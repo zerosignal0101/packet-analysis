@@ -1,4 +1,5 @@
 import os.path
+
 import pandas as pd
 
 
@@ -13,10 +14,8 @@ def alignment_path_query(csv_production_output, csv_back_output, folder_output):
         'Query': [],
         'Production_Sniff_time': [],
         'Production_Time_since_request': [],
-        'Production_source': [],
         'Back_Sniff_time': [],
         'Back_Time_since_request': [],
-        'Back_source': []
     }
 
     # 遍历production_df的Path+Query列
@@ -25,7 +24,6 @@ def alignment_path_query(csv_production_output, csv_back_output, folder_output):
         query = row['Query']
         sniff_time = row['Sniff_time']
         time_since_request = row['Time_since_request']
-        packet_source = row['Source']
 
         if pd.isna(query):  # 检测query是否为空，如为空则仅仅基于path匹配
             # 在back_df中找到匹配的Path
@@ -44,10 +42,8 @@ def alignment_path_query(csv_production_output, csv_back_output, folder_output):
             aligned_data['Query'].append(query)
             aligned_data['Production_Sniff_time'].append(sniff_time)
             aligned_data['Production_Time_since_request'].append(time_since_request)
-            aligned_data['Production_source'].append(packet_source)
             aligned_data['Back_Sniff_time'].append(back_row['Sniff_time'])
             aligned_data['Back_Time_since_request'].append(back_row['Time_since_request'])
-            aligned_data['Back_source'].append(back_row['Source'])
 
             # 从back_df中删除已匹配的行，以避免重复匹配
             back_df = back_df.drop(back_index)
@@ -57,10 +53,8 @@ def alignment_path_query(csv_production_output, csv_back_output, folder_output):
             aligned_data['Query'].append(query)
             aligned_data['Production_Sniff_time'].append(sniff_time)
             aligned_data['Production_Time_since_request'].append(time_since_request)
-            aligned_data['Production_source'].append(packet_source)
             aligned_data['Back_Sniff_time'].append('No match found')
             aligned_data['Back_Time_since_request'].append('No match found')
-            aligned_data['Back_source'].append('No match found')
 
     # 创建DataFrame保存对齐后的数据
     aligned_df = pd.DataFrame(aligned_data)
@@ -73,6 +67,7 @@ def alignment_path_query(csv_production_output, csv_back_output, folder_output):
     print(f'File saved to {csv_aligned_output}')
 
     return csv_aligned_output
+
 
 # Main
 if __name__ == '__main__':
