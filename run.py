@@ -56,16 +56,17 @@ if __name__ == '__main__':
         print(f"Error: {file_input} does not exist.")
         exit(1)
 
+    # check if output folder exists
+    if folder_output is None:
+        folder_output = os.path.join(os.getcwd(), f"results")
+    if not os.path.exists(folder_output):
+        os.makedirs(folder_output)
+
     # preprocess data
     if cmd.method == 'preprocess' or cmd.method == 'all':
         pcap_input = file_input
-        if folder_output is None:
-            folder_output = os.path.join(os.getcwd(), f"results")
-            csv_production_output = os.path.join(os.getcwd(), f"results/extracted_production_data.csv")
-            csv_back_output = os.path.join(os.getcwd(), f"results/extracted_back_data.csv")
-        else:
-            csv_production_output = os.path.join(folder_output, "extracted_production_data.csv")
-            csv_back_output = os.path.join(folder_output, "extracted_back_data.csv")
+        csv_production_output = os.path.join(folder_output, "extracted_production_data.csv")
+        csv_back_output = os.path.join(folder_output, "extracted_back_data.csv")
         extract_to_csv.preprocess_data(pcap_input[0], csv_production_output)
         extract_to_csv.preprocess_data(pcap_input[1], csv_back_output)
 
