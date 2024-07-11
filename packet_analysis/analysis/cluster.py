@@ -66,8 +66,8 @@ def plot_clusters(df, title, filename, plot_folder_output):
     plt.ylabel('Time Since Request')
     plt.xticks(rotation=45)
     plt.tight_layout()
-    plt.savefig(os.path.join(plot_folder_output, f'{filename}.png'))
-    plt.show()
+    plt.savefig(os.path.join(plot_folder_output, f'{filename}.png'), dpi=300)
+    # plt.show()
 
 
 def plot_anomalies(df, title, filename, plot_folder_output):
@@ -99,8 +99,8 @@ def plot_anomalies(df, title, filename, plot_folder_output):
     plt.legend(loc='upper right')
     plt.xticks(rotation=45)
     plt.tight_layout()
-    plt.savefig(os.path.join(plot_folder_output, f'{filename}_anomalies.png'))
-    plt.show()
+    plt.savefig(os.path.join(plot_folder_output, f'{filename}_anomalies.png'), dpi=300)
+    # plt.show()
 
 
 def analysis(csv_production_output, csv_back_output, folder_output):
@@ -141,6 +141,10 @@ def analysis(csv_production_output, csv_back_output, folder_output):
 
     # 可视化聚类结果和异常点检测结果
     plot_folder_output = os.path.join(folder_output, 'cluster_plots')
+
+    # check if output folder exists
+    if not os.path.exists(plot_folder_output):
+        os.makedirs(plot_folder_output)
 
     plot_clusters(api_post_data, 'API POST Request Clusters', 'api_post_clusters', plot_folder_output)
     plot_anomalies(api_post_data, 'API POST Request Anomalies', 'api_post_anomalies', plot_folder_output)

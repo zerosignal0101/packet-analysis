@@ -1,3 +1,10 @@
 *.pcap
 *.csv
 *.xlsx
+*.log
+
+results/*
+!results/.gitignore
+
+raw_data/*
+!raw_data/.gitignore
