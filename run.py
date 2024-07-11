@@ -60,9 +60,9 @@ if __name__ == '__main__':
     if cmd.method == 'preprocess' or cmd.method == 'all':
         pcap_input = file_input
         if folder_output is None:
-            folder_output = os.path.join(os.getcwd(), f"results/{time_now}")
-            csv_production_output = os.path.join(os.getcwd(), f"results/{time_now}/extracted_production_data.csv")
-            csv_back_output = os.path.join(os.getcwd(), f"results/{time_now}/extracted_back_data.csv")
+            folder_output = os.path.join(os.getcwd(), f"results")
+            csv_production_output = os.path.join(os.getcwd(), f"results/extracted_production_data.csv")
+            csv_back_output = os.path.join(os.getcwd(), f"results/extracted_back_data.csv")
         else:
             csv_production_output = os.path.join(folder_output, "extracted_production_data.csv")
             csv_back_output = os.path.join(folder_output, "extracted_back_data.csv")
