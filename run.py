@@ -46,6 +46,14 @@ if __name__ == '__main__':
     file_input = cmd.input
     folder_output = cmd.output
 
+    # check file input validity
+    if not file_input[0].endswith('.pcap') and not file_input[0].endswith('.csv'):
+        print(f"Error: {file_input[0]} is not a valid file format.")
+        exit(1)
+    if not file_input[1].endswith('.pcap') and not file_input[1].endswith('.csv'):
+        print(f"Error: {file_input[1]} is not a valid file format.")
+        exit(1)
+
     # Variables
     csv_production_output = ''
     csv_back_output = ''

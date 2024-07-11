@@ -5,7 +5,6 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from sklearn.ensemble import IsolationForest
 import matplotlib.pyplot as plt
-import numpy as np
 
 
 # 请求路径分类函数
@@ -43,14 +42,14 @@ def cluster_data(df):
 
 
 # 异常点检测并保存异常点信息
-def detect_anomalies(df, original_df, category):
+def detect_anomalies(df, original_df, category, csv_folder_output):
     if df.empty:
         return df
     features = ['Time_since_request']
     isolation_forest = IsolationForest(contamination=0.05, random_state=42)
     df['anomaly'] = isolation_forest.fit_predict(df[features])
     anomaly_data = original_df.loc[df[df['anomaly'] == -1].index]
-    anomaly_data.to_csv(f'{category}_anomalies.csv', index=False)
+    anomaly_data.to_csv(os.path.join(csv_folder_output, f'{category}_anomalies.csv'), index=False)
     return df
 
 
@@ -114,7 +113,13 @@ def analysis(csv_production_output, csv_back_output, folder_output):
     data['request_type'] = data['Path'].apply(classify_path)
 
     # 保存分类后的数据
-    data.to_csv('classified_requests.csv', index=False)
+    csv_folder_output = os.path.join(folder_output, 'cluster_csv')
+
+    # 检查输出文件夹是否存在
+    if not os.path.exists(csv_folder_output):
+        os.makedirs(csv_folder_output)
+
+    data.to_csv(os.path.join(csv_folder_output, 'classified_requests.csv'), index=False)
 
     # 对每一类请求分别提取特征并标准化
     api_post_data = extract_and_standardize_features(data[data['request_type'] == 'api_post'].copy())
@@ -131,13 +136,15 @@ def analysis(csv_production_output, csv_back_output, folder_output):
     other_data = cluster_data(other_data)
 
     # 对每一类请求分别进行异常点检测
-    api_post_data = detect_anomalies(api_post_data, data[data['request_type'] == 'api_post'], 'api_post')
-    static_resource_data = detect_anomalies(static_resource_data, data[data['request_type'] == 'static_resource'],
-                                            'static_resource')
-    api_get_data = detect_anomalies(api_get_data, data[data['request_type'] == 'api_get'], 'api_get')
+    api_post_data = detect_anomalies(api_post_data,
+                                     data[data['request_type'] == 'api_post'], 'api_post', csv_folder_output)
+    static_resource_data = detect_anomalies(static_resource_data,
+                                            data[data['request_type'] == 'static_resource'], 'static_resource',
+                                            csv_folder_output)
+    api_get_data = detect_anomalies(api_get_data, data[data['request_type'] == 'api_get'], 'api_get', csv_folder_output)
     dynamic_resource_data = detect_anomalies(dynamic_resource_data, data[data['request_type'] == 'dynamic_resource'],
-                                             'dynamic_resource')
-    other_data = detect_anomalies(other_data, data[data['request_type'] == 'other'], 'other')
+                                             'dynamic_resource', csv_folder_output)
+    other_data = detect_anomalies(other_data, data[data['request_type'] == 'other'], 'other', csv_folder_output)
 
     # 可视化聚类结果和异常点检测结果
     plot_folder_output = os.path.join(folder_output, 'cluster_plots')

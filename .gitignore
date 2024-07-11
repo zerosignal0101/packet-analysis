@@ -8,3 +8,5 @@ results/*
 
 raw_data/*
 !raw_data/.gitignore
+
+.pdm-python

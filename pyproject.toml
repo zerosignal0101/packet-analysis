@@ -1,0 +1,20 @@
+[project]
+name = "packet-analysis"
+version = "0.1.0"
+description = "A tool for packet analysis from both production environment and replay environment."
+authors = [
+    {name = "packetGroup", email = "zerosignal0101@proton.me"},
+]
+dependencies = [
+    "scikit-learn==1.5.1",
+    "pandas==2.2.2",
+    "pyshark==0.6",
+    "urllib3==1.26.18",
+]
+requires-python = "==3.10.*"
+readme = "README.md"
+license = {text = "MIT"}
+
+
+[tool.pdm]
+distribution = false
