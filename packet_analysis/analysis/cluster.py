@@ -160,3 +160,8 @@ def analysis(csv_production_output, csv_back_output, folder_output):
 
     plot_clusters(other_data, 'Other Request Clusters', 'other_clusters', plot_folder_output)
     plot_anomalies(other_data, 'Other Request Anomalies', 'other_anomalies', plot_folder_output)
+
+
+# Main
+if __name__ == '__main__':
+    print('Do not run this script directly. Please run run.py instead.')

@@ -191,10 +191,6 @@ def preprocess_data(pcap_file_path, csv_file_path):
     extract_packet_info(csv_file_path)
 
 
-# 主函数，测试时使用
-def main():
-    preprocess_data('数据集2/数据集/流量/15.165-8081-20240617-all.pcap', 'back0617_tcplength_match_unmatched1.csv')
-
-
-if __name__ == "__main__":
-    main()
+# Main
+if __name__ == '__main__':
+    print('Do not run this script directly. Please run run.py instead.')
