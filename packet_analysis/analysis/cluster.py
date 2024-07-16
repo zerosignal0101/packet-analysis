@@ -25,7 +25,7 @@ def classify_path(path):
 def extract_and_standardize_features(df):
     if df.empty:
         return df
-    features = ['Time_since_request']
+    features = ['Time_since_request', 'Response_Total_Length']
     scaler = StandardScaler()
     df.loc[:, features] = scaler.fit_transform(df[features])
     return df
@@ -35,7 +35,7 @@ def extract_and_standardize_features(df):
 def cluster_data(df):
     if df.empty:
         return df
-    features = ['Time_since_request']
+    features = ['Time_since_request', 'Response_Total_Length']
     kmeans = KMeans(n_clusters=3, n_init=10, random_state=42)
     df['cluster'] = kmeans.fit_predict(df[features])
     return df
@@ -45,7 +45,7 @@ def cluster_data(df):
 def detect_anomalies(df, original_df, category, csv_folder_output):
     if df.empty:
         return df
-    features = ['Time_since_request']
+    features = ['Time_since_request', 'Response_Total_Length']
     isolation_forest = IsolationForest(contamination=0.05, random_state=42)
     df['anomaly'] = isolation_forest.fit_predict(df[features])
     anomaly_data = original_df.loc[df[df['anomaly'] == -1].index]
@@ -59,10 +59,12 @@ def plot_clusters(df, title, filename, plot_folder_output):
         print(f"No data to plot for {title}")
         return
     plt.figure(figsize=(14, 7))
-    plt.scatter(df.index, df['Time_since_request'], c=df['cluster'], cmap='viridis', marker='o')
+    scatter = plt.scatter(df['Time_since_request'], df['Response_Total_Length'],
+                          c=df['cluster'], cmap='viridis', marker='o')
+    plt.colorbar(scatter)
     plt.title(title)
-    plt.xlabel('Index')
-    plt.ylabel('Time Since Request')
+    plt.xlabel('Time Since Request')
+    plt.ylabel('Response Total Length')
     plt.xticks(rotation=45)
     plt.tight_layout()
     plt.savefig(os.path.join(plot_folder_output, f'{filename}.png'), dpi=300)
@@ -78,8 +80,8 @@ def plot_anomalies(df, title, filename, plot_folder_output):
     colors = {1: 'blue', -1: 'red'}
     for anomaly, marker in markers.items():
         subset = df[df['anomaly'] == anomaly]
-        plt.scatter(subset.index, subset['Time_since_request'], c=colors[anomaly], marker=marker,
-                    label=('Normal' if anomaly == 1 else 'Anomaly'))
+        plt.scatter(subset['Relative_time'], subset['Time_since_request'], c=colors[anomaly],
+                    marker=marker, label=('Normal' if anomaly == 1 else 'Anomaly'))
 
     # 添加统计指标
     mean_value = df['Time_since_request'].mean()
@@ -93,7 +95,7 @@ def plot_anomalies(df, title, filename, plot_folder_output):
     plt.axhline(y=mean_value - variance_value ** 0.5, color='r', linestyle=':')
 
     plt.title(title)
-    plt.xlabel('Index')
+    plt.xlabel('Relative Time')
     plt.ylabel('Time Since Request')
     plt.legend(loc='upper right')
     plt.xticks(rotation=45)
