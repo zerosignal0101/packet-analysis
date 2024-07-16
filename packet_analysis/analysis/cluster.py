@@ -102,9 +102,9 @@ def plot_anomalies(df, title, filename, plot_folder_output):
     # plt.show()
 
 
-def analysis(csv_production_output, csv_back_output, folder_output):
+def analysis(csv_input, folder_output):
     # 读取CSV文件 当前使用这一版
-    data = pd.read_csv(csv_production_output)
+    data = pd.read_csv(csv_input)
 
     # 数据清洗，确保关键列没有缺失值
     data = data.dropna(subset=['Path', 'Request_Method', 'Time_since_request', 'Sniff_time'])

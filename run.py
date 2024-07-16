@@ -88,6 +88,8 @@ if __name__ == '__main__':
     # analyze data
     if cmd.method == 'analysis' or cmd.method == 'all':
         if csv_production_output == '' and csv_back_output == '':
-            cluster.analysis(file_input[0], file_input[1], folder_output)
+            cluster.analysis(file_input[0], os.path.join(folder_output, 'production'))
+            cluster.analysis(file_input[1], os.path.join(folder_output, 'back'))
         else:
-            cluster.analysis(csv_production_output, csv_back_output, folder_output)
+            cluster.analysis(csv_production_output, os.path.join(folder_output, 'production'))
+            cluster.analysis(csv_back_output, os.path.join(folder_output, 'back'))
