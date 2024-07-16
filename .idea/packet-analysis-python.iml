@@ -5,6 +5,12 @@
       <excludeFolder url="file://$MODULE_DIR$/results/cluster_csv" />
       <excludeFolder url="file://$MODULE_DIR$/results/cluster_plots" />
       <excludeFolder url="file://$MODULE_DIR$/raw_data/csv0708" />
+      <excludeFolder url="file://$MODULE_DIR$/results/1" />
+      <excludeFolder url="file://$MODULE_DIR$/results/2" />
+      <excludeFolder url="file://$MODULE_DIR$/results/3" />
+      <excludeFolder url="file://$MODULE_DIR$/results/4" />
+      <excludeFolder url="file://$MODULE_DIR$/results/5" />
+      <excludeFolder url="file://$MODULE_DIR$/results/cluster_results_old" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
