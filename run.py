@@ -46,6 +46,9 @@ if __name__ == '__main__':
     file_input = cmd.input
     folder_output = cmd.output
 
+    # remove ' in the args
+    file_input = [item.strip("'") for item in file_input]
+
     # check file input validity
     if not file_input[0].endswith('.pcap') and not file_input[0].endswith('.csv'):
         print(f"Error: {file_input[0]} is not a valid file format.")

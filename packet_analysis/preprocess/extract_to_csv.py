@@ -164,28 +164,15 @@ def preprocess_data(pcap_file_path, csv_file_path):
     global first_packet_time, request_response_pairs, unmatched_requests, match_num
 
     index = 0
-    processed_packets = 0
 
-    while True:
-        cap = pyshark.FileCapture(pcap_file_path, keep_packets=False,
-                                  tshark_path="F:\softwares_f\Wireshark\\tshark.exe",
-                                  display_filter=f"frame.number > {index}")
+    cap = pyshark.FileCapture(pcap_file_path, keep_packets=False,
+                              display_filter=f"frame.number > {index}")
 
-        batch_processed = False
-        for pkt in cap:
-            index += 1
-            process_packet(pkt, index)
-            processed_packets += 1
+    for pkt in cap:
+        index += 1
+        process_packet(pkt, index)
 
-            if processed_packets >= batch_size:
-                cap.close()
-                processed_packets = 0
-                batch_processed = True
-                break
-
-        if not batch_processed:
-            cap.close()
-            break
+    cap.close()
 
     # 提取配对成功后的指标并写入CSV
     extract_packet_info(csv_file_path)
