@@ -1,3 +1,4 @@
+import asyncio
 import csv
 import pyshark
 from urllib.parse import urlparse, urlunparse
@@ -164,6 +165,10 @@ def preprocess_data(pcap_file_path, csv_file_path):
     global first_packet_time, request_response_pairs, unmatched_requests, match_num
 
     index = 0
+
+    # 创建新的事件循环
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
 
     cap = pyshark.FileCapture(pcap_file_path, keep_packets=False,
                               display_filter=f"frame.number > {index}")
