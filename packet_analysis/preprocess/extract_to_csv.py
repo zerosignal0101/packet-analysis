@@ -1,5 +1,8 @@
 import csv
+import os
 import pyshark
+import glob
+import subprocess
 from urllib.parse import urlparse, urlunparse
 import time
 
@@ -103,10 +106,15 @@ def process_packet(pkt, index):
                 print(index, "is matched ", match_num, "in all")
 
                 # 提取 File Data 长度
+                response_total_length = 0
                 if hasattr(pkt.http, 'content_length'):
                     response_total_length = int(pkt.http.content_length)
-                elif hasattr(pkt.http, 'chunk_size'):
-                    response_total_length = int(pkt.http.chunk_size)
+                elif hasattr(pkt.http, 'transfer_encoding') and pkt.http.transfer_encoding == 'chunked':
+                    response_total_length = 0
+                    try:
+                        response_total_length = pkt.http.chunk_size
+                    except:
+                        print("error")
                 else:
                     response_total_length = int(pkt.length)
 
@@ -117,15 +125,24 @@ def process_packet(pkt, index):
                     'response_total_length': response_total_length,  # 存储总的响应长度
                     'matched': True
                 })
-                print(66666, response_total_length, int(pkt.length))
 
+# 使用 editcap 分割 .pcap 文件
+def split_pcap_file(input_file, output_prefix, packet_count_per_file):
+    editcap_path = r'C:\Program Files\Wireshark\editcap.exe'
+    command = [
+        editcap_path, '-c', str(packet_count_per_file), input_file, f"{output_prefix}.pcap"
+    ]
+    print("Executing:", ' '.join(command))
+    result = subprocess.run(command, check=True)
+    if result.returncode != 0:
+        print("Error during split:", result.stderr)
 
 # 提取并写入配对信息
 def extract_packet_info(csv_file_path):
     with open(csv_file_path, 'w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(
-            ['No', 'Request_Index', 'Response_Index', 'Sniff_time', 'Relative_time', 'Scheme', 'Netloc', 'Path',
+            ['No', 'Request_0Index', 'Response_Index', 'Sniff_time', 'Relative_time', 'Scheme', 'Netloc', 'Path',
              'Query', 'Time_since_request', 'Ip_src', 'Ip_dst', 'Request_Method', 'Request_Packet_Length',
              'Response_Packet_Length', 'Response_Total_Length', 'Match_Status'])
 
@@ -162,6 +179,30 @@ def extract_packet_info(csv_file_path):
 # 预处理函数
 def preprocess_data(pcap_file_path, csv_file_path):
     global first_packet_time, request_response_pairs, unmatched_requests, match_num
+
+    output_prefix = 'split_pcap'
+    packet_count_per_file = 20000  # 设置每个文件的分割数目
+
+    # 分割文件
+    split_pcap_file(pcap_file_path, output_prefix, packet_count_per_file)
+
+    # 处理每个分割文件
+    packet_index = 1  # 这个就应该放在for循环外
+    for split_file in sorted(glob.glob(f"{output_prefix}_*.pcap")):
+        print(f"Processing file: {split_file}")
+        cap = pyshark.FileCapture(split_file, keep_packets=False)
+
+        for pkt in cap:
+            process_packet(pkt, packet_index)
+            packet_index += 1
+
+        cap.close()
+
+        # 提取配对成功后的指标并写入CSV
+        extract_packet_info(f"{split_file}_info.csv")
+
+        # 删除处理完的分割文件
+        os.remove(split_file)
 
     index = 0
 
