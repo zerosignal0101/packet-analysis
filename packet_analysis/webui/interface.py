@@ -162,4 +162,11 @@ with gr.Blocks() as demo:
                                   plot_image_cluster_back_other, plot_image_anomalies_back_other
                                   ])
 
-demo.launch()
+
+def run():
+    demo.launch()
+
+
+# Main
+if __name__ == '__main__':
+    print('Do not run this script directly. Please run webui.py instead.')
