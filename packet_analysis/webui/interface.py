@@ -167,10 +167,6 @@ with gr.Blocks() as demo:
                                   ])
 
 
-def run():
-    demo.launch(server_port=7956)
-
-
 # Main
 if __name__ == '__main__':
     print('Do not run this script directly. Please run webui.py instead.')
