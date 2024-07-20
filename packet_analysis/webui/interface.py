@@ -168,7 +168,7 @@ with gr.Blocks() as demo:
 
 
 def run():
-    demo.launch(share=True)
+    demo.launch(server_port=7956)
 
 
 # Main
