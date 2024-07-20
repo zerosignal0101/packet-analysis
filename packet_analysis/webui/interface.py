@@ -43,6 +43,10 @@ def process_files(file1, file2):
 
     cluster_folder_output = os.path.join(folder_output, 'cluster_output')
 
+    # 如果存在cluster_folder_output，则删除
+    if os.path.exists(cluster_folder_output):
+        shutil.rmtree(cluster_folder_output)
+
     cluster_csv_production_list, cluster_plot_production_list = (
         cluster.analysis(csv_production_output, os.path.join(cluster_folder_output, 'production')))
     cluster_csv_back_list, cluster_plot_back_list = (
@@ -164,7 +168,7 @@ with gr.Blocks() as demo:
 
 
 def run():
-    demo.launch()
+    demo.launch(share=True)
 
 
 # Main
