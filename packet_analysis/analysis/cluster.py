@@ -44,20 +44,21 @@ def cluster_data(df):
 # 异常点检测并保存异常点信息
 def detect_anomalies(df, original_df, category, csv_folder_output):
     if df.empty:
-        return df
+        return df, None
     features = ['Time_since_request', 'Response_Total_Length']
     isolation_forest = IsolationForest(contamination=0.05, random_state=42)
     df['anomaly'] = isolation_forest.fit_predict(df[features])
     anomaly_data = original_df.loc[df[df['anomaly'] == -1].index]
-    anomaly_data.to_csv(os.path.join(csv_folder_output, f'{category}_anomalies.csv'), index=False)
-    return df
+    csv_save_path = os.path.join(csv_folder_output, f'{category}_anomalies.csv')
+    anomaly_data.to_csv(csv_save_path, index=False)
+    return df, csv_save_path
 
 
 # 结果可视化
 def plot_clusters(df, title, filename, plot_folder_output):
     if df.empty:
         print(f"No data to plot for {title}")
-        return
+        return None
     plt.figure(figsize=(14, 7))
     scatter = plt.scatter(df['Time_since_request'], df['Response_Total_Length'],
                           c=df['cluster'], cmap='viridis', marker='o')
@@ -67,14 +68,16 @@ def plot_clusters(df, title, filename, plot_folder_output):
     plt.ylabel('Response Total Length')
     plt.xticks(rotation=45)
     plt.tight_layout()
-    plt.savefig(os.path.join(plot_folder_output, f'{filename}.png'), dpi=300)
+    plot_save_path = os.path.join(plot_folder_output, f'{filename}.png')
+    plt.savefig(plot_save_path, dpi=300)
     # plt.show()
+    return plot_save_path
 
 
 def plot_anomalies(df, title, filename, plot_folder_output):
     if df.empty:
         print(f"No data to plot for {title}")
-        return
+        return None
     plt.figure(figsize=(14, 7))
     markers = {1: 'o', -1: 'x'}
     colors = {1: 'blue', -1: 'red'}
@@ -100,11 +103,15 @@ def plot_anomalies(df, title, filename, plot_folder_output):
     plt.legend(loc='upper right')
     plt.xticks(rotation=45)
     plt.tight_layout()
-    plt.savefig(os.path.join(plot_folder_output, f'{filename}_anomalies.png'), dpi=300)
+    plot_save_path = os.path.join(plot_folder_output, f'{filename}_anomalies.png')
+    plt.savefig(plot_save_path, dpi=300)
     # plt.show()
+    return plot_save_path
 
 
 def analysis(csv_input, folder_output):
+    ret_csv_list = []
+    ret_plot_list = []
     # 读取CSV文件 当前使用这一版
     data = pd.read_csv(csv_input)
 
@@ -121,7 +128,11 @@ def analysis(csv_input, folder_output):
     if not os.path.exists(csv_folder_output):
         os.makedirs(csv_folder_output)
 
-    data.to_csv(os.path.join(csv_folder_output, 'classified_requests.csv'), index=False)
+    classified_requests_csv_path = os.path.join(csv_folder_output, 'classified_requests.csv')
+    data.to_csv(classified_requests_csv_path, index=False)
+
+    # 路径返回到ret_csv_list
+    ret_csv_list.append(classified_requests_csv_path)
 
     # 对每一类请求分别提取特征并标准化
     api_post_data = extract_and_standardize_features(data[data['request_type'] == 'api_post'].copy())
@@ -138,15 +149,27 @@ def analysis(csv_input, folder_output):
     other_data = cluster_data(other_data)
 
     # 对每一类请求分别进行异常点检测
-    api_post_data = detect_anomalies(api_post_data,
-                                     data[data['request_type'] == 'api_post'], 'api_post', csv_folder_output)
-    static_resource_data = detect_anomalies(static_resource_data,
-                                            data[data['request_type'] == 'static_resource'], 'static_resource',
-                                            csv_folder_output)
-    api_get_data = detect_anomalies(api_get_data, data[data['request_type'] == 'api_get'], 'api_get', csv_folder_output)
-    dynamic_resource_data = detect_anomalies(dynamic_resource_data, data[data['request_type'] == 'dynamic_resource'],
-                                             'dynamic_resource', csv_folder_output)
-    other_data = detect_anomalies(other_data, data[data['request_type'] == 'other'], 'other', csv_folder_output)
+    api_post_data, csv_api_post_path = detect_anomalies(api_post_data,
+                                                        data[data['request_type'] == 'api_post'], 'api_post',
+                                                        csv_folder_output)
+    static_resource_data, csv_static_path = detect_anomalies(static_resource_data,
+                                                             data[data['request_type'] == 'static_resource'],
+                                                             'static_resource',
+                                                             csv_folder_output)
+    api_get_data, csv_api_get_path = detect_anomalies(api_get_data, data[data['request_type'] == 'api_get'], 'api_get',
+                                                      csv_folder_output)
+    dynamic_resource_data, csv_dynamic_path = detect_anomalies(dynamic_resource_data,
+                                                               data[data['request_type'] == 'dynamic_resource'],
+                                                               'dynamic_resource', csv_folder_output)
+    other_data, csv_other_path = detect_anomalies(other_data, data[data['request_type'] == 'other'], 'other',
+                                                  csv_folder_output)
+
+    # 路径返回到ret_csv_list
+    ret_csv_list.append(csv_api_post_path)
+    ret_csv_list.append(csv_static_path)
+    ret_csv_list.append(csv_api_get_path)
+    ret_csv_list.append(csv_dynamic_path)
+    ret_csv_list.append(csv_other_path)
 
     # 可视化聚类结果和异常点检测结果
     plot_folder_output = os.path.join(folder_output, 'cluster_plots')
@@ -155,24 +178,33 @@ def analysis(csv_input, folder_output):
     if not os.path.exists(plot_folder_output):
         os.makedirs(plot_folder_output)
 
-    plot_clusters(api_post_data, 'API POST Request Clusters', 'api_post_clusters', plot_folder_output)
-    plot_anomalies(api_post_data, 'API POST Request Anomalies', 'api_post_anomalies', plot_folder_output)
+    ret_plot_list.append(plot_clusters(api_post_data, 'API POST Request Clusters', 'api_post_clusters', plot_folder_output))
+    ret_plot_list.append(
+        plot_anomalies(api_post_data, 'API POST Request Anomalies', 'api_post_anomalies', plot_folder_output))
 
-    plot_clusters(static_resource_data,
-                  'Static Resource Request Clusters', 'static_resource_clusters', plot_folder_output)
-    plot_anomalies(static_resource_data,
-                   'Static Resource Request Anomalies', 'static_resource_anomalies', plot_folder_output)
+    ret_plot_list.append(
+        plot_clusters(static_resource_data, 'Static Resource Request Clusters', 'static_resource_clusters',
+                      plot_folder_output))
+    ret_plot_list.append(
+        plot_anomalies(static_resource_data, 'Static Resource Request Anomalies', 'static_resource_anomalies',
+                       plot_folder_output))
 
-    plot_clusters(api_get_data, 'API GET Request Clusters', 'api_get_clusters', plot_folder_output)
-    plot_anomalies(api_get_data, 'API GET Request Anomalies', 'api_get_anomalies', plot_folder_output)
+    ret_plot_list.append(
+        plot_clusters(api_get_data, 'API GET Request Clusters', 'api_get_clusters', plot_folder_output))
+    ret_plot_list.append(
+        plot_anomalies(api_get_data, 'API GET Request Anomalies', 'api_get_anomalies', plot_folder_output))
 
-    plot_clusters(dynamic_resource_data,
-                  'Dynamic Resource Request Clusters', 'dynamic_resource_clusters', plot_folder_output)
-    plot_anomalies(dynamic_resource_data,
-                   'Dynamic Resource Request Anomalies', 'dynamic_resource_anomalies', plot_folder_output)
+    ret_plot_list.append(
+        plot_clusters(dynamic_resource_data, 'Dynamic Resource Request Clusters', 'dynamic_resource_clusters',
+                      plot_folder_output))
+    ret_plot_list.append(
+        plot_anomalies(dynamic_resource_data, 'Dynamic Resource Request Anomalies', 'dynamic_resource_anomalies',
+                       plot_folder_output))
 
-    plot_clusters(other_data, 'Other Request Clusters', 'other_clusters', plot_folder_output)
-    plot_anomalies(other_data, 'Other Request Anomalies', 'other_anomalies', plot_folder_output)
+    ret_plot_list.append(plot_clusters(other_data, 'Other Request Clusters', 'other_clusters', plot_folder_output))
+    ret_plot_list.append(plot_anomalies(other_data, 'Other Request Anomalies', 'other_anomalies', plot_folder_output))
+
+    return ret_csv_list, ret_plot_list
 
 
 # Main

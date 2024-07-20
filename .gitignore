@@ -3,6 +3,9 @@
 *.xlsx
 *.log
 *.pyc
+*.zip
+*.png
+*.jpg
 */__pycache__
 
 results/*
@@ -10,5 +13,7 @@ results/*
 
 raw_data/*
 !raw_data/.gitignore
+
+test_field/*
 
 .pdm-python
