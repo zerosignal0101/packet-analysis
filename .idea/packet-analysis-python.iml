@@ -11,6 +11,8 @@
       <excludeFolder url="file://$MODULE_DIR$/results/4" />
       <excludeFolder url="file://$MODULE_DIR$/results/5" />
       <excludeFolder url="file://$MODULE_DIR$/results/cluster_results_old" />
+      <excludeFolder url="file://$MODULE_DIR$/raw_data/数据集2" />
+      <excludeFolder url="file://$MODULE_DIR$/test_field/flagged" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

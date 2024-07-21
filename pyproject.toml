@@ -11,11 +11,16 @@ dependencies = [
     "pyshark==0.6",
     "urllib3==1.26.18",
     "matplotlib==3.8.3",
+    "gradio>=4.26.0",
 ]
 requires-python = "==3.10.*"
 readme = "README.md"
 license = {text = "MIT"}
 
+[[tool.pdm.source]]
+name = "private"
+url = "https://mirrors.aliyun.com/pypi/simple/"
+verify_ssl = false
 
 [tool.pdm]
 distribution = false
