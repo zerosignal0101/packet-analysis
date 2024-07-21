@@ -76,7 +76,7 @@ def process_files(file1, file2):
 
 
 with gr.Blocks() as demo:
-    gr.Markdown("# Pcap File Processor")
+    gr.Markdown("# Packet analysis tool")
     gr.Markdown("Upload two files to process (pcap or csv)")
 
     with gr.Row():
@@ -85,6 +85,7 @@ with gr.Blocks() as demo:
 
     process_button = gr.Button("Process Files")
 
+    gr.Markdown("## General results")
     with gr.Row():
         with gr.Column():
             output_compressed_file = gr.File(label="Download compressed results")
@@ -107,7 +108,7 @@ with gr.Blocks() as demo:
             csv_back_other = gr.File(label="Download other cluster csv (Back)")
 
     # Plots for production data
-    gr.Markdown("Plots for production data")
+    gr.Markdown("## Plots for production data")
     with gr.Row():
         with gr.Column():
             plot_image_cluster_production_api_post = gr.Image(label="Production api post Cluster Plot")
@@ -123,24 +124,19 @@ with gr.Blocks() as demo:
             plot_image_anomalies_production_other = gr.Image(label="Production other Anomalies Plot")
 
     # Plots for back data
-    gr.Markdown("Plots for back data")
+    gr.Markdown("## Plots for back data")
     with gr.Row():
         with gr.Column():
             plot_image_cluster_back_api_post = gr.Image(label="Back api post Cluster Plot")
-            plot_image_anomalies_back_api_post = gr.Image(label="Back api post Anomalies Plot")
-        with gr.Column():
             plot_image_cluster_back_static = gr.Image(label="Back static resource Cluster Plot")
-            plot_image_anomalies_back_static = gr.Image(label="Back static resource Anomalies Plot")
-    with gr.Row():
-        with gr.Column():
             plot_image_cluster_back_api_get = gr.Image(label="Back api get Cluster Plot")
-            plot_image_anomalies_back_api_get = gr.Image(label="Back api get Anomalies Plot")
-        with gr.Column():
             plot_image_cluster_back_dynamic = gr.Image(label="Back dynamic resource Cluster Plot")
-            plot_image_anomalies_back_dynamic = gr.Image(label="Back dynamic resource Anomalies Plot")
-    with gr.Row():
-        with gr.Column():
             plot_image_cluster_back_other = gr.Image(label="Back other Cluster Plot")
+        with gr.Column():
+            plot_image_anomalies_back_api_post = gr.Image(label="Back api post Anomalies Plot")
+            plot_image_anomalies_back_static = gr.Image(label="Back static resource Anomalies Plot")
+            plot_image_anomalies_back_api_get = gr.Image(label="Back api get Anomalies Plot")
+            plot_image_anomalies_back_dynamic = gr.Image(label="Back dynamic resource Anomalies Plot")
             plot_image_anomalies_back_other = gr.Image(label="Back other Anomalies Plot")
 
     process_button.click(process_files, inputs=[file1_input, file2_input],
