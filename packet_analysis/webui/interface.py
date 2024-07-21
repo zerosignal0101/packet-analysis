@@ -111,20 +111,15 @@ with gr.Blocks() as demo:
     with gr.Row():
         with gr.Column():
             plot_image_cluster_production_api_post = gr.Image(label="Production api post Cluster Plot")
-            plot_image_anomalies_production_api_post = gr.Image(label="Production api post Anomalies Plot")
-        with gr.Column():
             plot_image_cluster_production_static = gr.Image(label="Production static resource Cluster Plot")
-            plot_image_anomalies_production_static = gr.Image(label="Production static resource Anomalies Plot")
-    with gr.Row():
-        with gr.Column():
             plot_image_cluster_production_api_get = gr.Image(label="Production api get Cluster Plot")
-            plot_image_anomalies_production_api_get = gr.Image(label="Production api get Anomalies Plot")
-        with gr.Column():
             plot_image_cluster_production_dynamic = gr.Image(label="Production dynamic resource Cluster Plot")
-            plot_image_anomalies_production_dynamic = gr.Image(label="Production dynamic resource Anomalies Plot")
-    with gr.Row():
-        with gr.Column():
             plot_image_cluster_production_other = gr.Image(label="Production other Cluster Plot")
+        with gr.Column():
+            plot_image_anomalies_production_api_post = gr.Image(label="Production api post Anomalies Plot")
+            plot_image_anomalies_production_static = gr.Image(label="Production static resource Anomalies Plot")
+            plot_image_anomalies_production_api_get = gr.Image(label="Production api get Anomalies Plot")
+            plot_image_anomalies_production_dynamic = gr.Image(label="Production dynamic resource Anomalies Plot")
             plot_image_anomalies_production_other = gr.Image(label="Production other Anomalies Plot")
 
     # Plots for back data
