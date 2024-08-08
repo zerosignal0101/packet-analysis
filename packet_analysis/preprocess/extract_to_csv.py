@@ -51,6 +51,8 @@ def process_packet(pkt, index):
                 'request_index': index,
                 'ip_src': pkt.ip.src,
                 'ip_dst': pkt.ip.dst,
+                'src_port': pkt.tcp.srcport,  # 添加源端口号
+                'dst_port': pkt.tcp.dstport,  # 添加目的端口号
                 'url': url,
                 'request_method': pkt.http.request_method,  # 存储请求类型
                 'request_packet_length': int(pkt.length),
@@ -103,11 +105,16 @@ def process_packet(pkt, index):
                 match_num += 1
                 print(index, "is matched ", match_num, "in all")
 
-                # 提取 File Data 长度
+                # 提取 File Data 长度  条件3
+                response_total_length = 0
                 if hasattr(pkt.http, 'content_length'):
                     response_total_length = int(pkt.http.content_length)
-                elif hasattr(pkt.http, 'chunk_size'):
-                    response_total_length = int(pkt.http.chunk_size)
+                elif hasattr(pkt.http, 'transfer_encoding') and pkt.http.transfer_encoding == 'chunked':
+                    response_total_length = 0
+                    try:
+                        response_total_length = pkt.http.chunk_size
+                    except:
+                        print("error")
                 else:
                     response_total_length = int(pkt.length)
 
@@ -127,8 +134,8 @@ def extract_packet_info(csv_file_path):
         writer = csv.writer(file)
         writer.writerow(
             ['No', 'Request_Index', 'Response_Index', 'Sniff_time', 'Relative_time', 'Scheme', 'Netloc', 'Path',
-             'Query', 'Time_since_request', 'Ip_src', 'Ip_dst', 'Request_Method', 'Request_Packet_Length',
-             'Response_Packet_Length', 'Response_Total_Length', 'Match_Status'])
+             'Query', 'Time_since_request', 'Ip_src', 'Ip_dst', 'Src_Port', 'Dst_Port', 'Request_Method',
+             'Request_Packet_Length', 'Response_Packet_Length', 'Response_Total_Length', 'Match_Status'])
 
         index = 0
         for key, pair in sorted(request_response_pairs.items(), key=lambda item: item[1]['request_sniff_time']):
@@ -146,18 +153,16 @@ def extract_packet_info(csv_file_path):
                 writer.writerow(
                     [index, pair['request_index'], pair['response_index'], sniff_time, relative_time, parsed_url.scheme,
                      parsed_url.netloc, parsed_url.path, query, time_since_request, pair['ip_src'], pair['ip_dst'],
-                     pair['request_method'], pair['request_packet_length'], pair['response_packet_length'],
-                     pair['response_total_length'], 'matched'])
-                print("----------------------------- Success !")
-                print(f"Num: {index}, Request Index: {pair['request_index']}, Response Index: {pair['response_index']}")
+                     pair['src_port'], pair['dst_port'], pair['request_method'], pair['request_packet_length'],
+                     pair['response_packet_length'], pair['response_total_length'], 'matched'])
             else:
                 writer.writerow(
                     [index, pair['request_index'], None, sniff_time, relative_time, parsed_url.scheme,
                      parsed_url.netloc, parsed_url.path, query, None, pair['ip_src'], pair['ip_dst'],
-                     pair['request_method'], pair['request_packet_length'], None, None, 'unmatched'])
+                     pair['src_port'], pair['dst_port'], pair['request_method'], pair['request_packet_length'],
+                     None, None, 'unmatched'])
                 unmatched_requests.append(pair)
-                print("----------------------------- Unmatched Request !")
-                print(f"Num: {index}, Request Index: {pair['request_index']}")
+            print("----写入66666666666----第 /15000次-------")
 
 
 # 预处理函数
