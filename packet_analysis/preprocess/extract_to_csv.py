@@ -3,6 +3,8 @@ import csv
 import pyshark
 from urllib.parse import urlparse, urlunparse
 import time
+import heapq
+from datetime import datetime
 
 # 全局变量
 first_packet_time = None
@@ -38,7 +40,14 @@ def process_packet(pkt, index):
         relative_time = (sniff_time - first_packet_time).total_seconds()
 
         if hasattr(pkt.http, 'request_method'):
-            # 处理HTTP请求
+            # check if the requested fields exists
+            if not hasattr(pkt.http, 'request_full_uri'):
+                return
+            if not hasattr(pkt.tcp, 'seq'):
+                return
+            if not hasattr(pkt.tcp, 'len'):
+                return
+
             url = pkt.http.request_full_uri
             seq_num = int(pkt.tcp.seq)
             next_seq_num = seq_num + int(pkt.tcp.len)
@@ -165,26 +174,49 @@ def extract_packet_info(csv_file_path):
             print("----写入66666666666----第 /15000次-------")
 
 
+class PacketWrapper:
+    def __init__(self, timestamp, packet, gen):
+        self.timestamp = timestamp
+        self.packet = packet
+        self.gen = gen
+
+    def __lt__(self, other):
+        return self.timestamp < other.timestamp
+
+
 # 预处理函数
-def preprocess_data(pcap_file_path, csv_file_path):
-    global first_packet_time, request_response_pairs, unmatched_requests, match_num
+def preprocess_data(file_paths, csv_file_path):
+    packet_generators = [pyshark.FileCapture(file_path, keep_packets=False) for file_path in file_paths]
+    current_packets = []
+
+    # Initialize the heap with the first packet from each file
+    for gen in packet_generators:
+        gen_iter = iter(gen)
+        try:
+            first_packet = next(gen_iter)
+            heapq.heappush(current_packets, PacketWrapper(first_packet.sniff_time, first_packet, gen_iter))
+        except StopIteration:
+            continue
 
     index = 0
-
-    # 创建新的事件循环
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
-    cap = pyshark.FileCapture(pcap_file_path, keep_packets=False,
-                              display_filter=f"frame.number > {index}")
-
-    for pkt in cap:
+    while current_packets:
+        # Get the packet with the smallest timestamp0
+        packet_wrapper = heapq.heappop(current_packets)
+        packet = packet_wrapper.packet
+        gen = packet_wrapper.gen
         index += 1
-        process_packet(pkt, index)
+        process_packet(packet, index)
 
-    cap.close()
+        gen_iter = iter(gen)
 
-    # 提取配对成功后的指标并写入CSV
+        # Push the next packet from the same generator into the heap
+        try:
+            next_packet = next(gen_iter)
+            heapq.heappush(current_packets, PacketWrapper(next_packet.sniff_time, next_packet, gen))
+        except StopIteration:
+            continue
+
+    # 提取并写入配对信息
     extract_packet_info(csv_file_path)
 
 

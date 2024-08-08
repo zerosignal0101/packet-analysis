@@ -11,12 +11,18 @@ def parse_args(args=None, namespace=None):
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "-i",
-        "--input",
+        "-ip",
+        "--input-production",
         type=str,
-        nargs=2,
         required=True,
-        help="path to the input file (pcap or csv), former is the file in production, latter is in back"
+        help="path to the input files (pcap or csv format), the file in production"
+    )
+    parser.add_argument(
+        "-ib",
+        "--input-back",
+        type=str,
+        required=True,
+        help="path to the input files (pcap or csv format), the file in back"
     )
     parser.add_argument(
         "-o",
@@ -43,29 +49,50 @@ if __name__ == '__main__':
 
     # parse commands
     cmd = parse_args()
-    file_input = cmd.input
+    production_inputs = cmd.input_production
+    back_inputs = cmd.input_back
     folder_output = cmd.output
-
-    # remove ' in the args
-    file_input = [item.strip("'") for item in file_input]
-
-    # check file input validity
-    if not file_input[0].endswith('.pcap') and not file_input[0].endswith('.csv'):
-        print(f"Error: {file_input[0]} is not a valid file format.")
-        exit(1)
-    if not file_input[1].endswith('.pcap') and not file_input[1].endswith('.csv'):
-        print(f"Error: {file_input[1]} is not a valid file format.")
-        exit(1)
 
     # Variables
     csv_production_output = ''
     csv_back_output = ''
     csv_aligned_output = ''
 
-    # check if input file exists
-    if not os.path.exists(file_input[0]) or not os.path.exists(file_input[1]):
-        print(f"Error: {file_input} does not exist.")
-        exit(1)
+    # transfrom the production input files to list
+    production_inputs = production_inputs.split(',')
+
+    # transfrom the back input files to list
+    back_inputs = back_inputs.split(',')
+
+    # # test pause
+    # print(production_inputs)
+    # print(back_inputs)
+    # print("pause")
+    # exit(1)
+
+    # check if the production input files from the list 'production_inputs' exist or not
+    for file in production_inputs:
+        if not os.path.exists(file):
+            print(f"File {file} does not exist.")
+            exit(1)
+
+    # check if the back input files from the list 'production_inputs' exist or not
+    for file in back_inputs:
+        if not os.path.exists(file):
+            print(f"File {file} does not exist.")
+            exit(1)
+
+    # check if the production input files are pcap or csv
+    for file in production_inputs:
+        if not file.endswith('.pcap') and not file.endswith('.csv'):
+            print(f"File {file} in production field is not a pcap or csv file.")
+            exit(1)
+
+    # check if the back input files are pcap or csv
+    for file in back_inputs:
+        if not file.endswith('.pcap') and not file.endswith('.csv'):
+            print(f"File {file} in back field is not a pcap or csv file.")
+            exit(1)
 
     # check if output folder exists
     if folder_output is None:
@@ -75,24 +102,23 @@ if __name__ == '__main__':
 
     # preprocess data
     if cmd.method == 'preprocess' or cmd.method == 'all':
-        pcap_input = file_input
         csv_production_output = os.path.join(folder_output, "extracted_production_data.csv")
         csv_back_output = os.path.join(folder_output, "extracted_back_data.csv")
-        extract_to_csv.preprocess_data(pcap_input[0], csv_production_output)
-        extract_to_csv.preprocess_data(pcap_input[1], csv_back_output)
+        extract_to_csv.preprocess_data(production_inputs, csv_production_output)
+        extract_to_csv.preprocess_data(back_inputs, csv_back_output)
 
     # alignment
     if cmd.method == 'align' or cmd.method == 'all':
         if csv_production_output == '' and csv_back_output == '':
-            csv_aligned_output = alignment.alignment_path_query(file_input[0], file_input[1], folder_output)
+            csv_aligned_output = alignment.alignment_path_query(production_inputs[0], back_inputs[0], folder_output)
         else:
             csv_aligned_output = alignment.alignment_path_query(csv_production_output, csv_back_output, folder_output)
 
     # analyze data
     if cmd.method == 'analysis' or cmd.method == 'all':
         if csv_production_output == '' and csv_back_output == '':
-            cluster.analysis(file_input[0], os.path.join(folder_output, 'production'))
-            cluster.analysis(file_input[1], os.path.join(folder_output, 'back'))
+            cluster.analysis(production_inputs[0], os.path.join(folder_output, 'production'))
+            cluster.analysis(back_inputs[0], os.path.join(folder_output, 'back'))
         else:
             cluster.analysis(csv_production_output, os.path.join(folder_output, 'production'))
             cluster.analysis(csv_back_output, os.path.join(folder_output, 'back'))
