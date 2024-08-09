@@ -102,10 +102,16 @@ if __name__ == '__main__':
 
     # preprocess data
     if cmd.method == 'preprocess' or cmd.method == 'all':
-        csv_production_output = os.path.join(folder_output, "extracted_production_data.csv")
-        csv_back_output = os.path.join(folder_output, "extracted_back_data.csv")
-        extract_to_csv.preprocess_data(production_inputs, csv_production_output)
-        extract_to_csv.preprocess_data(back_inputs, csv_back_output)
+        if production_inputs[0].endswith('.csv'):
+            csv_production_output = production_inputs[0]
+        else:
+            csv_production_output = os.path.join(folder_output, "extracted_production_data.csv")
+            extract_to_csv.preprocess_data(production_inputs, csv_production_output)
+        if back_inputs[0].endswith('.csv'):
+            csv_back_output = back_inputs[0]
+        else:
+            csv_back_output = os.path.join(folder_output, "extracted_back_data.csv")
+            extract_to_csv.preprocess_data(back_inputs, csv_back_output)
 
     # alignment
     if cmd.method == 'align' or cmd.method == 'all':
