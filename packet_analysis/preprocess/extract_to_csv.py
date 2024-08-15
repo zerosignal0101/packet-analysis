@@ -186,6 +186,21 @@ class PacketWrapper:
 
 # 预处理函数
 def preprocess_data(file_paths, csv_file_path):
+    # # 创建新的事件循环
+    # loop = asyncio.new_event_loop()
+    # asyncio.set_event_loop(loop)
+
+    if len(file_paths) == 1:
+        cap = pyshark.FileCapture(file_paths[0], keep_packets=False)
+        index = 0
+        for pkt in cap:
+            index += 1
+            process_packet(pkt, index)
+
+        # 提取并写入配对信息
+        extract_packet_info(csv_file_path)
+        return
+
     packet_generators = [pyshark.FileCapture(file_path, keep_packets=False) for file_path in file_paths]
     current_packets = []
 

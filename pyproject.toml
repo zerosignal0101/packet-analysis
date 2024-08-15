@@ -12,6 +12,8 @@ dependencies = [
     "urllib3==1.26.18",
     "matplotlib==3.8.3",
     "gradio>=4.26.0",
+    "fastapi>=0.112.0",
+    "uvicorn>=0.30.5",
 ]
 requires-python = "==3.10.*"
 readme = "README.md"
