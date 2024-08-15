@@ -40,43 +40,42 @@ def process_packet(pkt, index):
         relative_time = (sniff_time - first_packet_time).total_seconds()
 
         if hasattr(pkt.http, 'request_method'):
-            # check if the requested fields exists
-            if not hasattr(pkt.http, 'request_full_uri'):
-                return
-            if not hasattr(pkt.tcp, 'seq'):
-                return
-            if not hasattr(pkt.tcp, 'len'):
-                return
-
-            url = pkt.http.request_full_uri
-            seq_num = int(pkt.tcp.seq)
-            next_seq_num = seq_num + int(pkt.tcp.len)
-            key = (pkt.ip.src, pkt.ip.dst, pkt.tcp.srcport, pkt.tcp.dstport, url, next_seq_num)
-            keys_no_ack = (pkt.ip.src, pkt.ip.dst, pkt.tcp.srcport, pkt.tcp.dstport, url)
-            keys_no_url = (pkt.ip.src, pkt.ip.dst, pkt.tcp.srcport, pkt.tcp.dstport, next_seq_num)
-            request_response_pairs[key] = {
-                'request_sniff_time': sniff_time,
-                'request_relative_time': relative_time,
-                'request_index': index,
-                'ip_src': pkt.ip.src,
-                'ip_dst': pkt.ip.dst,
-                'src_port': pkt.tcp.srcport,  # 添加源端口号
-                'dst_port': pkt.tcp.dstport,  # 添加目的端口号
-                'url': url,
-                'request_method': pkt.http.request_method,  # 存储请求类型
-                'request_packet_length': int(pkt.length),
-                'matched': False,
-                'keys_no_ack': keys_no_ack,  # 存储备用的无ACK键
-                'keys_no_url': keys_no_url  # 存储备用的无URL键
-            }
+            try:
+                url = pkt.http.request_full_uri
+                seq_num = int(pkt.tcp.seq)
+                next_seq_num = seq_num + int(pkt.tcp.len)
+                key = (pkt.ip.src, pkt.ip.dst, pkt.tcp.srcport, pkt.tcp.dstport, url, next_seq_num)
+                keys_no_ack = (pkt.ip.src, pkt.ip.dst, pkt.tcp.srcport, pkt.tcp.dstport, url)
+                keys_no_url = (pkt.ip.src, pkt.ip.dst, pkt.tcp.srcport, pkt.tcp.dstport, next_seq_num)
+                request_response_pairs[key] = {
+                    'request_sniff_time': sniff_time,
+                    'request_relative_time': relative_time,
+                    'request_index': index,
+                    'ip_src': pkt.ip.src,
+                    'ip_dst': pkt.ip.dst,
+                    'src_port': pkt.tcp.srcport,  # 添加源端口号
+                    'dst_port': pkt.tcp.dstport,  # 添加目的端口号
+                    'url': url,
+                    'request_method': pkt.http.request_method,  # 存储请求类型
+                    'request_packet_length': int(pkt.length),
+                    'matched': False,
+                    'keys_no_ack': keys_no_ack,  # 存储备用的无ACK键
+                    'keys_no_url': keys_no_url  # 存储备用的无URL键
+                }
+            except AttributeError:  # 有时候会出现解析错误
+                print("error")
         elif hasattr(pkt.http, 'response_code'):
-            # 处理HTTP响应
-            url = pkt.http.response_for_uri if hasattr(pkt.http, 'response_for_uri') else None
-            ack_num = int(pkt.tcp.ack)
-            potential_keys = [
-                (pkt.ip.dst, pkt.ip.src, pkt.tcp.dstport, pkt.tcp.srcport, url, ack_num),
-                (pkt.ip.dst, pkt.ip.src, pkt.tcp.dstport, pkt.tcp.srcport, url, ack_num - 1)
-            ]
+            try:
+                # 处理HTTP响应
+                url = pkt.http.response_for_uri if hasattr(pkt.http, 'response_for_uri') else None
+                ack_num = int(pkt.tcp.ack)
+                potential_keys = [
+                    (pkt.ip.dst, pkt.ip.src, pkt.tcp.dstport, pkt.tcp.srcport, url, ack_num),
+                    (pkt.ip.dst, pkt.ip.src, pkt.tcp.dstport, pkt.tcp.srcport, url, ack_num - 1)
+                ]
+            except AttributeError:  # 有时候会出现解析错误
+                print("Attr error")
+                return
 
             matched_key = None
 
@@ -186,9 +185,9 @@ class PacketWrapper:
 
 # 预处理函数
 def preprocess_data(file_paths, csv_file_path):
-    # # 创建新的事件循环
-    # loop = asyncio.new_event_loop()
-    # asyncio.set_event_loop(loop)
+    # 创建新的事件循环
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
 
     if len(file_paths) == 1:
         cap = pyshark.FileCapture(file_paths[0], keep_packets=False)
