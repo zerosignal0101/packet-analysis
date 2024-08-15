@@ -3,6 +3,8 @@ import csv
 import pyshark
 from urllib.parse import urlparse, urlunparse
 import time
+import heapq
+from datetime import datetime
 
 # 全局变量
 first_packet_time = None
@@ -38,7 +40,14 @@ def process_packet(pkt, index):
         relative_time = (sniff_time - first_packet_time).total_seconds()
 
         if hasattr(pkt.http, 'request_method'):
-            # 处理HTTP请求
+            # check if the requested fields exists
+            if not hasattr(pkt.http, 'request_full_uri'):
+                return
+            if not hasattr(pkt.tcp, 'seq'):
+                return
+            if not hasattr(pkt.tcp, 'len'):
+                return
+
             url = pkt.http.request_full_uri
             seq_num = int(pkt.tcp.seq)
             next_seq_num = seq_num + int(pkt.tcp.len)
@@ -51,6 +60,8 @@ def process_packet(pkt, index):
                 'request_index': index,
                 'ip_src': pkt.ip.src,
                 'ip_dst': pkt.ip.dst,
+                'src_port': pkt.tcp.srcport,  # 添加源端口号
+                'dst_port': pkt.tcp.dstport,  # 添加目的端口号
                 'url': url,
                 'request_method': pkt.http.request_method,  # 存储请求类型
                 'request_packet_length': int(pkt.length),
@@ -103,11 +114,16 @@ def process_packet(pkt, index):
                 match_num += 1
                 print(index, "is matched ", match_num, "in all")
 
-                # 提取 File Data 长度
+                # 提取 File Data 长度  条件3
+                response_total_length = 0
                 if hasattr(pkt.http, 'content_length'):
                     response_total_length = int(pkt.http.content_length)
-                elif hasattr(pkt.http, 'chunk_size'):
-                    response_total_length = int(pkt.http.chunk_size)
+                elif hasattr(pkt.http, 'transfer_encoding') and pkt.http.transfer_encoding == 'chunked':
+                    response_total_length = 0
+                    try:
+                        response_total_length = pkt.http.chunk_size
+                    except:
+                        print("error")
                 else:
                     response_total_length = int(pkt.length)
 
@@ -127,8 +143,8 @@ def extract_packet_info(csv_file_path):
         writer = csv.writer(file)
         writer.writerow(
             ['No', 'Request_Index', 'Response_Index', 'Sniff_time', 'Relative_time', 'Scheme', 'Netloc', 'Path',
-             'Query', 'Time_since_request', 'Ip_src', 'Ip_dst', 'Request_Method', 'Request_Packet_Length',
-             'Response_Packet_Length', 'Response_Total_Length', 'Match_Status'])
+             'Query', 'Time_since_request', 'Ip_src', 'Ip_dst', 'Src_Port', 'Dst_Port', 'Request_Method',
+             'Request_Packet_Length', 'Response_Packet_Length', 'Response_Total_Length', 'Match_Status'])
 
         index = 0
         for key, pair in sorted(request_response_pairs.items(), key=lambda item: item[1]['request_sniff_time']):
@@ -146,40 +162,61 @@ def extract_packet_info(csv_file_path):
                 writer.writerow(
                     [index, pair['request_index'], pair['response_index'], sniff_time, relative_time, parsed_url.scheme,
                      parsed_url.netloc, parsed_url.path, query, time_since_request, pair['ip_src'], pair['ip_dst'],
-                     pair['request_method'], pair['request_packet_length'], pair['response_packet_length'],
-                     pair['response_total_length'], 'matched'])
-                print("----------------------------- Success !")
-                print(f"Num: {index}, Request Index: {pair['request_index']}, Response Index: {pair['response_index']}")
+                     pair['src_port'], pair['dst_port'], pair['request_method'], pair['request_packet_length'],
+                     pair['response_packet_length'], pair['response_total_length'], 'matched'])
             else:
                 writer.writerow(
                     [index, pair['request_index'], None, sniff_time, relative_time, parsed_url.scheme,
                      parsed_url.netloc, parsed_url.path, query, None, pair['ip_src'], pair['ip_dst'],
-                     pair['request_method'], pair['request_packet_length'], None, None, 'unmatched'])
+                     pair['src_port'], pair['dst_port'], pair['request_method'], pair['request_packet_length'],
+                     None, None, 'unmatched'])
                 unmatched_requests.append(pair)
-                print("----------------------------- Unmatched Request !")
-                print(f"Num: {index}, Request Index: {pair['request_index']}")
+            print("----写入66666666666----第 /15000次-------")
+
+
+class PacketWrapper:
+    def __init__(self, timestamp, packet, gen):
+        self.timestamp = timestamp
+        self.packet = packet
+        self.gen = gen
+
+    def __lt__(self, other):
+        return self.timestamp < other.timestamp
 
 
 # 预处理函数
-def preprocess_data(pcap_file_path, csv_file_path):
-    global first_packet_time, request_response_pairs, unmatched_requests, match_num
+def preprocess_data(file_paths, csv_file_path):
+    packet_generators = [pyshark.FileCapture(file_path, keep_packets=False) for file_path in file_paths]
+    current_packets = []
+
+    # Initialize the heap with the first packet from each file
+    for gen in packet_generators:
+        gen_iter = iter(gen)
+        try:
+            first_packet = next(gen_iter)
+            heapq.heappush(current_packets, PacketWrapper(first_packet.sniff_time, first_packet, gen_iter))
+        except StopIteration:
+            continue
 
     index = 0
-
-    # 创建新的事件循环
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
-    cap = pyshark.FileCapture(pcap_file_path, keep_packets=False,
-                              display_filter=f"frame.number > {index}")
-
-    for pkt in cap:
+    while current_packets:
+        # Get the packet with the smallest timestamp0
+        packet_wrapper = heapq.heappop(current_packets)
+        packet = packet_wrapper.packet
+        gen = packet_wrapper.gen
         index += 1
-        process_packet(pkt, index)
+        process_packet(packet, index)
 
-    cap.close()
+        gen_iter = iter(gen)
 
-    # 提取配对成功后的指标并写入CSV
+        # Push the next packet from the same generator into the heap
+        try:
+            next_packet = next(gen_iter)
+            heapq.heappush(current_packets, PacketWrapper(next_packet.sniff_time, next_packet, gen))
+        except StopIteration:
+            continue
+
+    # 提取并写入配对信息
     extract_packet_info(csv_file_path)
 
 
