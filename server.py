@@ -44,6 +44,8 @@ async def upload_pcap(request: Request):
 
     print(pcap_info_list.pcap_info[0].replay_pcap.replay_speed)
 
+    print(pcap_info_list.pcap_info[0].collect_pcap)
+
     # # 创建新的事件循环
     # loop = asyncio.new_event_loop()
     # asyncio.set_event_loop(loop)
