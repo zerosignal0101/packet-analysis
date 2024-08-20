@@ -77,7 +77,13 @@ RUN apt-get update && \
 COPY --from=builder /app/.venv /app/.venv
 
 # 复制项目文件
-COPY . /app
+COPY ./packet_analysis /app/packet_analysis
+COPY ./run.py /app
+COPY ./server.py /app
+
+# 设置挂载目录
+VOLUME /app/raw_data
+VOLUME /app/results
 
 # 设置环境变量
 ENV PATH="/app/.venv/bin:$PATH"
@@ -86,4 +92,4 @@ ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 7956
 
 # 启动应用
-CMD ["python", "webui.py"]
+CMD ["python", "server.py"]

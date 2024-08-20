@@ -114,6 +114,7 @@ if __name__ == '__main__':
             extract_to_csv.preprocess_data(back_inputs, csv_back_output)
 
     # alignment
+
     if cmd.method == 'align' or cmd.method == 'all':
         if csv_production_output == '' and csv_back_output == '':
             csv_aligned_output = alignment.alignment_path_query(production_inputs[0], back_inputs[0], folder_output)

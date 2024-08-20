@@ -1,12 +1,16 @@
 import asyncio
+import json
 import os
 
 from flask import Flask, request, jsonify
 from pydantic import BaseModel, ValidationError
 from typing import List
+import requests
 import time
 
 from packet_analysis.preprocess import extract_to_csv
+from packet_analysis.preprocess import alignment
+from packet_analysis.utils import postapi
 
 app = Flask(__name__)
 
@@ -51,18 +55,25 @@ def process_request(pcap_info_list: PcapInfoList):
         for collect_pcap in pcap_info.collect_pcap:
             collect_paths.append(os.path.join("raw_data", collect_pcap.collect_path))
         print(collect_paths)
+
+        # 预处理数据
         # 生成 production_csv_file_path
         production_csv_file_path = f"results/extracted_production_data_{index}.csv"
-        # 预处理数据
         # 调用 preprocess_data 函数处理生产环境的数据
         extract_to_csv.preprocess_data(collect_paths, production_csv_file_path)
 
         # 生成 replay_csv_file_path
         replay_csv_file_path = f"results/extracted_replay_data_{index}.csv"
         # 预处理数据
+
         # 调用 preprocess_data 函数处理回放环境的数据
         extract_to_csv.preprocess_data(
             [os.path.join("raw_data", pcap_info.replay_pcap.replay_path)], replay_csv_file_path)
+
+        # 调用 align_data 函数对生产环境和回放环境的数据进行对齐
+        alignment_csv_file_path = f"results/aligned_data_{index}.csv"
+        alignment.alignment_path_query(production_csv_file_path, replay_csv_file_path, alignment_csv_file_path)
+
 
     # Generate the response JSON
     response = {
@@ -204,6 +215,10 @@ def process_request(pcap_info_list: PcapInfoList):
             ]
         }
     }
+
+    callback_url = os.getenv("CALLBACK_URL", 'http://10.180.124.116:18088/api/replay-core/aglAnalysisResult')
+    postapi.post_url(json.dumps(response), callback_url)
+
     return response
 
 
