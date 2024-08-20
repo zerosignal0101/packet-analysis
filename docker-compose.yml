@@ -1,0 +1,17 @@
+version: '3'
+
+services:
+  packet_analysis:
+    image: zerosignal0101/packet-analysis-tool:v0.2.0-alpha
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./raw_data:/app/raw_data
+      - ./results:/app/results
+    environment:
+      - CALLBACK_URL=http://10.180.124.116:18088/api/replay-core/aglAnalysisResult
+    ports:
+      - "7956:7956"
+
+
