@@ -8,18 +8,22 @@ from typing import List
 import requests
 import time
 
+# Import the new function
 from packet_analysis.preprocess import extract_to_csv
 from packet_analysis.preprocess import alignment
 from packet_analysis.utils import postapi
 
-app = Flask(__name__)
 
+from packet_analysis.json_build.comparison_analysis import *
+from packet_analysis.analysis import cluster
+from packet_analysis.json_build import anomaly_detection
+
+app = Flask(__name__)
 
 class CollectPcap(BaseModel):
     collect_path: str
     ip: str
     prot: int
-
 
 class ReplayPcap(BaseModel):
     replay_path: str
@@ -27,7 +31,6 @@ class ReplayPcap(BaseModel):
     prot: int
     replay_speed: str
     replay_multiplier: str
-
 
 class PcapInfo(BaseModel):
     collect_pcap: List[CollectPcap]
@@ -37,50 +40,64 @@ class PcapInfo(BaseModel):
     replay_task_id: int
     replay_id: str
 
-
 class PcapInfoList(BaseModel):
     pcap_info: List[PcapInfo]
 
 
 def process_request(pcap_info_list: PcapInfoList):
-
+    # Create results directory if not exists
     if not os.path.exists('results'):
         os.makedirs('results')
 
-    proc_list = []
-
-    # 提取所有的 collect_path
-    for index, pcap_info in enumerate(pcap_info_list.pcap_info):
-        collect_paths = []
-        for collect_pcap in pcap_info.collect_pcap:
-            collect_paths.append(os.path.join("raw_data", collect_pcap.collect_path))
-        print(collect_paths)
-
-        # 预处理数据
-        # 生成 production_csv_file_path
-        production_csv_file_path = f"results/extracted_production_data_{index}.csv"
-        # 调用 preprocess_data 函数处理生产环境的数据
-        extract_to_csv.preprocess_data(collect_paths, production_csv_file_path)
-
-        # 生成 replay_csv_file_path
-        replay_csv_file_path = f"results/extracted_replay_data_{index}.csv"
-        # 预处理数据
-
-        # 调用 preprocess_data 函数处理回放环境的数据
-        extract_to_csv.preprocess_data(
-            [os.path.join("raw_data", pcap_info.replay_pcap.replay_path)], replay_csv_file_path)
-
-        # 调用 align_data 函数对生产环境和回放环境的数据进行对齐
-        alignment_csv_file_path = f"results/aligned_data_{index}.csv"
-        alignment.alignment_path_query(production_csv_file_path, replay_csv_file_path, alignment_csv_file_path)
-
-
-    # Generate the response JSON
+    # Initialize the global response with predefined values
     response = {
         "individual_analysis_info": [
             {
-                "replay_task_id": info.replay_task_id,
-                "replay_id": info.replay_id,
+                "replay_task_id": "111",
+                "replay_id": "1",
+                "comparison_analysis": {
+                    "title": "生产与回放环境处理时延对比分析",
+                    "x_axis_label": "请求路径",
+                    "y_axis_label": "时延（ms）",
+                    "legend": {
+                        "production": "生产环境",
+                        "replay": "回放环境",
+                        "difference_ratio": "差异倍数"
+                    },
+                    "data": []
+                },
+                "anomaly_detection": {
+                    "details": [],
+                    "dict": [
+                        {
+                            "request_url": "/api/v1/data",
+                            "env": "prod",
+                            "class_method": "get_api",
+                            "bottleneck_cause": "数据库查询慢",
+                            "solution": "优化数据库查询，增加索引"
+                        }
+                    ]
+                },
+                "performance_bottleneck_analysis": {
+                    "bottlenecks": [
+                        {
+                            "class_name": "database",
+                            "cause": "数据库查询慢",
+                            "criteria": "请求时延超过300ms，查询次数过多",
+                            "solution": "优化数据库查询，增加索引"
+                        },
+                        {
+                            "class_name": "network",
+                            "cause": "网络带宽不足",
+                            "criteria": "数据传输时延大，带宽利用率高",
+                            "solution": "增加网络带宽或优化传输协议"
+                        }
+                    ]
+                }
+            },
+            {
+                "replay_task_id": "2222",
+                "replay_id": "2",
                 "comparison_analysis": {
                     "title": "生产与回放环境处理时延对比分析",
                     "x_axis_label": "请求路径",
@@ -93,6 +110,7 @@ def process_request(pcap_info_list: PcapInfoList):
                     "data": [
                         {
                             "url": "/api/v1/data",
+                            "request_method": "get",
                             "production_delay_mean": 200,
                             "replay_delay_mean": 150,
                             "production_delay_median": 190,
@@ -101,12 +119,13 @@ def process_request(pcap_info_list: PcapInfoList):
                             "replay_delay_min": 80,
                             "production_delay_max": 300,
                             "replay_delay_max": 220,
-                            "difference_ratio": 1.33,
+                            "mean_difference_ratio": 1.33,
                             "request_count": 1000,
                             "function_description": "数据查询接口"
                         },
                         {
                             "url": "/api/v1/upload",
+                            "request_method": "get",
                             "production_delay_mean": 500,
                             "replay_delay_mean": 600,
                             "production_delay_median": 480,
@@ -115,69 +134,34 @@ def process_request(pcap_info_list: PcapInfoList):
                             "replay_delay_min": 450,
                             "production_delay_max": 700,
                             "replay_delay_max": 800,
-                            "difference_ratio": 0.83,
+                            "mean_difference_ratio": 0.83,
                             "request_count": 800,
                             "function_description": "文件上传接口"
                         }
                     ]
                 },
                 "anomaly_detection": {
-                    "GET": {
-                        "total_anomalies": 10,
-                        "details": [
-                            {
-                                "request_url": "/api/v1/data",
-                                "anomaly_delay": 400,
-                                "average_delay": 200,
-                                "anomaly_time": "2024-07-23 10:00",
-                                "packet_position": "Packet 102",
-                                "bottleneck_cause": "数据库查询慢",
-                                "solution": "优化数据库查询，增加索引"
-                            }
-                        ]
-                    },
-                    "POST": {
-                        "total_anomalies": 5,
-                        "details": [
-                            {
-                                "request_url": "/api/v1/submit",
-                                "anomaly_delay": 700,
-                                "average_delay": 300,
-                                "anomaly_time": "2024-07-23 11:00",
-                                "packet_position": "Packet 204",
-                                "bottleneck_cause": "网络带宽不足",
-                                "solution": "增加网络带宽或优化传输协议"
-                            }
-                        ]
-                    },
-                    "static_resources": {
-                        "total_anomalies": 3,
-                        "details": [
-                            {
-                                "request_url": "/static/js/app.js",
-                                "anomaly_delay": 500,
-                                "average_delay": 100,
-                                "anomaly_time": "2024-07-23 12:00",
-                                "packet_position": "Packet 305",
-                                "bottleneck_cause": "文件服务器响应慢",
-                                "solution": "优化文件服务器配置"
-                            }
-                        ]
-                    },
-                    "others": {
-                        "total_anomalies": 2,
-                        "details": [
-                            {
-                                "request_url": "/api/v1/other",
-                                "anomaly_delay": 800,
-                                "average_delay": 200,
-                                "anomaly_time": "2024-07-23 13:00",
-                                "packet_position": "Packet 406",
-                                "bottleneck_cause": "未知原因",
-                                "solution": "进一步分析数据包"
-                            }
-                        ]
-                    }
+                    "details": [
+                        {
+                            "request_url": "/api/v1/data",
+                            "request_method": "get",
+                            "env": "prod",
+                            "class_method": "get_api",
+                            "anomaly_delay": 400,
+                            "average_delay": 200,
+                            "anomaly_time": "2024-07-23 10:00",
+                            "packet_position": "Packet 102"
+                        }
+                    ],
+                    "dict": [
+                        {
+                            "request_url": "/api/v1/data",
+                            "env": "prod",
+                            "class_method": "get_api",
+                            "bottleneck_cause": "数据库查询慢",
+                            "solution": "优化数据库查询，增加索引"
+                        }
+                    ]
                 },
                 "performance_bottleneck_analysis": {
                     "bottlenecks": [
@@ -196,7 +180,6 @@ def process_request(pcap_info_list: PcapInfoList):
                     ]
                 }
             }
-            for info in pcap_info_list.pcap_info
         ],
         "overall_analysis_info": {
             "summary": {
@@ -207,25 +190,69 @@ def process_request(pcap_info_list: PcapInfoList):
             },
             "overview": [
                 {
-                    "replay_task_id": info.replay_task_id,
-                    "replay_id": info.replay_id,
-                    "text": "回放存在显著性能差异" if info.replay_task_id % 2 == 0 else "回放正常"
+                    "replay_task_id": 1111,
+                    "replay_id": "1",
+                    "text": "回放存在显著性能差异"
+                },
+                {
+                    "replay_task_id": 1111,
+                    "replay_id": "1",
+                    "text": "回放正常"
                 }
-                for info in pcap_info_list.pcap_info
             ]
         }
     }
 
+    # Process each pcap info
+    for index, pcap_info in enumerate(pcap_info_list.pcap_info):
+
+        # Extract production and replay data
+        production_csv_file_path = f"results/extracted_production_data_{index}.csv"
+        extract_to_csv.preprocess_data(
+            [os.path.join("raw_data", collect.collect_path) for collect in pcap_info.collect_pcap],
+            production_csv_file_path)
+
+        replay_csv_file_path = f"results/extracted_replay_data_{index}.csv"
+        extract_to_csv.preprocess_data(
+            [os.path.join("raw_data", pcap_info.replay_pcap.replay_path)], replay_csv_file_path)
+
+        # Align production and replay data
+        alignment_csv_file_path = f"results/aligned_data_{index}.csv"
+        alignment.alignment_path_query(production_csv_file_path, replay_csv_file_path, alignment_csv_file_path)
+
+        # Process CSV files and get comparison analysis data to build JSON
+        DataBase = DB(csv_back=replay_csv_file_path, csv_production=production_csv_file_path)
+        data_list = DataBase.built_all_dict()
+        # Update response with the data_list for the current analysis
+        response['individual_analysis_info'][index]['comparison_analysis']['data'] = data_list
+
+        #production cluster anomaly and replay cluster anomaly
+        folder_output_pro = f"results/cluster_pro_{index}"
+        pro_anomaly_csv_list, pro_plot_cluster_list = cluster.analysis(production_csv_file_path, folder_output_pro)
+        folder_output_replay = f"results/cluster_replay_{index}"
+        replay_anomaly_csv_list, replay_plot_cluster_list = cluster.analysis(replay_csv_file_path, folder_output_replay)
+
+        # Process anomaly CSV files to build JSON
+        all_pro_anomaly_details = anomaly_detection.process_anomalies(pro_anomaly_csv_list, "production")
+        all_replay_anomaly_details = anomaly_detection.process_anomalies(replay_anomaly_csv_list, "replay")
+        combined_anomaly_details = all_pro_anomaly_details + all_replay_anomaly_details
+        response['individual_analysis_info'][index]['anomaly_detection']['details'] = combined_anomaly_details
+
+
+
+    # Post the response to the callback URL
     callback_url = os.getenv("CALLBACK_URL", 'http://10.180.124.116:18088/api/replay-core/aglAnalysisResult')
     postapi.post_url(json.dumps(response), callback_url)
 
     return response
 
-
+import logging
+logging.basicConfig(level=logging.INFO)
 @app.route('/api/algorithm/analyze', methods=['POST'])
 def process():
     try:
         data = request.json
+        logging.info("2222 This is a debug message")
         pcap_info_list = PcapInfoList.parse_obj(data)
         result = process_request(pcap_info_list)
         return jsonify(result)
