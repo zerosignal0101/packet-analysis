@@ -14,7 +14,7 @@
       <excludeFolder url="file://$MODULE_DIR$/raw_data/数据集2" />
       <excludeFolder url="file://$MODULE_DIR$/test_field/flagged" />
     </content>
-    <orderEntry type="inheritedJdk" />
+    <orderEntry type="jdk" jdkName="Python 3.10 (packet-analysis)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>
