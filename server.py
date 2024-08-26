@@ -1,6 +1,12 @@
 import asyncio
 import json
 import os
+import logging
+import multiprocessing
+from multiprocessing import Pool, cpu_count
+from functools import partial
+
+logging.basicConfig(level=logging.INFO)
 
 from flask import Flask, request, jsonify
 from pydantic import BaseModel, ValidationError
@@ -13,17 +19,18 @@ from packet_analysis.preprocess import extract_to_csv
 from packet_analysis.preprocess import alignment
 from packet_analysis.utils import postapi
 
-
 from packet_analysis.json_build.comparison_analysis import *
 from packet_analysis.analysis import cluster
 from packet_analysis.json_build import anomaly_detection
 
 app = Flask(__name__)
 
+
 class CollectPcap(BaseModel):
     collect_path: str
     ip: str
     prot: int
+
 
 class ReplayPcap(BaseModel):
     replay_path: str
@@ -31,6 +38,7 @@ class ReplayPcap(BaseModel):
     prot: int
     replay_speed: str
     replay_multiplier: str
+
 
 class PcapInfo(BaseModel):
     collect_pcap: List[CollectPcap]
@@ -40,8 +48,43 @@ class PcapInfo(BaseModel):
     replay_task_id: int
     replay_id: str
 
+
 class PcapInfoList(BaseModel):
     pcap_info: List[PcapInfo]
+
+
+def process_pcap_info(index, pcap_info, response):
+    # Extract production and replay data
+    production_csv_file_path = f"results/extracted_production_data_{index}.csv"
+    extract_to_csv.preprocess_data(
+        [os.path.join("raw_data", collect.collect_path) for collect in pcap_info.collect_pcap],
+        production_csv_file_path)
+
+    replay_csv_file_path = f"results/extracted_replay_data_{index}.csv"
+    extract_to_csv.preprocess_data(
+        [os.path.join("raw_data", pcap_info.replay_pcap.replay_path)], replay_csv_file_path)
+
+    # Align production and replay data
+    alignment_csv_file_path = f"results/aligned_data_{index}.csv"
+    alignment.alignment_path_query(production_csv_file_path, replay_csv_file_path, alignment_csv_file_path)
+
+    # Process CSV files and get comparison analysis data to build JSON
+    DataBase = DB(csv_back=replay_csv_file_path, csv_production=production_csv_file_path)
+    data_list = DataBase.built_all_dict()
+    # Update response with the data_list for the current analysis
+    response['individual_analysis_info'][index]['comparison_analysis']['data'] = data_list
+
+    # production cluster anomaly and replay cluster anomaly
+    folder_output_pro = f"results/cluster_pro_{index}"
+    pro_anomaly_csv_list, pro_plot_cluster_list = cluster.analysis(production_csv_file_path, folder_output_pro)
+    folder_output_replay = f"results/cluster_replay_{index}"
+    replay_anomaly_csv_list, replay_plot_cluster_list = cluster.analysis(replay_csv_file_path, folder_output_replay)
+
+    # Process anomaly CSV files to build JSON
+    all_pro_anomaly_details = anomaly_detection.process_anomalies(pro_anomaly_csv_list, "production")
+    all_replay_anomaly_details = anomaly_detection.process_anomalies(replay_anomaly_csv_list, "replay")
+    combined_anomaly_details = all_pro_anomaly_details + all_replay_anomaly_details
+    response['individual_analysis_info'][index]['anomaly_detection']['details'] = combined_anomaly_details
 
 
 def process_request(pcap_info_list: PcapInfoList):
@@ -203,42 +246,8 @@ def process_request(pcap_info_list: PcapInfoList):
         }
     }
 
-    # Process each pcap info
-    for index, pcap_info in enumerate(pcap_info_list.pcap_info):
-
-        # Extract production and replay data
-        production_csv_file_path = f"results/extracted_production_data_{index}.csv"
-        extract_to_csv.preprocess_data(
-            [os.path.join("raw_data", collect.collect_path) for collect in pcap_info.collect_pcap],
-            production_csv_file_path)
-
-        replay_csv_file_path = f"results/extracted_replay_data_{index}.csv"
-        extract_to_csv.preprocess_data(
-            [os.path.join("raw_data", pcap_info.replay_pcap.replay_path)], replay_csv_file_path)
-
-        # Align production and replay data
-        alignment_csv_file_path = f"results/aligned_data_{index}.csv"
-        alignment.alignment_path_query(production_csv_file_path, replay_csv_file_path, alignment_csv_file_path)
-
-        # Process CSV files and get comparison analysis data to build JSON
-        DataBase = DB(csv_back=replay_csv_file_path, csv_production=production_csv_file_path)
-        data_list = DataBase.built_all_dict()
-        # Update response with the data_list for the current analysis
-        response['individual_analysis_info'][index]['comparison_analysis']['data'] = data_list
-
-        #production cluster anomaly and replay cluster anomaly
-        folder_output_pro = f"results/cluster_pro_{index}"
-        pro_anomaly_csv_list, pro_plot_cluster_list = cluster.analysis(production_csv_file_path, folder_output_pro)
-        folder_output_replay = f"results/cluster_replay_{index}"
-        replay_anomaly_csv_list, replay_plot_cluster_list = cluster.analysis(replay_csv_file_path, folder_output_replay)
-
-        # Process anomaly CSV files to build JSON
-        all_pro_anomaly_details = anomaly_detection.process_anomalies(pro_anomaly_csv_list, "production")
-        all_replay_anomaly_details = anomaly_detection.process_anomalies(replay_anomaly_csv_list, "replay")
-        combined_anomaly_details = all_pro_anomaly_details + all_replay_anomaly_details
-        response['individual_analysis_info'][index]['anomaly_detection']['details'] = combined_anomaly_details
-
-
+    with Pool(processes=min(cpu_count(), len(pcap_info_list.pcap_info))) as pool:
+        pool.starmap(partial(process_pcap_info, response=response), enumerate(pcap_info_list.pcap_info))
 
     # Post the response to the callback URL
     callback_url = os.getenv("CALLBACK_URL", 'http://10.180.124.116:18088/api/replay-core/aglAnalysisResult')
@@ -246,8 +255,7 @@ def process_request(pcap_info_list: PcapInfoList):
 
     return response
 
-import logging
-logging.basicConfig(level=logging.INFO)
+
 @app.route('/api/algorithm/analyze', methods=['POST'])
 def process():
     try:

@@ -8,12 +8,7 @@ from datetime import datetime
 
 # 全局变量
 first_packet_time = None
-request_response_pairs = {}
-unmatched_requests = []
-batch_size = 10000  # 每处理10000个数据包清理一次内存
 match_num = 0
-now = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-
 
 # 检查最高层协议是否合适
 def check_highest_layer_suitable(layer):
@@ -27,7 +22,7 @@ def check_highest_layer_suitable(layer):
 
 
 # 处理数据包，提取HTTP请求和响应信息
-def process_packet(pkt, index):
+def process_packet(pkt, index, request_response_pairs):
     global first_packet_time
     global match_num
 
@@ -137,7 +132,7 @@ def process_packet(pkt, index):
 
 
 # 提取并写入配对信息
-def extract_packet_info(csv_file_path):
+def extract_packet_info(csv_file_path, request_response_pairs, unmatched_requests):
     with open(csv_file_path, 'w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(
@@ -189,15 +184,19 @@ def preprocess_data(file_paths, csv_file_path):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
+    # 变量
+    request_response_pairs = {}
+    unmatched_requests = []
+
     if len(file_paths) == 1:
         cap = pyshark.FileCapture(file_paths[0], keep_packets=False)
         index = 0
         for pkt in cap:
             index += 1
-            process_packet(pkt, index)
+            process_packet(pkt, index, request_response_pairs)
 
         # 提取并写入配对信息
-        extract_packet_info(csv_file_path)
+        extract_packet_info(csv_file_path, request_response_pairs, unmatched_requests)
         return
 
     packet_generators = [pyshark.FileCapture(file_path, keep_packets=False) for file_path in file_paths]
@@ -219,7 +218,7 @@ def preprocess_data(file_paths, csv_file_path):
         packet = packet_wrapper.packet
         gen = packet_wrapper.gen
         index += 1
-        process_packet(packet, index)
+        process_packet(packet, index, request_response_pairs)
 
         gen_iter = iter(gen)
 
@@ -231,7 +230,7 @@ def preprocess_data(file_paths, csv_file_path):
             continue
 
     # 提取并写入配对信息
-    extract_packet_info(csv_file_path)
+    extract_packet_info(csv_file_path, request_response_pairs, unmatched_requests)
 
 
 # Main
