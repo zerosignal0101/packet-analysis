@@ -5,9 +5,6 @@ import logging
 import multiprocessing
 from multiprocessing import Pool, cpu_count
 from functools import partial
-
-logging.basicConfig(level=logging.INFO)
-
 from flask import Flask, request, jsonify
 from pydantic import BaseModel, ValidationError
 from typing import List
@@ -22,6 +19,9 @@ from packet_analysis.utils import postapi
 from packet_analysis.json_build.comparison_analysis import *
 from packet_analysis.analysis import cluster
 from packet_analysis.json_build import anomaly_detection
+
+
+logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
 
@@ -246,6 +246,7 @@ def process_request(pcap_info_list: PcapInfoList):
         }
     }
 
+    # Process each pcap info in parallel
     with Pool(processes=min(cpu_count(), len(pcap_info_list.pcap_info))) as pool:
         pool.starmap(partial(process_pcap_info, response=response), enumerate(pcap_info_list.pcap_info))
 
