@@ -218,7 +218,8 @@ def preprocess_data(file_paths, csv_file_path):
             packet = packet_wrapper.packet
             gen = packet_wrapper.gen
             index += 1
-            process_packet(packet, index)
+            first_packet_time, match_num = process_packet(packet, index, first_packet_time, request_response_pairs,
+                                                          unmatched_requests, match_num)
 
             gen_iter = iter(gen)
 
