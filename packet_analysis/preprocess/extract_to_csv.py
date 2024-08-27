@@ -187,6 +187,7 @@ def preprocess_data(file_paths, csv_file_path):
     asyncio.set_event_loop(loop)
 
     if len(file_paths) == 1:
+        # 在我自己电脑上运行要加上： ,tshark_path="F:\softwares_f\Wireshark\\tshark.exe"
         cap = pyshark.FileCapture(file_paths[0], keep_packets=False)
         index = 0
         for pkt in cap:
@@ -198,6 +199,7 @@ def preprocess_data(file_paths, csv_file_path):
 
     elif len(file_paths) > 1:
         packet_generators = [
+            #在我自己电脑上运行要加上： ,tshark_path="F:\softwares_f\Wireshark\\tshark.exe"
             pyshark.FileCapture(file_path, keep_packets=False) for
             file_path in file_paths]
         current_packets = []
@@ -218,7 +220,9 @@ def preprocess_data(file_paths, csv_file_path):
             packet = packet_wrapper.packet
             gen = packet_wrapper.gen
             index += 1
-            process_packet(packet, index)
+            first_packet_time, match_num = process_packet(packet, index, first_packet_time, request_response_pairs,
+                                                          unmatched_requests, match_num)
+            # process_packet(packet, index)
 
             gen_iter = iter(gen)
 
