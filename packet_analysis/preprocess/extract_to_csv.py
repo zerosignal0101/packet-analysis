@@ -197,37 +197,37 @@ def preprocess_data(file_paths, csv_file_path):
         extract_packet_info(csv_file_path, request_response_pairs, unmatched_requests)
 
     elif len(file_paths) > 1:
-        print("使用heapq进行多文件按时间排序")
-        caps = [pyshark.FileCapture(file_path, keep_packets=False) for file_path in file_paths]
+        packet_generators = [
+            pyshark.FileCapture(file_path, keep_packets=False) for
+            file_path in file_paths]
+        current_packets = []
 
-        for index, cap in enumerate(caps):
-            cap.sniff_continuously(packet_count=100)
-            caps[index] = cap
+        # Initialize the heap with the first packet from each file
+        for gen in packet_generators:
+            gen_iter = iter(gen)
+            try:
+                first_packet = next(gen_iter)
+                heapq.heappush(current_packets, PacketWrapper(first_packet.sniff_time, first_packet, gen_iter))
+            except StopIteration:
+                continue
 
         index = 0
-        pending_packets = []
-        for gen in caps:
-            try:
-                packet = next(gen)
-                pending_packets.append(PacketWrapper(packet.sniff_time.timestamp(), packet, gen))
-            except StopIteration:
-                pass
-
-        heapq.heapify(pending_packets)
-
-        while pending_packets:
-            next_wrapper = heapq.heappop(pending_packets)
-            pkt = next_wrapper.packet
-            gen = next_wrapper.gen
-
+        while current_packets:
+            # Get the packet with the smallest timestamp0
+            packet_wrapper = heapq.heappop(current_packets)
+            packet = packet_wrapper.packet
+            gen = packet_wrapper.gen
             index += 1
-            first_packet_time, match_num = process_packet(pkt, index, first_packet_time, request_response_pairs, unmatched_requests, match_num)
+            process_packet(packet, index)
 
+            gen_iter = iter(gen)
+
+            # Push the next packet from the same generator into the heap
             try:
-                next_packet = next(gen)
-                heapq.heappush(pending_packets, PacketWrapper(next_packet.sniff_time.timestamp(), next_packet, gen))
+                next_packet = next(gen_iter)
+                heapq.heappush(current_packets, PacketWrapper(next_packet.sniff_time, next_packet, gen))
             except StopIteration:
-                pass
+                continue
 
         # 提取并写入配对信息
         extract_packet_info(csv_file_path, request_response_pairs, unmatched_requests)
