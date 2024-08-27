@@ -6,14 +6,6 @@ import time
 import heapq
 from datetime import datetime
 
-# 全局变量
-first_packet_time = None
-request_response_pairs = {}
-unmatched_requests = []
-batch_size = 10000  # 每处理10000个数据包清理一次内存
-match_num = 0
-now = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-
 
 # 检查最高层协议是否合适
 def check_highest_layer_suitable(layer):
@@ -22,15 +14,11 @@ def check_highest_layer_suitable(layer):
             or (layer == 'PNG')
             or (layer == 'URLENCODED-FORM')
             or (layer == 'MEDIA')
-            or (layer == 'IMAGE-JFIF')
-            )
+            or (layer == 'IMAGE-JFIF'))
 
 
 # 处理数据包，提取HTTP请求和响应信息
-def process_packet(pkt, index):
-    global first_packet_time
-    global match_num
-
+def process_packet(pkt, index, first_packet_time, request_response_pairs, unmatched_requests, match_num):
     if check_highest_layer_suitable(pkt.highest_layer) or hasattr(pkt, 'http'):
         # 显示当前处理进度
         print("HTTP: ", index)
@@ -75,7 +63,7 @@ def process_packet(pkt, index):
                 ]
             except AttributeError:  # 有时候会出现解析错误
                 print("Attr error")
-                return
+                return first_packet_time, match_num
 
             matched_key = None
 
@@ -135,9 +123,11 @@ def process_packet(pkt, index):
                 })
                 print(66666, response_total_length, int(pkt.length))
 
+    return first_packet_time, match_num
+
 
 # 提取并写入配对信息
-def extract_packet_info(csv_file_path):
+def extract_packet_info(csv_file_path, request_response_pairs, unmatched_requests):
     with open(csv_file_path, 'w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(
@@ -148,7 +138,7 @@ def extract_packet_info(csv_file_path):
         index = 0
         for key, pair in sorted(request_response_pairs.items(), key=lambda item: item[1]['request_sniff_time']):
             index += 1
-            sniff_time = pair['request_sniff_time']
+            sniff_time = pair['request_sniff_time'].strftime("%Y-%m-%d %H:%M:%S.%f")  # 修改时间格式
             relative_time = pair['request_relative_time']
 
             url = pair['url']
@@ -157,7 +147,9 @@ def extract_packet_info(csv_file_path):
 
             if pair['matched']:
                 response_time = pair['response_time']
-                time_since_request = (response_time - sniff_time).total_seconds()
+                time_since_request = (response_time - pair['request_sniff_time']).total_seconds()
+                time_since_request = "{:.6f}".format(time_since_request)  # 保留六位小数
+
                 writer.writerow(
                     [index, pair['request_index'], pair['response_index'], sniff_time, relative_time, parsed_url.scheme,
                      parsed_url.netloc, parsed_url.path, query, time_since_request, pair['ip_src'], pair['ip_dst'],
@@ -185,6 +177,11 @@ class PacketWrapper:
 
 # 预处理函数
 def preprocess_data(file_paths, csv_file_path):
+    request_response_pairs = {}
+    unmatched_requests = []
+    first_packet_time = None
+    match_num = 0
+
     # 创建新的事件循环
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -194,46 +191,47 @@ def preprocess_data(file_paths, csv_file_path):
         index = 0
         for pkt in cap:
             index += 1
-            process_packet(pkt, index)
+            first_packet_time, match_num = process_packet(pkt, index, first_packet_time, request_response_pairs, unmatched_requests, match_num)
 
         # 提取并写入配对信息
-        extract_packet_info(csv_file_path)
-        return
+        extract_packet_info(csv_file_path, request_response_pairs, unmatched_requests)
 
-    packet_generators = [pyshark.FileCapture(file_path, keep_packets=False) for file_path in file_paths]
-    current_packets = []
+    elif len(file_paths) > 1:
+        print("使用heapq进行多文件按时间排序")
+        caps = [pyshark.FileCapture(file_path, keep_packets=False) for file_path in file_paths]
 
-    # Initialize the heap with the first packet from each file
-    for gen in packet_generators:
-        gen_iter = iter(gen)
-        try:
-            first_packet = next(gen_iter)
-            heapq.heappush(current_packets, PacketWrapper(first_packet.sniff_time, first_packet, gen_iter))
-        except StopIteration:
-            continue
+        for index, cap in enumerate(caps):
+            cap.sniff_continuously(packet_count=100)
+            caps[index] = cap
 
-    index = 0
-    while current_packets:
-        # Get the packet with the smallest timestamp0
-        packet_wrapper = heapq.heappop(current_packets)
-        packet = packet_wrapper.packet
-        gen = packet_wrapper.gen
-        index += 1
-        process_packet(packet, index)
+        index = 0
+        pending_packets = []
+        for gen in caps:
+            try:
+                packet = next(gen)
+                pending_packets.append(PacketWrapper(packet.sniff_time.timestamp(), packet, gen))
+            except StopIteration:
+                pass
 
-        gen_iter = iter(gen)
+        heapq.heapify(pending_packets)
 
-        # Push the next packet from the same generator into the heap
-        try:
-            next_packet = next(gen_iter)
-            heapq.heappush(current_packets, PacketWrapper(next_packet.sniff_time, next_packet, gen))
-        except StopIteration:
-            continue
+        while pending_packets:
+            next_wrapper = heapq.heappop(pending_packets)
+            pkt = next_wrapper.packet
+            gen = next_wrapper.gen
 
-    # 提取并写入配对信息
-    extract_packet_info(csv_file_path)
+            index += 1
+            first_packet_time, match_num = process_packet(pkt, index, first_packet_time, request_response_pairs, unmatched_requests, match_num)
+
+            try:
+                next_packet = next(gen)
+                heapq.heappush(pending_packets, PacketWrapper(next_packet.sniff_time.timestamp(), next_packet, gen))
+            except StopIteration:
+                pass
+
+        # 提取并写入配对信息
+        extract_packet_info(csv_file_path, request_response_pairs, unmatched_requests)
 
 
-# Main
-if __name__ == '__main__':
+if __name__ == "__main__":
     print('Do not run this script directly. Please run run.py instead.')
