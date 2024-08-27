@@ -1,6 +1,6 @@
 import os
 import argparse
-import packet_analysis.preprocess.extract_to_csv as extract_to_csv
+import packet_analysis.preprocess.extract_to_csv_old as extract_to_csv
 import packet_analysis.preprocess.alignment as alignment
 import packet_analysis.analysis.cluster as cluster
 import time

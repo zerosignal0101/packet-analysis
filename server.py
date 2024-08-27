@@ -50,7 +50,7 @@ def process_request(pcap_info_list: PcapInfoList):
         os.makedirs('results')
 
     # Initialize the global response with predefined values
-    response = {
+    response={
         "individual_analysis_info": [
             {
                 "replay_task_id": "111",
@@ -58,35 +58,76 @@ def process_request(pcap_info_list: PcapInfoList):
                 "comparison_analysis": {
                     "title": "生产与回放环境处理时延对比分析",
                     "x_axis_label": "请求路径",
-                    "y_axis_label": "时延（ms）",
+                    "y_axis_label": "时延（s）",
                     "legend": {
                         "production": "生产环境",
                         "replay": "回放环境",
-                        "difference_ratio": "差异倍数"
+                        "mean_difference_ratio": "差异倍数"
                     },
-                    "data": []
+                    "data": [
+
+                    ]
                 },
                 "anomaly_detection": {
-                    "details": [],
+                    "details": [
+
+                    ],
                     "dict": [
                         {
                             "request_url": "/api/v1/data",
-                            "env": "prod",
+                            "env": "production",
+                            "hostip": "10.180.1.96",
                             "class_method": "get_api",
                             "bottleneck_cause": "数据库查询慢",
                             "solution": "优化数据库查询，增加索引"
+                        }
+                    ],
+                    "correlation": [
+                        {
+                            "env": "production",
+                            "hostip": "10.180.1.96",
+                            "class_method": "get_api",
+                            "correlation_data": [
+                                {
+                                    "index_id": "非root用户进程数",
+                                    "value": 0.6
+                                },
+                                {
+                                    "index_id": "活动进程数",
+                                    "value": 0.7
+                                }
+                            ]
+                        },
+                        {
+                            "env": "replay",
+                            "hostip": "10.180.2.10",
+                            "class_method": "get_post",
+                            "correlation_data": [
+                                {
+                                    "index_id": "会话数",
+                                    "value": 0.6
+                                },
+                                {
+                                    "index_id": "当前数据库的连接数",
+                                    "value": 0.7
+                                }
+                            ]
                         }
                     ]
                 },
                 "performance_bottleneck_analysis": {
                     "bottlenecks": [
                         {
+                            "env": "replay",
+                            "hostip": "10.180.1.96",
                             "class_name": "database",
                             "cause": "数据库查询慢",
                             "criteria": "请求时延超过300ms，查询次数过多",
                             "solution": "优化数据库查询，增加索引"
                         },
                         {
+                            "env": "production",
+                            "hostip": "10.180.1.96",
                             "class_name": "network",
                             "cause": "网络带宽不足",
                             "criteria": "数据传输时延大，带宽利用率高",
@@ -207,34 +248,37 @@ def process_request(pcap_info_list: PcapInfoList):
     for index, pcap_info in enumerate(pcap_info_list.pcap_info):
 
         # Extract production and replay data
-        production_csv_file_path = f"results/extracted_production_data_{index}.csv"
+        production_csv_file_path = f"results/extracted_production_data_{index}_{pcap_info.replay_id}.csv"
         extract_to_csv.preprocess_data(
             [os.path.join("raw_data", collect.collect_path) for collect in pcap_info.collect_pcap],
             production_csv_file_path)
 
-        replay_csv_file_path = f"results/extracted_replay_data_{index}.csv"
+        replay_csv_file_path = f"results/extracted_replay_data_{index}_{pcap_info.replay_id}.csv"
         extract_to_csv.preprocess_data(
             [os.path.join("raw_data", pcap_info.replay_pcap.replay_path)], replay_csv_file_path)
 
         # Align production and replay data
-        alignment_csv_file_path = f"results/aligned_data_{index}.csv"
+        alignment_csv_file_path = f"results/aligned_data_{index}_{pcap_info.replay_id}.csv"
         alignment.alignment_path_query(production_csv_file_path, replay_csv_file_path, alignment_csv_file_path)
 
         # Process CSV files and get comparison analysis data to build JSON
+        # Request_Info_File_Path = f"packet_analysis/json_build/path_function.csv"
         DataBase = DB(csv_back=replay_csv_file_path, csv_production=production_csv_file_path)
         data_list = DataBase.built_all_dict()
         # Update response with the data_list for the current analysis
         response['individual_analysis_info'][index]['comparison_analysis']['data'] = data_list
+        response['individual_analysis_info'][index]['replay_task_id'] = pcap_info.replay_task_id
+        response['individual_analysis_info'][index]['replay_id'] = pcap_info.replay_id
 
         #production cluster anomaly and replay cluster anomaly
-        folder_output_pro = f"results/cluster_pro_{index}"
+        folder_output_pro = f"results/cluster_production_{index}_{pcap_info.replay_id}"
         pro_anomaly_csv_list, pro_plot_cluster_list = cluster.analysis(production_csv_file_path, folder_output_pro)
-        folder_output_replay = f"results/cluster_replay_{index}"
+        folder_output_replay = f"results/cluster_replay_{index}_{pcap_info.replay_id}"
         replay_anomaly_csv_list, replay_plot_cluster_list = cluster.analysis(replay_csv_file_path, folder_output_replay)
 
         # Process anomaly CSV files to build JSON
-        all_pro_anomaly_details = anomaly_detection.process_anomalies(pro_anomaly_csv_list, "production")
-        all_replay_anomaly_details = anomaly_detection.process_anomalies(replay_anomaly_csv_list, "replay")
+        all_pro_anomaly_details = anomaly_detection.process_anomalies(pro_anomaly_csv_list, "production",pcap_info.collect_pcap[0].ip)
+        all_replay_anomaly_details = anomaly_detection.process_anomalies(replay_anomaly_csv_list, "replay",pcap_info.replay_pcap.ip)
         combined_anomaly_details = all_pro_anomaly_details + all_replay_anomaly_details
         response['individual_analysis_info'][index]['anomaly_detection']['details'] = combined_anomaly_details
 
