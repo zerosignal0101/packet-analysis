@@ -53,8 +53,8 @@ def process_request(pcap_info_list: PcapInfoList):
     response={
         "individual_analysis_info": [
             {
-                "replay_task_id": "111",
-                "replay_id": "1",
+                "replay_task_id": info.replay_task_id,
+                "replay_id": info.replay_id,
                 "comparison_analysis": {
                     "title": "生产与回放环境处理时延对比分析",
                     "x_axis_label": "请求路径",
@@ -76,7 +76,7 @@ def process_request(pcap_info_list: PcapInfoList):
                         {
                             "request_url": "/api/v1/data",
                             "env": "production",
-                            "hostip": "10.180.1.96",
+                            "hostip": info.collect_pcap[0].ip,
                             "class_method": "get_api",
                             "bottleneck_cause": "数据库查询慢",
                             "solution": "优化数据库查询，增加索引"
@@ -85,7 +85,7 @@ def process_request(pcap_info_list: PcapInfoList):
                     "correlation": [
                         {
                             "env": "production",
-                            "hostip": "10.180.1.96",
+                            "hostip": info.collect_pcap[0].ip,
                             "class_method": "get_api",
                             "correlation_data": [
                                 {
@@ -100,7 +100,7 @@ def process_request(pcap_info_list: PcapInfoList):
                         },
                         {
                             "env": "replay",
-                            "hostip": "10.180.2.10",
+                            "hostip": info.replay_pcap.ip,
                             "class_method": "get_post",
                             "correlation_data": [
                                 {
@@ -119,7 +119,7 @@ def process_request(pcap_info_list: PcapInfoList):
                     "bottlenecks": [
                         {
                             "env": "replay",
-                            "hostip": "10.180.1.96",
+                            "hostip": info.replay_pcap.ip,
                             "class_name": "database",
                             "cause": "数据库查询慢",
                             "criteria": "请求时延超过300ms，查询次数过多",
@@ -127,92 +127,7 @@ def process_request(pcap_info_list: PcapInfoList):
                         },
                         {
                             "env": "production",
-                            "hostip": "10.180.1.96",
-                            "class_name": "network",
-                            "cause": "网络带宽不足",
-                            "criteria": "数据传输时延大，带宽利用率高",
-                            "solution": "增加网络带宽或优化传输协议"
-                        }
-                    ]
-                }
-            },
-            {
-                "replay_task_id": "2222",
-                "replay_id": "2",
-                "comparison_analysis": {
-                    "title": "生产与回放环境处理时延对比分析",
-                    "x_axis_label": "请求路径",
-                    "y_axis_label": "时延（ms）",
-                    "legend": {
-                        "production": "生产环境",
-                        "replay": "回放环境",
-                        "difference_ratio": "差异倍数"
-                    },
-                    "data": [
-                        {
-                            "url": "/api/v1/data",
-                            "request_method": "get",
-                            "production_delay_mean": 200,
-                            "replay_delay_mean": 150,
-                            "production_delay_median": 190,
-                            "replay_delay_median": 140,
-                            "production_delay_min": 100,
-                            "replay_delay_min": 80,
-                            "production_delay_max": 300,
-                            "replay_delay_max": 220,
-                            "mean_difference_ratio": 1.33,
-                            "request_count": 1000,
-                            "function_description": "数据查询接口"
-                        },
-                        {
-                            "url": "/api/v1/upload",
-                            "request_method": "get",
-                            "production_delay_mean": 500,
-                            "replay_delay_mean": 600,
-                            "production_delay_median": 480,
-                            "replay_delay_median": 580,
-                            "production_delay_min": 400,
-                            "replay_delay_min": 450,
-                            "production_delay_max": 700,
-                            "replay_delay_max": 800,
-                            "mean_difference_ratio": 0.83,
-                            "request_count": 800,
-                            "function_description": "文件上传接口"
-                        }
-                    ]
-                },
-                "anomaly_detection": {
-                    "details": [
-                        {
-                            "request_url": "/api/v1/data",
-                            "request_method": "get",
-                            "env": "prod",
-                            "class_method": "get_api",
-                            "anomaly_delay": 400,
-                            "average_delay": 200,
-                            "anomaly_time": "2024-07-23 10:00",
-                            "packet_position": "Packet 102"
-                        }
-                    ],
-                    "dict": [
-                        {
-                            "request_url": "/api/v1/data",
-                            "env": "prod",
-                            "class_method": "get_api",
-                            "bottleneck_cause": "数据库查询慢",
-                            "solution": "优化数据库查询，增加索引"
-                        }
-                    ]
-                },
-                "performance_bottleneck_analysis": {
-                    "bottlenecks": [
-                        {
-                            "class_name": "database",
-                            "cause": "数据库查询慢",
-                            "criteria": "请求时延超过300ms，查询次数过多",
-                            "solution": "优化数据库查询，增加索引"
-                        },
-                        {
+                            "hostip": info.collect_pcap[0].ip,
                             "class_name": "network",
                             "cause": "网络带宽不足",
                             "criteria": "数据传输时延大，带宽利用率高",
@@ -221,6 +136,7 @@ def process_request(pcap_info_list: PcapInfoList):
                     ]
                 }
             }
+            for info in pcap_info_list.pcap_info
         ],
         "overall_analysis_info": {
             "summary": {
@@ -231,15 +147,12 @@ def process_request(pcap_info_list: PcapInfoList):
             },
             "overview": [
                 {
-                    "replay_task_id": 1111,
-                    "replay_id": "1",
-                    "text": "回放存在显著性能差异"
-                },
-                {
-                    "replay_task_id": 1111,
-                    "replay_id": "1",
-                    "text": "回放正常"
+                    "replay_task_id": info.replay_task_id,
+                    "replay_id": info.replay_id,
+                    "text": "回放存在显著性能差异" if info.replay_task_id % 2 == 0 else "回放正常"
+                    # TODO: Add logic to determine if replay is normal or not
                 }
+                for info in pcap_info_list.pcap_info
             ]
         }
     }
