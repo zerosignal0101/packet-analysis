@@ -250,12 +250,12 @@ def process_request(pcap_info_list: PcapInfoList):
         # Extract production and replay data
         production_csv_file_path = f"results/extracted_production_data_{index}_{pcap_info.replay_id}.csv"
         extract_to_csv.preprocess_data(
-            [os.path.join("raw_data", collect.collect_path) for collect in pcap_info.collect_pcap],
+            [os.path.join(collect.collect_path) for collect in pcap_info.collect_pcap],
             production_csv_file_path)
 
         replay_csv_file_path = f"results/extracted_replay_data_{index}_{pcap_info.replay_id}.csv"
         extract_to_csv.preprocess_data(
-            [os.path.join("raw_data", pcap_info.replay_pcap.replay_path)], replay_csv_file_path)
+            [os.path.join(pcap_info.replay_pcap.replay_path)], replay_csv_file_path)
 
         # Align production and replay data
         alignment_csv_file_path = f"results/aligned_data_{index}_{pcap_info.replay_id}.csv"
