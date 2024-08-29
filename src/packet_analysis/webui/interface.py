@@ -2,8 +2,8 @@ import shutil
 
 import gradio as gr
 import os
-from packet_analysis.preprocess import extract_to_csv_old, alignment
-from packet_analysis.analysis import cluster
+from src.packet_analysis.preprocess import alignment
+from src.packet_analysis.analysis import cluster
 
 
 def process_files(file1, file2):

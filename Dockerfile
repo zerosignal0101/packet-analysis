@@ -76,14 +76,15 @@ RUN apt-get update && \
 # 从构建阶段复制虚拟环境
 COPY --from=builder /app/.venv /app/.venv
 
-# 复制项目文件
-COPY ./packet_analysis /app/packet_analysis
-COPY ./run.py /app
-COPY ./server.py /app
+## 复制项目文件
+#COPY ./packet_analysis /app/packet_analysis
+#COPY ./run.py /app
+#COPY ./server.py /app
 
 # 设置挂载目录
 VOLUME /app/raw_data
 VOLUME /app/results
+VOLUME /app/src
 
 # 设置环境变量
 ENV PATH="/app/.venv/bin:$PATH"
@@ -92,4 +93,4 @@ ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 7956
 
 # 启动应用
-CMD ["python", "server.py"]
+CMD ["python", "src/server.py"]

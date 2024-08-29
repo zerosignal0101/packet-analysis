@@ -1,29 +1,26 @@
-import asyncio
 import json
 import os
 
 from flask import Flask, request, jsonify
 from pydantic import BaseModel, ValidationError
 from typing import List
-import requests
-import time
 
 # Import the new function
-from packet_analysis.preprocess import extract_to_csv
-from packet_analysis.preprocess import alignment
-from packet_analysis.utils import postapi
+from src.packet_analysis.preprocess import extract_to_csv, alignment
+from src.packet_analysis.utils import postapi
 
-
-from packet_analysis.json_build.comparison_analysis import *
-from packet_analysis.analysis import cluster
-from packet_analysis.json_build import anomaly_detection
+from src.packet_analysis.json_build.comparison_analysis import *
+from src.packet_analysis.analysis import cluster
+from src.packet_analysis.json_build import anomaly_detection
 
 app = Flask(__name__)
+
 
 class CollectPcap(BaseModel):
     collect_path: str
     ip: str
     prot: int
+
 
 class ReplayPcap(BaseModel):
     replay_path: str
@@ -31,6 +28,7 @@ class ReplayPcap(BaseModel):
     prot: int
     replay_speed: str
     replay_multiplier: str
+
 
 class PcapInfo(BaseModel):
     collect_pcap: List[CollectPcap]
@@ -40,17 +38,18 @@ class PcapInfo(BaseModel):
     replay_task_id: int
     replay_id: str
 
+
 class PcapInfoList(BaseModel):
     pcap_info: List[PcapInfo]
 
 
 def process_request(pcap_info_list: PcapInfoList):
     # Create results directory if not exists
-    if not os.path.exists('results'):
-        os.makedirs('results')
+    if not os.path.exists('../results'):
+        os.makedirs('../results')
 
     # Initialize the global response with predefined values
-    response={
+    response = {
         "individual_analysis_info": [
             {
                 "replay_task_id": info.replay_task_id,
@@ -159,7 +158,6 @@ def process_request(pcap_info_list: PcapInfoList):
 
     # Process each pcap info
     for index, pcap_info in enumerate(pcap_info_list.pcap_info):
-
         # Extract production and replay data
         production_csv_file_path = f"results/extracted_production_data_{index}_{pcap_info.replay_id}.csv"
         extract_to_csv.preprocess_data(
@@ -183,19 +181,19 @@ def process_request(pcap_info_list: PcapInfoList):
         response['individual_analysis_info'][index]['replay_task_id'] = pcap_info.replay_task_id
         response['individual_analysis_info'][index]['replay_id'] = pcap_info.replay_id
 
-        #production cluster anomaly and replay cluster anomaly
+        # production cluster anomaly and replay cluster anomaly
         folder_output_pro = f"results/cluster_production_{index}_{pcap_info.replay_id}"
         pro_anomaly_csv_list, pro_plot_cluster_list = cluster.analysis(production_csv_file_path, folder_output_pro)
         folder_output_replay = f"results/cluster_replay_{index}_{pcap_info.replay_id}"
         replay_anomaly_csv_list, replay_plot_cluster_list = cluster.analysis(replay_csv_file_path, folder_output_replay)
 
         # Process anomaly CSV files to build JSON
-        all_pro_anomaly_details = anomaly_detection.process_anomalies(pro_anomaly_csv_list, "production",pcap_info.collect_pcap[0].ip)
-        all_replay_anomaly_details = anomaly_detection.process_anomalies(replay_anomaly_csv_list, "replay",pcap_info.replay_pcap.ip)
+        all_pro_anomaly_details = anomaly_detection.process_anomalies(pro_anomaly_csv_list, "production",
+                                                                      pcap_info.collect_pcap[0].ip)
+        all_replay_anomaly_details = anomaly_detection.process_anomalies(replay_anomaly_csv_list, "replay",
+                                                                         pcap_info.replay_pcap.ip)
         combined_anomaly_details = all_pro_anomaly_details + all_replay_anomaly_details
         response['individual_analysis_info'][index]['anomaly_detection']['details'] = combined_anomaly_details
-
-
 
     # Post the response to the callback URL
     callback_url = os.getenv("CALLBACK_URL", 'http://10.180.124.116:18088/api/replay-core/aglAnalysisResult')
@@ -203,8 +201,12 @@ def process_request(pcap_info_list: PcapInfoList):
 
     return response
 
+
 import logging
+
 logging.basicConfig(level=logging.INFO)
+
+
 @app.route('/api/algorithm/analyze', methods=['POST'])
 def process():
     try:
