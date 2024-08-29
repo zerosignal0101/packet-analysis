@@ -6,12 +6,12 @@ from pydantic import BaseModel, ValidationError
 from typing import List
 
 # Import the new function
-from src.packet_analysis.preprocess import extract_to_csv, alignment
-from src.packet_analysis.utils import postapi
+from packet_analysis.preprocess import extract_to_csv, alignment
+from packet_analysis.utils import postapi
 
-from src.packet_analysis.json_build.comparison_analysis import *
-from src.packet_analysis.analysis import cluster
-from src.packet_analysis.json_build import anomaly_detection
+from packet_analysis.json_build.comparison_analysis import *
+from packet_analysis.analysis import cluster
+from packet_analysis.json_build import anomaly_detection
 
 app = Flask(__name__)
 
