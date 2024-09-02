@@ -1,6 +1,6 @@
 import os
 import argparse
-import packet_analysis.preprocess.extract_to_csv_old as extract_to_csv
+import packet_analysis.preprocess.extract_to_csv as extract_to_csv
 import packet_analysis.preprocess.alignment as alignment
 import packet_analysis.analysis.cluster as cluster
 import time
@@ -21,7 +21,7 @@ def parse_args(args=None, namespace=None):
         "-ib",
         "--input-back",
         type=str,
-        required=True,
+        required=False,
         help="path to the input files (pcap or csv format), the file in back"
     )
     parser.add_argument(
@@ -62,7 +62,8 @@ if __name__ == '__main__':
     production_inputs = production_inputs.split(',')
 
     # transfrom the back input files to list
-    back_inputs = back_inputs.split(',')
+    if back_inputs is not None:
+        back_inputs = back_inputs.split(',')
 
     # # test pause
     # print(production_inputs)
@@ -76,11 +77,11 @@ if __name__ == '__main__':
             print(f"File {file} does not exist.")
             exit(1)
 
-    # check if the back input files from the list 'production_inputs' exist or not
-    for file in back_inputs:
-        if not os.path.exists(file):
-            print(f"File {file} does not exist.")
-            exit(1)
+    # # check if the back input files from the list 'production_inputs' exist or not
+    # for file in back_inputs:
+    #     if not os.path.exists(file):
+    #         print(f"File {file} does not exist.")
+    #         exit(1)
 
     # check if the production input files are pcap or csv
     for file in production_inputs:
@@ -88,11 +89,11 @@ if __name__ == '__main__':
             print(f"File {file} in production field is not a pcap or csv file.")
             exit(1)
 
-    # check if the back input files are pcap or csv
-    for file in back_inputs:
-        if not file.endswith('.pcap') and not file.endswith('.csv'):
-            print(f"File {file} in back field is not a pcap or csv file.")
-            exit(1)
+    # # check if the back input files are pcap or csv
+    # for file in back_inputs:
+    #     if not file.endswith('.pcap') and not file.endswith('.csv'):
+    #         print(f"File {file} in back field is not a pcap or csv file.")
+    #         exit(1)
 
     # check if output folder exists
     if folder_output is None:
@@ -107,11 +108,18 @@ if __name__ == '__main__':
         else:
             csv_production_output = os.path.join(folder_output, "extracted_production_data.csv")
             extract_to_csv.preprocess_data(production_inputs, csv_production_output)
-        if back_inputs[0].endswith('.csv'):
-            csv_back_output = back_inputs[0]
-        else:
-            csv_back_output = os.path.join(folder_output, "extracted_back_data.csv")
-            extract_to_csv.preprocess_data(back_inputs, csv_back_output)
+        if back_inputs is not None:
+            flag = True
+            for file in back_inputs:
+                if not file.endswith('.pcap') and not file.endswith('.csv') and flag:
+                    print(f"File {file} in back field is not a pcap or csv file.")
+                    flag = False
+            if flag:
+                if back_inputs[0].endswith('.csv'):
+                    csv_back_output = back_inputs[0]
+                else:
+                    csv_back_output = os.path.join(folder_output, "extracted_back_data.csv")
+                    extract_to_csv.preprocess_data(back_inputs, csv_back_output)
 
     # alignment
 
