@@ -4,16 +4,28 @@ import os
 from flask import Flask, request, jsonify
 from pydantic import BaseModel, ValidationError
 from typing import List
+import requests
+from celery import Celery
 
 # Import the new function
-from packet_analysis.preprocess import extract_to_csv, alignment
-from packet_analysis.utils import postapi
+from src.packet_analysis.preprocess import extract_to_csv, alignment
+from src.packet_analysis.utils import postapi
 
-from packet_analysis.json_build.comparison_analysis import *
-from packet_analysis.analysis import cluster
-from packet_analysis.json_build import anomaly_detection
+from src.packet_analysis.json_build.comparison_analysis import *
+from src.packet_analysis.analysis import cluster
+from src.packet_analysis.json_build import anomaly_detection
+from src.packet_analysis.utils.logger_config import logger
 
 app = Flask(__name__)
+# 使用新格式的配置名称
+app.config.update(
+    include=['src.server'],
+    result_backend='redis://localhost:6379/0',
+    broker_url='redis://localhost:6379/0'
+)
+
+celery = Celery(app.name, broker=app.config['broker_url'])
+celery.conf.update(app.config)
 
 
 class CollectPcap(BaseModel):
@@ -43,7 +55,7 @@ class PcapInfoList(BaseModel):
     pcap_info: List[PcapInfo]
 
 
-def process_request(pcap_info_list: PcapInfoList):
+def process_request(pcap_info_list: PcapInfoList, ip_address: str = "10.180.124.116"):
     # Create results directory if not exists
     if not os.path.exists('../results'):
         os.makedirs('../results')
@@ -158,13 +170,21 @@ def process_request(pcap_info_list: PcapInfoList):
 
     # Process each pcap info
     for index, pcap_info in enumerate(pcap_info_list.pcap_info):
+        logger.info(f"Processing pcap info {index}")
         # Extract production and replay data
         production_csv_file_path = f"results/extracted_production_data_{index}_{pcap_info.replay_id}.csv"
         extract_to_csv.preprocess_data(
             [os.path.join(collect.collect_path) for collect in pcap_info.collect_pcap],
             production_csv_file_path)
 
+        # log production pcap path
+        logger.info(f"Production pcap path: {pcap_info.collect_pcap[0].collect_path}")
+
         replay_csv_file_path = f"results/extracted_replay_data_{index}_{pcap_info.replay_id}.csv"
+
+        # log replay pcap path
+        logger.info(f"Replay pcap path: {pcap_info.replay_pcap.replay_path}")
+
         extract_to_csv.preprocess_data(
             [os.path.join(pcap_info.replay_pcap.replay_path)], replay_csv_file_path)
 
@@ -196,25 +216,36 @@ def process_request(pcap_info_list: PcapInfoList):
         response['individual_analysis_info'][index]['anomaly_detection']['details'] = combined_anomaly_details
 
     # Post the response to the callback URL
-    callback_url = os.getenv("CALLBACK_URL", 'http://10.180.124.116:18088/api/replay-core/aglAnalysisResult')
+    callback_url = os.getenv("CALLBACK_URL", f'http://{ip_address}:18088/api/replay-core/aglAnalysisResult')
     postapi.post_url(json.dumps(response), callback_url)
 
     return response
 
 
-import logging
+@celery.task(name='server.analyze_algorithm')
+def analyze_algorithm(data, ip_address):
+    pcap_info_list = PcapInfoList.parse_obj(data)
+    json_id = id(data)
+    logger.info('Processing task %s', json_id)
+    result = process_request(pcap_info_list, ip_address)
 
-logging.basicConfig(level=logging.INFO)
+    # Save the result to a file
+    with open(f"results/result_{json_id}.json", "w") as f:
+        f.write(json.dumps(result))
+
+    logger.info('Task %s processed', json_id)
 
 
 @app.route('/api/algorithm/analyze', methods=['POST'])
 def process():
     try:
-        data = request.json
-        logging.info("2222 This is a debug message")
-        pcap_info_list = PcapInfoList.parse_obj(data)
-        result = process_request(pcap_info_list)
-        return jsonify(result)
+        data = request.json  # 假设请求体是JSON格式
+        ip_address = request.remote_addr
+
+        # 异步执行任务
+        task = analyze_algorithm.apply_async(args=[data, ip_address])
+
+        return jsonify({"message": "Request received", "task_id": task.id, "status": "queued"}), 202
     except ValidationError as e:
         return jsonify({"error": str(e)}), 400
 

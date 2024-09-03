@@ -5,6 +5,7 @@ from urllib.parse import urlparse, urlunparse
 import time
 import heapq
 from datetime import datetime
+from src.packet_analysis.utils.logger_config import logger
 
 
 # 检查最高层协议是否合适
@@ -21,7 +22,7 @@ def check_highest_layer_suitable(layer):
 def process_packet(pkt, index, first_packet_time, request_response_pairs, unmatched_requests, match_num):
     if check_highest_layer_suitable(pkt.highest_layer) or hasattr(pkt, 'http'):
         # 显示当前处理进度
-        print("HTTP: ", index)
+        logger.info("HTTP: ", index)
         sniff_time = pkt.sniff_time
         if first_packet_time is None:
             first_packet_time = sniff_time
@@ -51,7 +52,7 @@ def process_packet(pkt, index, first_packet_time, request_response_pairs, unmatc
                     'keys_no_url': keys_no_url  # 存储备用的无URL键
                 }
             except AttributeError:  # 有时候会出现解析错误
-                print("error")
+                logger.info("error")
         elif hasattr(pkt.http, 'response_code'):
             try:
                 # 处理HTTP响应
@@ -62,7 +63,7 @@ def process_packet(pkt, index, first_packet_time, request_response_pairs, unmatc
                     (pkt.ip.dst, pkt.ip.src, pkt.tcp.dstport, pkt.tcp.srcport, url, ack_num - 1)
                 ]
             except AttributeError:  # 有时候会出现解析错误
-                print("Attr error")
+                logger.info("Attr error")
                 return first_packet_time, match_num
 
             matched_key = None
@@ -99,7 +100,7 @@ def process_packet(pkt, index, first_packet_time, request_response_pairs, unmatc
             if matched_key:
                 # 处理过程中显示配对成功数
                 match_num += 1
-                print(index, "is matched ", match_num, "in all")
+                logger.info(index, "is matched ", match_num, "in all")
 
                 # 提取 File Data 长度  条件3
                 response_total_length = 0
@@ -110,7 +111,7 @@ def process_packet(pkt, index, first_packet_time, request_response_pairs, unmatc
                     try:
                         response_total_length = pkt.http.chunk_size
                     except:
-                        print("error")
+                        logger.info("error")
                 else:
                     response_total_length = int(pkt.length)
 
@@ -121,7 +122,7 @@ def process_packet(pkt, index, first_packet_time, request_response_pairs, unmatc
                     'response_total_length': response_total_length,  # 存储总的响应长度
                     'matched': True
                 })
-                print(66666, response_total_length, int(pkt.length))
+                logger.info("66666" + response_total_length + str(pkt.length))
 
     return first_packet_time, match_num
 
@@ -162,7 +163,7 @@ def extract_packet_info(csv_file_path, request_response_pairs, unmatched_request
                      pair['src_port'], pair['dst_port'], pair['request_method'], pair['request_packet_length'],
                      None, None, 'unmatched'])
                 unmatched_requests.append(pair)
-            print("----写入66666666666----第 /15000次-------")
+            logger.info("----写入66666666666----第 /15000次-------")
 
 
 class PacketWrapper:
@@ -235,4 +236,4 @@ def preprocess_data(file_paths, csv_file_path):
 
 
 if __name__ == "__main__":
-    print('Do not run this script directly. Please run run.py instead.')
+    logger.info('Do not run this script directly. Please run run.py instead.')
