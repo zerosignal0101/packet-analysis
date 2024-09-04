@@ -27,9 +27,7 @@ services:
 
   celery_worker:
     image: zerosignal0101/packet-analysis-tool:v0.2.2
-    build:
-      context: ./src/celery_worker
-      dockerfile: Dockerfile
+    command: celery -A src.server.celery worker --loglevel=info
     volumes:
       - ./raw_data:/app/raw_data
       - ./results:/app/results

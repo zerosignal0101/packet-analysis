@@ -88,6 +88,7 @@ VOLUME /app/src
 
 # 设置环境变量
 ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONPATH=/app
 
 # 暴露端口7956
 EXPOSE 7956
