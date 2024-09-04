@@ -5,7 +5,7 @@ from flask import Flask, request, jsonify
 from pydantic import BaseModel, ValidationError
 from typing import List
 import requests
-from celery import Celery
+from celery import Celery, group, chain, chord
 
 # Import the new function
 from src.packet_analysis.preprocess import extract_to_csv, alignment
@@ -55,11 +55,54 @@ class PcapInfoList(BaseModel):
     pcap_info: List[PcapInfo]
 
 
-def process_request(pcap_info_list: PcapInfoList, ip_address: str = "10.180.124.116"):
-    # Create results directory if not exists
-    if not os.path.exists('../results'):
-        os.makedirs('../results')
+@celery.task(name='server.extract_data')
+def extract_data(pcap_file_path, csv_file_path):
+    extract_to_csv.preprocess_data([pcap_file_path], csv_file_path)
 
+
+@celery.task(name='server.align_data')
+def align_data(results, production_csv_file_path, replay_csv_file_path, alignment_csv_file_path):
+    alignment.alignment_path_query(production_csv_file_path, replay_csv_file_path, alignment_csv_file_path)
+
+
+@celery.task(name='server.cluster_analysis_data')
+def cluster_analysis_data(results, index, replay_task_id, replay_id, production_ip, replay_ip, replay_csv_file_path,
+                          production_csv_file_path):
+    # res variable
+    res = {
+        "comparison_analysis": {},
+        "anomaly_detection": {},
+    }
+
+    # Process CSV files and get comparison analysis data to build JSON
+    # Request_Info_File_Path = f"packet_analysis/json_build/path_function.csv"
+    DataBase = DB(csv_back=replay_csv_file_path, csv_production=production_csv_file_path)
+    data_list = DataBase.built_all_dict()
+    # Update response with the data_list for the current analysis
+    res['comparison_analysis']['data'] = data_list
+    res['replay_task_id'] = replay_task_id
+    res['replay_id'] = replay_id
+
+    # production cluster anomaly and replay cluster anomaly
+    folder_output_pro = f"results/cluster_production_{index}_{replay_id}"
+    pro_anomaly_csv_list, pro_plot_cluster_list = cluster.analysis(production_csv_file_path, folder_output_pro)
+    folder_output_replay = f"results/cluster_replay_{index}_{replay_id}"
+    replay_anomaly_csv_list, replay_plot_cluster_list = cluster.analysis(replay_csv_file_path, folder_output_replay)
+
+    # Process anomaly CSV files to build JSON
+    all_pro_anomaly_details = anomaly_detection.process_anomalies(pro_anomaly_csv_list, "production",
+                                                                  production_ip)
+    all_replay_anomaly_details = anomaly_detection.process_anomalies(replay_anomaly_csv_list, "replay",
+                                                                     replay_ip)
+    combined_anomaly_details = all_pro_anomaly_details + all_replay_anomaly_details
+    res['anomaly_detection']['details'] = combined_anomaly_details
+
+    return index, res
+
+
+@celery.task(name='server.final_task')
+def final_task(results, data, ip_address):
+    pcap_info_list = PcapInfoList.parse_obj(data)
     # Initialize the global response with predefined values
     response = {
         "individual_analysis_info": [
@@ -168,72 +211,51 @@ def process_request(pcap_info_list: PcapInfoList, ip_address: str = "10.180.124.
         }
     }
 
-    # Process each pcap info
-    for index, pcap_info in enumerate(pcap_info_list.pcap_info):
-        logger.info(f"Processing pcap info {index}")
-        # Extract production and replay data
-        production_csv_file_path = f"results/extracted_production_data_{index}_{pcap_info.replay_id}.csv"
-        extract_to_csv.preprocess_data(
-            [os.path.join(collect.collect_path) for collect in pcap_info.collect_pcap],
-            production_csv_file_path)
+    logger.info(f"Results: {results}")
 
-        # log production pcap path
-        logger.info(f"Production pcap path: {pcap_info.collect_pcap[0].collect_path}")
-
-        replay_csv_file_path = f"results/extracted_replay_data_{index}_{pcap_info.replay_id}.csv"
-
-        # log replay pcap path
-        logger.info(f"Replay pcap path: {pcap_info.replay_pcap.replay_path}")
-
-        extract_to_csv.preprocess_data(
-            [os.path.join(pcap_info.replay_pcap.replay_path)], replay_csv_file_path)
-
-        # Align production and replay data
-        alignment_csv_file_path = f"results/aligned_data_{index}_{pcap_info.replay_id}.csv"
-        alignment.alignment_path_query(production_csv_file_path, replay_csv_file_path, alignment_csv_file_path)
-
-        # Process CSV files and get comparison analysis data to build JSON
-        # Request_Info_File_Path = f"packet_analysis/json_build/path_function.csv"
-        DataBase = DB(csv_back=replay_csv_file_path, csv_production=production_csv_file_path)
-        data_list = DataBase.built_all_dict()
-        # Update response with the data_list for the current analysis
-        response['individual_analysis_info'][index]['comparison_analysis']['data'] = data_list
-        response['individual_analysis_info'][index]['replay_task_id'] = pcap_info.replay_task_id
-        response['individual_analysis_info'][index]['replay_id'] = pcap_info.replay_id
-
-        # production cluster anomaly and replay cluster anomaly
-        folder_output_pro = f"results/cluster_production_{index}_{pcap_info.replay_id}"
-        pro_anomaly_csv_list, pro_plot_cluster_list = cluster.analysis(production_csv_file_path, folder_output_pro)
-        folder_output_replay = f"results/cluster_replay_{index}_{pcap_info.replay_id}"
-        replay_anomaly_csv_list, replay_plot_cluster_list = cluster.analysis(replay_csv_file_path, folder_output_replay)
-
-        # Process anomaly CSV files to build JSON
-        all_pro_anomaly_details = anomaly_detection.process_anomalies(pro_anomaly_csv_list, "production",
-                                                                      pcap_info.collect_pcap[0].ip)
-        all_replay_anomaly_details = anomaly_detection.process_anomalies(replay_anomaly_csv_list, "replay",
-                                                                         pcap_info.replay_pcap.ip)
-        combined_anomaly_details = all_pro_anomaly_details + all_replay_anomaly_details
-        response['individual_analysis_info'][index]['anomaly_detection']['details'] = combined_anomaly_details
+    for result in results:
+        if result is not None:
+            index, res = result
+            response['individual_analysis_info'][index] = res
 
     # Post the response to the callback URL
     callback_url = os.getenv("CALLBACK_URL", f'http://{ip_address}:18088/api/replay-core/aglAnalysisResult')
     postapi.post_url(json.dumps(response), callback_url)
 
-    return response
 
+def run_tasks_in_parallel(data, ip_address):
+    # Create results directory if not exists
+    if not os.path.exists('../results'):
+        os.makedirs('../results')
 
-@celery.task(name='server.analyze_algorithm')
-def analyze_algorithm(data, ip_address):
     pcap_info_list = PcapInfoList.parse_obj(data)
-    json_id = id(data)
-    logger.info('Processing task %s', json_id)
-    result = process_request(pcap_info_list, ip_address)
 
-    # Save the result to a file
-    with open(f"results/result_{json_id}.json", "w") as f:
-        f.write(json.dumps(result))
+    # high_cost_tasks
+    task_groups = []
 
-    logger.info('Task %s processed', json_id)
+    # Process each pcap info
+    for index, pcap_info in enumerate(pcap_info_list.pcap_info):
+        logger.info(f"Processing pcap info {index}")
+        # Extract production and replay data
+        production_csv_file_path = f"results/extracted_production_data_{index}_{pcap_info.replay_id}.csv"
+        replay_csv_file_path = f"results/extracted_replay_data_{index}_{pcap_info.replay_id}.csv"
+
+        # Align production and replay data
+        alignment_csv_file_path = f"results/aligned_data_{index}_{pcap_info.replay_id}.csv"
+
+        # Parallelize the tasks
+        task_group = group(
+            extract_data.s(
+                [os.path.join(collect.collect_path) for collect in pcap_info.collect_pcap],
+                production_csv_file_path), extract_data.s(
+                [os.path.join(pcap_info.replay_pcap.replay_path)], replay_csv_file_path) | align_data.s(
+                production_csv_file_path, replay_csv_file_path, alignment_csv_file_path) | cluster_analysis_data.s(
+                index, pcap_info.replay_task_id, pcap_info.replay_id, pcap_info.collect_pcap[0].ip,
+                pcap_info.replay_pcap.ip, replay_csv_file_path, production_csv_file_path))
+        task_groups.append(task_group)
+
+    # 使用chord确保所有任务子项完成后执行最终任务
+    final_chord = chord(task_groups)(final_task.s(data, ip_address))
 
 
 @app.route('/api/algorithm/analyze', methods=['POST'])
@@ -243,9 +265,9 @@ def process():
         ip_address = request.remote_addr
 
         # 异步执行任务
-        task = analyze_algorithm.apply_async(args=[data, ip_address])
+        run_tasks_in_parallel(data, ip_address)
 
-        return jsonify({"message": "Request received", "task_id": task.id, "status": "queued"}), 202
+        return jsonify({"message": "Request received", "task_id": id(data), "status": "queued"}), 202
     except ValidationError as e:
         return jsonify({"error": str(e)}), 400
 

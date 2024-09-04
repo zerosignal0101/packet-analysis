@@ -5,6 +5,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from sklearn.ensemble import IsolationForest
 import matplotlib.pyplot as plt
+from src.packet_analysis.utils.logger_config import logger
 
 
 # 请求路径分类函数
@@ -57,7 +58,7 @@ def detect_anomalies(df, original_df, category, csv_folder_output):
 # 结果可视化
 def plot_clusters(df, title, filename, plot_folder_output):
     if df.empty:
-        print(f"No data to plot for {title}")
+        logger.info(f"No data to plot for {title}")
         return None
     plt.figure(figsize=(14, 7))
     scatter = plt.scatter(df['Time_since_request'], df['Response_Total_Length'],
@@ -76,7 +77,7 @@ def plot_clusters(df, title, filename, plot_folder_output):
 
 def plot_anomalies(df, title, filename, plot_folder_output):
     if df.empty:
-        print(f"No data to plot for {title}")
+        logger.info(f"No data to plot for {title}")
         return None
     plt.figure(figsize=(14, 7))
     markers = {1: 'o', -1: 'x'}

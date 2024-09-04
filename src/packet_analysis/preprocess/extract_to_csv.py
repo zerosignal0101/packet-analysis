@@ -22,7 +22,7 @@ def check_highest_layer_suitable(layer):
 def process_packet(pkt, index, first_packet_time, request_response_pairs, unmatched_requests, match_num):
     if check_highest_layer_suitable(pkt.highest_layer) or hasattr(pkt, 'http'):
         # 显示当前处理进度
-        logger.info("HTTP: ", index)
+        logger.info(f"HTTP: {index}")
         sniff_time = pkt.sniff_time
         if first_packet_time is None:
             first_packet_time = sniff_time
@@ -100,7 +100,7 @@ def process_packet(pkt, index, first_packet_time, request_response_pairs, unmatc
             if matched_key:
                 # 处理过程中显示配对成功数
                 match_num += 1
-                logger.info(index, "is matched ", match_num, "in all")
+                logger.info(f"{index} is matched {match_num} in all")
 
                 # 提取 File Data 长度  条件3
                 response_total_length = 0
@@ -122,7 +122,7 @@ def process_packet(pkt, index, first_packet_time, request_response_pairs, unmatc
                     'response_total_length': response_total_length,  # 存储总的响应长度
                     'matched': True
                 })
-                logger.info("66666" + response_total_length + str(pkt.length))
+                logger.info(f"66666 {response_total_length} {pkt.length}")
 
     return first_packet_time, match_num
 
@@ -178,6 +178,13 @@ class PacketWrapper:
 
 # 预处理函数
 def preprocess_data(file_paths, csv_file_path):
+    # log the input file paths
+    logger.info(f"Input file paths: {file_paths}")
+
+    # check if the [0] is type of list
+    if isinstance(file_paths[0], list):
+        file_paths = file_paths[0]
+
     request_response_pairs = {}
     unmatched_requests = []
     first_packet_time = None
@@ -236,4 +243,4 @@ def preprocess_data(file_paths, csv_file_path):
 
 
 if __name__ == "__main__":
-    logger.info('Do not run this script directly. Please run run.py instead.')
+    print('Do not run this script directly. Please run run.py instead.')

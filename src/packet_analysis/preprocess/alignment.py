@@ -1,6 +1,7 @@
 import os.path
 
 import pandas as pd
+from src.packet_analysis.utils.logger_config import logger
 
 
 def alignment_path_query(csv_production_output, csv_back_output, alignment_csv_file_path):
@@ -102,7 +103,7 @@ def alignment_path_query(csv_production_output, csv_back_output, alignment_csv_f
     # 保存到新的CSV文件
     aligned_df.to_csv(alignment_csv_file_path, index=False)
 
-    print(f'File saved to {alignment_csv_file_path}')
+    logger.info(f'File saved to {alignment_csv_file_path}')
 
     return alignment_csv_file_path
 
