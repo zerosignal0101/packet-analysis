@@ -39,8 +39,8 @@ RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ \
     && pdm config pypi.url https://mirrors.aliyun.com/pypi/simple/
 
 # 复制项目文件到工作目录
-COPY ../pyproject.toml /app
-COPY ../pdm.lock /app
+COPY ../../pyproject.toml /app
+COPY ../../pdm.lock /app
 
 # 使用PDM安装项目依赖
 RUN pdm install
