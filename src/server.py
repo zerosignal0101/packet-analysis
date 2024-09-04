@@ -20,8 +20,8 @@ app = Flask(__name__)
 # 使用新格式的配置名称
 app.config.update(
     include=['src.server'],
-    result_backend='redis://localhost:6379/0',
-    broker_url='redis://localhost:6379/0'
+    result_backend='redis://redis:6379/0',
+    broker_url='redis://redis:6379/0'
 )
 
 celery = Celery(app.name, broker=app.config['broker_url'])
