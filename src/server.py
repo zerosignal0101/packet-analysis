@@ -1,12 +1,13 @@
 import json
 import os
-
+import threading
 from flask import Flask, request, jsonify
 from pydantic import BaseModel, ValidationError
 from typing import List
 
 # Import the new function
 from packet_analysis.preprocess import extract_to_csv, alignment
+from packet_analysis.preprocess import extract_to_csv_split
 from packet_analysis.utils import postapi
 
 from packet_analysis.json_build.comparison_analysis import *
@@ -42,6 +43,33 @@ class PcapInfo(BaseModel):
 class PcapInfoList(BaseModel):
     pcap_info: List[PcapInfo]
 
+
+def process_pcap_files(index, pcap_info,production_csv_file_path,replay_csv_file_path):
+    # 创建线程，用于并行处理 production 和 replay 的 pcap 文件
+
+    # 线程任务函数
+    def process_production():
+        extract_to_csv_split.preprocess_data(
+            [os.path.join(collect.collect_path) for collect in pcap_info.collect_pcap],
+            production_csv_file_path)
+
+    def process_replay():
+        extract_to_csv_split.preprocess_data(
+            [os.path.join(pcap_info.replay_pcap.replay_path)], replay_csv_file_path)
+
+    # 创建两个线程
+    production_thread = threading.Thread(target=process_production)
+    replay_thread = threading.Thread(target=process_replay)
+    # 启动线程
+    production_thread.start()
+    replay_thread.start()
+    # 等待两个线程都完成
+    production_thread.join()
+    replay_thread.join()
+
+    # 当两个线程都完成后，执行对齐操作
+    alignment_csv_file_path = f"../results/aligned_data_{index}_{pcap_info.replay_id}.csv"
+    alignment.alignment_path_query(production_csv_file_path, replay_csv_file_path, alignment_csv_file_path)
 
 def process_request(pcap_info_list: PcapInfoList):
     # Create results directory if not exists
@@ -159,18 +187,10 @@ def process_request(pcap_info_list: PcapInfoList):
     # Process each pcap info
     for index, pcap_info in enumerate(pcap_info_list.pcap_info):
         # Extract production and replay data
-        production_csv_file_path = f"results/extracted_production_data_{index}_{pcap_info.replay_id}.csv"
-        extract_to_csv.preprocess_data(
-            [os.path.join(collect.collect_path) for collect in pcap_info.collect_pcap],
-            production_csv_file_path)
+        production_csv_file_path = f"../results/extracted_production_data_{index}_{pcap_info.replay_id}.csv"
+        replay_csv_file_path = f"../results/extracted_replay_data_{index}_{pcap_info.replay_id}.csv"
+        process_pcap_files(index, pcap_info,production_csv_file_path,replay_csv_file_path)
 
-        replay_csv_file_path = f"results/extracted_replay_data_{index}_{pcap_info.replay_id}.csv"
-        extract_to_csv.preprocess_data(
-            [os.path.join(pcap_info.replay_pcap.replay_path)], replay_csv_file_path)
-
-        # Align production and replay data
-        alignment_csv_file_path = f"results/aligned_data_{index}_{pcap_info.replay_id}.csv"
-        alignment.alignment_path_query(production_csv_file_path, replay_csv_file_path, alignment_csv_file_path)
 
         # Process CSV files and get comparison analysis data to build JSON
         # Request_Info_File_Path = f"packet_analysis/json_build/path_function.csv"
@@ -182,22 +202,22 @@ def process_request(pcap_info_list: PcapInfoList):
         response['individual_analysis_info'][index]['replay_id'] = pcap_info.replay_id
 
         # production cluster anomaly and replay cluster anomaly
-        folder_output_pro = f"results/cluster_production_{index}_{pcap_info.replay_id}"
-        pro_anomaly_csv_list, pro_plot_cluster_list = cluster.analysis(production_csv_file_path, folder_output_pro)
-        folder_output_replay = f"results/cluster_replay_{index}_{pcap_info.replay_id}"
-        replay_anomaly_csv_list, replay_plot_cluster_list = cluster.analysis(replay_csv_file_path, folder_output_replay)
+        # folder_output_pro = f"../results/cluster_production_{index}_{pcap_info.replay_id}"
+        # pro_anomaly_csv_list, pro_plot_cluster_list = cluster.analysis(production_csv_file_path, folder_output_pro)
+        # folder_output_replay = f"../results/cluster_replay_{index}_{pcap_info.replay_id}"
+        # replay_anomaly_csv_list, replay_plot_cluster_list = cluster.analysis(replay_csv_file_path, folder_output_replay)
 
         # Process anomaly CSV files to build JSON
-        all_pro_anomaly_details = anomaly_detection.process_anomalies(pro_anomaly_csv_list, "production",
-                                                                      pcap_info.collect_pcap[0].ip)
-        all_replay_anomaly_details = anomaly_detection.process_anomalies(replay_anomaly_csv_list, "replay",
-                                                                         pcap_info.replay_pcap.ip)
-        combined_anomaly_details = all_pro_anomaly_details + all_replay_anomaly_details
-        response['individual_analysis_info'][index]['anomaly_detection']['details'] = combined_anomaly_details
+        # all_pro_anomaly_details = anomaly_detection.process_anomalies(pro_anomaly_csv_list, "production",
+        #                                                               pcap_info.collect_pcap[0].ip)
+        # all_replay_anomaly_details = anomaly_detection.process_anomalies(replay_anomaly_csv_list, "replay",
+        #                                                                  pcap_info.replay_pcap.ip)
+        # combined_anomaly_details = all_pro_anomaly_details + all_replay_anomaly_details
+        # response['individual_analysis_info'][index]['anomaly_detection']['details'] = combined_anomaly_details
 
     # Post the response to the callback URL
-    callback_url = os.getenv("CALLBACK_URL", 'http://10.180.124.116:18088/api/replay-core/aglAnalysisResult')
-    postapi.post_url(json.dumps(response), callback_url)
+    # callback_url = os.getenv("CALLBACK_URL", 'http://10.180.124.116:18088/api/replay-core/aglAnalysisResult')
+    # postapi.post_url(json.dumps(response), callback_url)
 
     return response
 
