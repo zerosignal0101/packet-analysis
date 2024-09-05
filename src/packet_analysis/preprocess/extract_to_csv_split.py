@@ -27,9 +27,13 @@ def check_tcp_anomalies(pkt):
     anomalies = []
     if hasattr(pkt.tcp, 'window_size_value') and pkt.tcp.window_size_value == 0:
         anomalies.append('TCP ZeroWindow')
-    if hasattr(pkt.tcp, 'window_full') and pkt.tcp.window_full:
-        anomalies.append('TCP Window Full')
-    if hasattr(pkt.tcp, 'rst') and pkt.tcp.rst:
+    # 检查 TCP Window Full
+    try:
+        if hasattr(pkt.tcp, 'analysis') and hasattr(pkt.tcp.analysis, 'window_full') and pkt.tcp.analysis.window_full:   # 判断条件上还有疑问 加了一个analysis
+            anomalies.append('TCP Window Full')
+    except AttributeError:
+        pass  # 处理不存在的分析属性，防止抛出异常
+    if hasattr(pkt.tcp.flags, 'reset') and pkt.tcp.flags.reset:
         anomalies.append('TCP Reset')
     return anomalies
 
@@ -235,7 +239,7 @@ def extract_packet_info(csv_file_path, request_response_pairs, write_header=True
         # 移除成功配对的数据
         for key in keys_to_remove:
             del request_response_pairs[key]
-            print("清理已配对matched后，request_response_pairs剩余的未配对字典：",request_response_pairs)
+        print("清理已配对matched后，request_response_pairs剩余的未配对字典：",request_response_pairs.keys())
     return request_response_pairs
 
 
@@ -262,7 +266,7 @@ def sort_csv_by_sniff_time(csv_file_path):
     # 将排序后的数据写回 CSV 文件
     df.to_csv(csv_file_path, index=False)
 
-def save_tcp_anomalies_to_file(tcp_anomalies, filename='../raw_data/tcp_anomalies.csv'):
+def save_tcp_anomalies_to_file(tcp_anomalies, filename='../results/tcp_anomalies.csv'):
     fieldnames = ['anomaly_type', 'ip_src', 'ip_dst', 'src_port', 'dst_port', 'anomaly_sniff_time', 'anomaly_index']
     with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -346,7 +350,7 @@ def preprocess_data(file_paths, csv_file_path):
             # 清理资源
             cap.close()
             os.remove(split_file)  # 删除分割后的文件，节省磁盘空间
-            save_tcp_anomalies_to_file(tcp_anomalies)  #写入异常文件的位置
+        save_tcp_anomalies_to_file(tcp_anomalies)  #写入异常文件的位置
     sort_csv_by_sniff_time(csv_file_path)
     print("数据处理完成，已生成CSV文件，已排序。")
 

@@ -221,11 +221,8 @@ def process_request(pcap_info_list: PcapInfoList):
 
     return response
 
-
 import logging
-
 logging.basicConfig(level=logging.INFO)
-
 
 @app.route('/api/algorithm/analyze', methods=['POST'])
 def process():
