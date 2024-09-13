@@ -20,12 +20,31 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
     back_df = pd.read_csv(csv_back_output)
     # 创建新的DataFrame用于存储对齐后的数据
     aligned_data = {
-        'Path': [], 'Query': [], 'Src_Port': [], 'Request_Method': [],
-        'Production_Sniff_time': [], 'Production_Time_since_request': [],
-        'Production_Request_Packet_Length': [], 'Production_Response_Total_Length': [],
-        'Production_Match_Status': [], 'Back_Sniff_time': [], 'Back_Time_since_request': [],
-        'Back_Request_Packet_Length': [], 'Back_Response_Total_Length': [], 'Back_Match_Status': [],
-        'Time_since_request_ratio': [], 'state': []
+        'Path': [],
+        'Query': [],
+        'Src_Port': [],
+        'Request_Method': [],
+        # 生产环境
+        'Production_Sniff_time': [],
+        'Production_Time_since_request': [],
+        'Production_Request_Index': [],
+        'Production_Response_Index': [],
+        'Production_Request_Packet_Length': [],
+        'Production_Response_Packet_Length': [],
+        'Production_Response_Total_Length': [],
+        'Production_Match_Status': [],
+
+        'Back_Sniff_time': [],
+        'Back_Time_since_request': [],
+        'Back_Request_Index': [],
+        'Back_Response_Index': [],
+        'Back_Request_Packet_Length': [],
+        'Back_Response_Packet_Length': [],
+        'Back_Response_Total_Length': [],
+        'Back_Match_Status': [],
+
+        'Time_since_request_ratio': [],
+        'state': []
     }
 
     # 用于存储每次成功匹配的回放请求时间
@@ -92,16 +111,25 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
                 aligned_data['Query'].append(query2)
                 aligned_data['Src_Port'].append(src_port2)
                 aligned_data['Request_Method'].append(request_method2)
+
                 aligned_data['Production_Sniff_time'].append(sniff_time2)
                 aligned_data['Production_Time_since_request'].append(time_since_request2)
+                aligned_data['Production_Request_Index'].append(production_df.iloc[index + 1]['Request_Index'])
+                aligned_data['Production_Response_Index'].append(production_df.iloc[index + 1]['Response_Index'])
                 aligned_data['Production_Request_Packet_Length'].append(production_df.iloc[index + 1]['Request_Packet_Length'])
+                aligned_data['Production_Response_Packet_Length'].append(production_df.iloc[index + 1]['Response_Packet_Length'])
                 aligned_data['Production_Response_Total_Length'].append(production_df.iloc[index + 1]['Response_Total_Length'])
                 aligned_data['Production_Match_Status'].append(production_df.iloc[index + 1]['Match_Status'])
+
                 aligned_data['Back_Sniff_time'].append(back_sniff_time2)
                 aligned_data['Back_Time_since_request'].append(back_time_since_request2)
+                aligned_data['Back_Request_Index'].append(best_match['Request_Index'])
+                aligned_data['Back_Response_Index'].append(best_match['Response_Index'])
                 aligned_data['Back_Request_Packet_Length'].append(best_match['Request_Packet_Length'])
+                aligned_data['Back_Response_Packet_Length'].append(best_match['Response_Packet_Length'])
                 aligned_data['Back_Response_Total_Length'].append(best_match['Response_Total_Length'])
                 aligned_data['Back_Match_Status'].append(best_match['Match_Status'])
+
                 aligned_data['Time_since_request_ratio'].append(ratio)
                 aligned_data['state'].append("success")
 
@@ -113,34 +141,52 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
                 aligned_data['Query'].append(query2)
                 aligned_data['Src_Port'].append(src_port2)
                 aligned_data['Request_Method'].append(request_method2)
+
                 aligned_data['Production_Sniff_time'].append(sniff_time2)
                 aligned_data['Production_Time_since_request'].append(time_since_request2)
+                aligned_data['Production_Request_Index'].append(production_df.iloc[index + 1]['Request_Index'])
+                aligned_data['Production_Response_Index'].append(production_df.iloc[index + 1]['Response_Index'])
                 aligned_data['Production_Request_Packet_Length'].append(production_df.iloc[index + 1]['Request_Packet_Length'])
+                aligned_data['Production_Response_Packet_Length'].append(production_df.iloc[index + 1]['Response_Packet_Length'])
                 aligned_data['Production_Response_Total_Length'].append(production_df.iloc[index + 1]['Response_Total_Length'])
                 aligned_data['Production_Match_Status'].append(production_df.iloc[index + 1]['Match_Status'])
+
                 aligned_data['Back_Sniff_time'].append('No match found')
                 aligned_data['Back_Time_since_request'].append('No match found')
+                aligned_data['Back_Request_Index'].append('No match found')
+                aligned_data['Back_Response_Index'].append('No match found')
                 aligned_data['Back_Request_Packet_Length'].append('No match found')
+                aligned_data['Back_Response_Packet_Length'].append('No match found')
                 aligned_data['Back_Response_Total_Length'].append('No match found')
                 aligned_data['Back_Match_Status'].append('No match found')
+
                 aligned_data['Time_since_request_ratio'].append('No match found')
-                aligned_data['state'].append("fail1 no best match")
+                aligned_data['state'].append("fail1 no best match but has match")
 
         else:
             aligned_data['Path'].append(path2)
             aligned_data['Query'].append(query2)
             aligned_data['Src_Port'].append(src_port2)
             aligned_data['Request_Method'].append(request_method2)
+
             aligned_data['Production_Sniff_time'].append(sniff_time2)
             aligned_data['Production_Time_since_request'].append(time_since_request2)
+            aligned_data['Production_Request_Index'].append(production_df.iloc[index + 1]['Request_Index'])
+            aligned_data['Production_Response_Index'].append(production_df.iloc[index + 1]['Response_Index'])
             aligned_data['Production_Request_Packet_Length'].append(production_df.iloc[index + 1]['Request_Packet_Length'])
+            aligned_data['Production_Response_Packet_Length'].append(production_df.iloc[index + 1]['Response_Packet_Length'])
             aligned_data['Production_Response_Total_Length'].append(production_df.iloc[index + 1]['Response_Total_Length'])
             aligned_data['Production_Match_Status'].append(production_df.iloc[index + 1]['Match_Status'])
+
             aligned_data['Back_Sniff_time'].append('No match found')
             aligned_data['Back_Time_since_request'].append('No match found')
+            aligned_data['Back_Request_Index'].append('No match found')
+            aligned_data['Back_Response_Index'].append('No match found')
             aligned_data['Back_Request_Packet_Length'].append('No match found')
+            aligned_data['Back_Response_Packet_Length'].append('No match found')
             aligned_data['Back_Response_Total_Length'].append('No match found')
             aligned_data['Back_Match_Status'].append('No match found')
+
             aligned_data['Time_since_request_ratio'].append('No match found')
             aligned_data['state'].append("fail2 no match")
 
