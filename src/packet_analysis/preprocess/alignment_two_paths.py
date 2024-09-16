@@ -33,6 +33,7 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
         'Production_Response_Packet_Length': [],
         'Production_Response_Total_Length': [],
         'Production_Match_Status': [],
+        'Production_Response_Code': [],
 
         'Back_Sniff_time': [],
         'Back_Time_since_request': [],
@@ -42,6 +43,7 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
         'Back_Response_Packet_Length': [],
         'Back_Response_Total_Length': [],
         'Back_Match_Status': [],
+        'Back_Response_Code': [],
 
         'Time_since_request_ratio': [],
         'state': []
@@ -71,10 +73,17 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
         time_threshold = min(time_diff_production * 100000000, timedelta(seconds=5))
 
         # 查找回放环境中生产请求2的匹配项 根据有无参数值来寻找
+        # if pd.isna(query2):
+        #     back_match = back_df[(back_df['Path'] == path2) & (back_df['Src_Port'] == src_port2)]
+        # else:
+        #     back_match = back_df[(back_df['Path'] == path2) & (back_df['Query'] == query2) & (back_df['Src_Port'] == src_port2)]
+
+        subset_back_df = back_df.iloc[:5000]  # 只取前20000行 结果ok、前5000测试
         if pd.isna(query2):
-            back_match = back_df[(back_df['Path'] == path2) & (back_df['Src_Port'] == src_port2)]
+            back_match = subset_back_df[(subset_back_df['Path'] == path2) & (subset_back_df['Src_Port'] == src_port2)]
         else:
-            back_match = back_df[(back_df['Path'] == path2) & (back_df['Query'] == query2) & (back_df['Src_Port'] == src_port2)]
+            back_match = subset_back_df[(subset_back_df['Path'] == path2) & (subset_back_df['Query'] == query2) & (
+                        subset_back_df['Src_Port'] == src_port2)]
 
         # 先初始化没有最佳匹配，时间间隔为最大
         if not back_match.empty:
@@ -120,6 +129,7 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
                 aligned_data['Production_Response_Packet_Length'].append(production_df.iloc[index + 1]['Response_Packet_Length'])
                 aligned_data['Production_Response_Total_Length'].append(production_df.iloc[index + 1]['Response_Total_Length'])
                 aligned_data['Production_Match_Status'].append(production_df.iloc[index + 1]['Match_Status'])
+                aligned_data['Production_Response_Code'].append(production_df.iloc[index + 1]['Response_code'])
 
                 aligned_data['Back_Sniff_time'].append(back_sniff_time2)
                 aligned_data['Back_Time_since_request'].append(back_time_since_request2)
@@ -129,6 +139,7 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
                 aligned_data['Back_Response_Packet_Length'].append(best_match['Response_Packet_Length'])
                 aligned_data['Back_Response_Total_Length'].append(best_match['Response_Total_Length'])
                 aligned_data['Back_Match_Status'].append(best_match['Match_Status'])
+                aligned_data['Back_Response_Code'].append(best_match['Response_code'])
 
                 aligned_data['Time_since_request_ratio'].append(ratio)
                 aligned_data['state'].append("success")
@@ -150,6 +161,7 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
                 aligned_data['Production_Response_Packet_Length'].append(production_df.iloc[index + 1]['Response_Packet_Length'])
                 aligned_data['Production_Response_Total_Length'].append(production_df.iloc[index + 1]['Response_Total_Length'])
                 aligned_data['Production_Match_Status'].append(production_df.iloc[index + 1]['Match_Status'])
+                aligned_data['Production_Response_Code'].append(production_df.iloc[index + 1]['Response_code'])
 
                 aligned_data['Back_Sniff_time'].append('No match found')
                 aligned_data['Back_Time_since_request'].append('No match found')
@@ -159,6 +171,7 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
                 aligned_data['Back_Response_Packet_Length'].append('No match found')
                 aligned_data['Back_Response_Total_Length'].append('No match found')
                 aligned_data['Back_Match_Status'].append('No match found')
+                aligned_data['Back_Response_Code'].append('No match found')
 
                 aligned_data['Time_since_request_ratio'].append('No match found')
                 aligned_data['state'].append("fail1 no best match but has match")
@@ -177,6 +190,7 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
             aligned_data['Production_Response_Packet_Length'].append(production_df.iloc[index + 1]['Response_Packet_Length'])
             aligned_data['Production_Response_Total_Length'].append(production_df.iloc[index + 1]['Response_Total_Length'])
             aligned_data['Production_Match_Status'].append(production_df.iloc[index + 1]['Match_Status'])
+            aligned_data['Production_Response_Code'].append(production_df.iloc[index + 1]['Response_code'])
 
             aligned_data['Back_Sniff_time'].append('No match found')
             aligned_data['Back_Time_since_request'].append('No match found')
@@ -186,6 +200,7 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
             aligned_data['Back_Response_Packet_Length'].append('No match found')
             aligned_data['Back_Response_Total_Length'].append('No match found')
             aligned_data['Back_Match_Status'].append('No match found')
+            aligned_data['Back_Response_Code'].append('No match found')
 
             aligned_data['Time_since_request_ratio'].append('No match found')
             aligned_data['state'].append("fail2 no match")
