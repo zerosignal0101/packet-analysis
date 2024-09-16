@@ -6,13 +6,14 @@ from pydantic import BaseModel, ValidationError
 from typing import List
 
 # Import the new function
-from packet_analysis.preprocess import extract_to_csv, alignment
+from packet_analysis.preprocess import extract_to_csv, alignment,alignment_two_paths
 from packet_analysis.preprocess import extract_to_csv_split
 from packet_analysis.utils import postapi
 
 from packet_analysis.json_build.comparison_analysis import *
 from packet_analysis.analysis import cluster
 from packet_analysis.json_build import anomaly_detection
+from datetime import datetime
 
 app = Flask(__name__)
 
@@ -46,16 +47,20 @@ class PcapInfoList(BaseModel):
 
 def process_pcap_files(index, pcap_info,production_csv_file_path,replay_csv_file_path):
     # 创建线程，用于并行处理 production 和 replay 的 pcap 文件
-
     # 线程任务函数
     def process_production():
+        start_time_production = datetime.now()
+        # 信息提取算法1：分段extract_to_csv_split 如果想不分段，只需改成extract_to_csv
         extract_to_csv_split.preprocess_data(
             [os.path.join(collect.collect_path) for collect in pcap_info.collect_pcap],
             production_csv_file_path)
-
+        print(f"Production thread finished at {datetime.now()} total time is {datetime.now()-start_time_production}")
     def process_replay():
+        start_time_replay = datetime.now()
+        # 信息提取算法1：分段extract_to_csv_split 如果想不分段，只需改成extract_to_csv
         extract_to_csv_split.preprocess_data(
             [os.path.join(pcap_info.replay_pcap.replay_path)], replay_csv_file_path)
+        print(f"Replay thread finished at {datetime.now()} total time is {datetime.now()-start_time_replay}")
 
     # 创建两个线程
     production_thread = threading.Thread(target=process_production)
@@ -68,8 +73,17 @@ def process_pcap_files(index, pcap_info,production_csv_file_path,replay_csv_file
     replay_thread.join()
 
     # 当两个线程都完成后，执行对齐操作
+    # 对齐算法1 直接基于path query src_port 找到符合条件第一个对齐
+    # print(f"alignment started at {datetime.now()}")
+    # alignment_csv_file_path = f"../results/aligned_data_{index}_{pcap_info.replay_id}.csv"
+    # alignment.alignment_path_query(production_csv_file_path, replay_csv_file_path, alignment_csv_file_path)
+    # print(f"alignment finished at {datetime.now()}")
+
+    # 对齐算法2 除了基于path query src_port 还增加了相邻时间的约束条件
+    print(f"alignment started at {datetime.now()}")
     alignment_csv_file_path = f"../results/aligned_data_{index}_{pcap_info.replay_id}.csv"
-    alignment.alignment_path_query(production_csv_file_path, replay_csv_file_path, alignment_csv_file_path)
+    alignment_two_paths.alignment_two_paths(production_csv_file_path, replay_csv_file_path, alignment_csv_file_path)
+    print(f"alignment finished at {datetime.now()}")
 
 def process_request(pcap_info_list: PcapInfoList):
     # Create results directory if not exists
@@ -194,30 +208,120 @@ def process_request(pcap_info_list: PcapInfoList):
 
         # Process CSV files and get comparison analysis data to build JSON
         # Request_Info_File_Path = f"packet_analysis/json_build/path_function.csv"
+        print(f"json started at {datetime.now()}")
         DataBase = DB(csv_back=replay_csv_file_path, csv_production=production_csv_file_path)
+        # 添加返回值
         data_list = DataBase.built_all_dict()
+        # 保存两环境对比数据csv、对比图到本地
+        comparison_csv_path = f"../results/comparison_analysis_data_{index}_{pcap_info.replay_id}.csv"
+        DataBase.save_to_csv(comparison_csv_path)
+        comparison_png_path = f"../results/comparison_analysis_data_{index}_{pcap_info.replay_id}.png"
+        DataBase.plot_mean_difference_ratio(comparison_png_path)
+
         # Update response with the data_list for the current analysis
-        response['individual_analysis_info'][index]['comparison_analysis']['data'] = data_list
+        # 添加 legend 信息
+        data_legend = {
+            "production": "生产环境",
+            "replay": "回放环境",
+            "mean_difference_ratio": "差异倍数"
+        }
         response['individual_analysis_info'][index]['replay_task_id'] = pcap_info.replay_task_id
         response['individual_analysis_info'][index]['replay_id'] = pcap_info.replay_id
+        response['individual_analysis_info'][index]['comparison_analysis']['title'] = "生产与回放环境处理时延对比分析"
+        response['individual_analysis_info'][index]['comparison_analysis']['x_axis_label'] = "请求路径"
+        response['individual_analysis_info'][index]['comparison_analysis']['y_axis_label'] = "时延（s）"
+        response['individual_analysis_info'][index]['comparison_analysis']['data'] = data_list
+        response['individual_analysis_info'][index]['comparison_analysis']['legend'] = data_legend
+        print(f"json finished at {datetime.now()}")
 
         # production cluster anomaly and replay cluster anomaly
-        # folder_output_pro = f"../results/cluster_production_{index}_{pcap_info.replay_id}"
-        # pro_anomaly_csv_list, pro_plot_cluster_list = cluster.analysis(production_csv_file_path, folder_output_pro)
-        # folder_output_replay = f"../results/cluster_replay_{index}_{pcap_info.replay_id}"
-        # replay_anomaly_csv_list, replay_plot_cluster_list = cluster.analysis(replay_csv_file_path, folder_output_replay)
+        folder_output_pro = f"../results/cluster_production_{index}_{pcap_info.replay_id}"
+        pro_anomaly_csv_list, pro_plot_cluster_list = cluster.analysis(production_csv_file_path, folder_output_pro)
+        folder_output_replay = f"../results/cluster_replay_{index}_{pcap_info.replay_id}"
+        replay_anomaly_csv_list, replay_plot_cluster_list = cluster.analysis(replay_csv_file_path, folder_output_replay)
 
         # Process anomaly CSV files to build JSON
-        # all_pro_anomaly_details = anomaly_detection.process_anomalies(pro_anomaly_csv_list, "production",
-        #                                                               pcap_info.collect_pcap[0].ip)
-        # all_replay_anomaly_details = anomaly_detection.process_anomalies(replay_anomaly_csv_list, "replay",
-        #                                                                  pcap_info.replay_pcap.ip)
-        # combined_anomaly_details = all_pro_anomaly_details + all_replay_anomaly_details
-        # response['individual_analysis_info'][index]['anomaly_detection']['details'] = combined_anomaly_details
+        all_pro_anomaly_details = anomaly_detection.process_anomalies(pro_anomaly_csv_list, "production",
+                                                                      pcap_info.collect_pcap[0].ip)
+        all_replay_anomaly_details = anomaly_detection.process_anomalies(replay_anomaly_csv_list, "replay",
+                                                                         pcap_info.replay_pcap.ip)
+        combined_anomaly_details = all_pro_anomaly_details + all_replay_anomaly_details
+        response['individual_analysis_info'][index]['anomaly_detection']['details'] = combined_anomaly_details
+
+        # 先预设的'anomaly_detection'中的dict部分
+        data_dict = [
+            {
+                "request_url": "/portal_todo/api/getAllUserTodoData",
+                "env": "production",
+                "hostip": pcap_info.collect_pcap[0].ip,
+                "class_method": "get_api",
+                "bottleneck_cause": "数据库查询慢",
+                "solution": "优化数据库查询，增加索引"
+            }
+        ]
+        response['individual_analysis_info'][index]['anomaly_detection']['dict'] = data_dict
+
+        # 先预设的'anomaly_detection'中的correlation部分
+        data_correlation = [
+                        {
+                            "env": "production",
+                            "hostip": pcap_info.collect_pcap[0].ip,
+                            "class_method": "get_api",
+                            "correlation_data": [
+                                {
+                                    "index_id": "非root用户进程数",
+                                    "value": 0.6
+                                },
+                                {
+                                    "index_id": "活动进程数",
+                                    "value": 0.7
+                                }
+                            ]
+                        },
+                        {
+                            "env": "replay",
+                            "hostip": pcap_info.replay_pcap.ip,
+                            "class_method": "get_post",
+                            "correlation_data": [
+                                {
+                                    "index_id": "会话数",
+                                    "value": 0.6
+                                },
+                                {
+                                    "index_id": "当前数据库的连接数",
+                                    "value": 0.7
+                                }
+                            ]
+                        }
+                    ]
+        response['individual_analysis_info'][index]['anomaly_detection']['correlation'] = data_correlation
+
+        # 先预设的'anomaly_detection'中的correlation部分
+        data_performance_bottleneck_analysis= {
+            "bottlenecks": [
+                {
+                    "env": "replay",
+                    "hostip": pcap_info.replay_pcap.ip,
+                    "class_name": "database",
+                    "cause": "数据库查询慢",
+                    "criteria": "请求时延超过300ms，查询次数过多",
+                    "solution": "优化数据库查询，增加索引"
+                },
+                {
+                    "env": "production",
+                    "hostip": pcap_info.collect_pcap[0].ip,
+                    "class_name": "network",
+                    "cause": "网络带宽不足",
+                    "criteria": "数据传输时延大，带宽利用率高",
+                    "solution": "增加网络带宽或优化传输协议"
+                }
+            ]
+        }
+        response['individual_analysis_info'][index]['performance_bottleneck_analysis'] = data_performance_bottleneck_analysis
 
     # Post the response to the callback URL
-    # callback_url = os.getenv("CALLBACK_URL", 'http://10.180.124.116:18088/api/replay-core/aglAnalysisResult')
-    # postapi.post_url(json.dumps(response), callback_url)
+    callback_url = os.getenv("CALLBACK_URL", 'http://10.180.124.116:18088/api/replay-core/aglAnalysisResult')
+    postapi.post_url(json.dumps(response), callback_url)
 
     return response
 

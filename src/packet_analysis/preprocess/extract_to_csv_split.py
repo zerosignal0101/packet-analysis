@@ -25,16 +25,19 @@ def check_highest_layer_suitable(layer):
 # 检测TCP状态问题
 def check_tcp_anomalies(pkt):
     anomalies = []
-    if hasattr(pkt.tcp, 'window_size_value') and pkt.tcp.window_size_value == 0:
+    # 这里是'0' 不是0
+    if hasattr(pkt.tcp, 'window_size_value') and pkt.tcp.window_size_value == '0':
         anomalies.append('TCP ZeroWindow')
     # 检查 TCP Window Full
-    try:
-        if hasattr(pkt.tcp, 'analysis') and hasattr(pkt.tcp.analysis, 'window_full') and pkt.tcp.analysis.window_full:   # 判断条件上还有疑问 加了一个analysis
-            anomalies.append('TCP Window Full')
-    except AttributeError:
-        pass  # 处理不存在的分析属性，防止抛出异常
-    if hasattr(pkt.tcp.flags, 'reset') and pkt.tcp.flags.reset:
-        anomalies.append('TCP Reset')
+
+    if hasattr(pkt.tcp, 'flags'):
+        # pkt.tcp.flags 是一个16进制的字符串, 转换为整数进行位运算
+        tcp_flags = int(pkt.tcp.flags, 16)
+        # 检查 RST 位 (第3位)
+        is_rst_set = tcp_flags & 0x04
+        if is_rst_set:
+            print("RST flag is set in the TCP packet")
+            anomalies.append('TCP Reset')
     return anomalies
 
 
@@ -153,36 +156,40 @@ def process_packet(pkt, index, first_packet_time, request_response_pairs, unmatc
                 })
                 print(66666, response_total_length, int(pkt.length))
 
-    if hasattr(pkt, 'tcp'):
-        anomalies = check_tcp_anomalies(pkt)
-        if anomalies:  # 如果检测到TCP异常
-            matched_key_for_tcp = None
-            for request_key, request_value in islice(reversed(request_response_pairs.items()), 20):  # 只遍历最近的20个请求
-                if ((pkt.ip.src == request_value['ip_src'] and pkt.ip.dst == request_value['ip_dst'] and
-                     pkt.tcp.srcport == request_value['src_port'] and pkt.tcp.dstport == request_value['dst_port'])
-                        or (pkt.ip.src == request_value['ip_dst'] and pkt.ip.dst == request_value['ip_src'] and
-                            pkt.tcp.srcport == request_value['dst_port'] and pkt.tcp.dstport == request_value[
-                                'src_port'])):
-                    matched_key_for_tcp = request_key
-                    break
-
-            if matched_key_for_tcp:
-                request_response_pairs[matched_key_for_tcp].update({
-                    'tcp_anomalies': anomalies,
-                    'tcp_anomaly_sniff_time': pkt.sniff_time,
-                    'tcp_anomaly_index': index
-                })
-            else:
-                for anomaly in anomalies:
-                    tcp_anomalies.append({
-                        'anomaly_type': anomaly,
-                        'ip_src': pkt.ip.src,
-                        'ip_dst': pkt.ip.dst,
-                        'src_port': pkt.tcp.srcport,
-                        'dst_port': pkt.tcp.dstport,
-                        'anomaly_sniff_time': pkt.sniff_time,
-                        'anomaly_index': index
-                    })
+    # if hasattr(pkt, 'tcp'):
+    #     print("TCP: ", index)
+    #     anomalies = check_tcp_anomalies(pkt)
+    #     if anomalies:  # 如果检测到TCP异常
+    #         print(f"Detected TCP Anomalies in packet {index}: {anomalies}")
+    #         print(666666666666)
+    #         matched_key_for_tcp = None
+    #         for request_key, request_value in islice(reversed(request_response_pairs.items()), 20):  # 只遍历最近的20个请求
+    #             if ((pkt.ip.src == request_value['ip_src'] and pkt.ip.dst == request_value['ip_dst'] and
+    #                  pkt.tcp.srcport == request_value['src_port'] and pkt.tcp.dstport == request_value['dst_port'])
+    #                     or (pkt.ip.src == request_value['ip_dst'] and pkt.ip.dst == request_value['ip_src'] and
+    #                         pkt.tcp.srcport == request_value['dst_port'] and pkt.tcp.dstport == request_value[
+    #                             'src_port'])):
+    #                 matched_key_for_tcp = request_key
+    #                 break
+    #
+    #         if matched_key_for_tcp:
+    #             request_response_pairs[matched_key_for_tcp].update({
+    #                 'tcp_anomalies': anomalies,
+    #                 'tcp_anomaly_sniff_time': pkt.sniff_time,
+    #                 'tcp_anomaly_index': index
+    #             })
+    #         else:
+    #             for anomaly in anomalies:
+    #                 tcp_anomalies.append({
+    #                     'anomaly_type': anomaly,
+    #                     'ip_src': pkt.ip.src,
+    #                     'ip_dst': pkt.ip.dst,
+    #                     'src_port': pkt.tcp.srcport,
+    #                     'dst_port': pkt.tcp.dstport,
+    #                     'anomaly_sniff_time': pkt.sniff_time,
+    #                     'anomaly_index': index
+    #                 })
+    #                 print("tcp_anomalies:",tcp_anomalies)
 
     return first_packet_time, match_num
 
@@ -293,7 +300,7 @@ def preprocess_data(file_paths, csv_file_path):
         split_prefix = os.path.join(output_dir, base_filename)  # Prefix includes the target directory
 
         # Run the editcap command to split the pcap file and save the splits in the specified directory
-        command = f"editcap -c 50000 {file_path} {split_prefix}"
+        command = f"editcap -c 200000 {file_path} {split_prefix}"
         subprocess.run(command, shell=True)
 
         # Use glob to find the split files matching the pattern in the output directory
@@ -329,7 +336,7 @@ def preprocess_data(file_paths, csv_file_path):
         index = 0  #尤其是index 为了保证同一个path下 分段间的index有联系，而不是每一次都是从0开始
         tcp_anomalies = []
         for i, split_file in enumerate(split_files):   #按顺序做处理 enumerate枚举+输出标号
-            cap = pyshark.FileCapture(split_file, keep_packets=False, tshark_path="F:\\softwares_f\\Wireshark\\tshark.exe")
+            cap = pyshark.FileCapture(split_file, keep_packets=False)  #在自己的主机要加上路径：tshark_path="F:\\softwares_f\\Wireshark\\tshark.exe"
             # 分批处理每个分割文件中的包
             for pkt in cap:
                 index += 1
