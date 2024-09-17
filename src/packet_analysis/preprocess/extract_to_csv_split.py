@@ -22,6 +22,7 @@ def check_highest_layer_suitable(layer):
             or (layer == 'MEDIA')
             or (layer == 'IMAGE-JFIF'))
 
+
 # 检测TCP状态问题
 def check_tcp_anomalies(pkt):
     anomalies = []
@@ -42,7 +43,7 @@ def check_tcp_anomalies(pkt):
 
 
 # 处理数据包，提取HTTP请求和响应信息
-def process_packet(pkt, index, first_packet_time, request_response_pairs, unmatched_requests, match_num,tcp_anomalies):
+def process_packet(pkt, index, first_packet_time, request_response_pairs, unmatched_requests, match_num, tcp_anomalies):
     if check_highest_layer_suitable(pkt.highest_layer) or hasattr(pkt, 'http'):
         # 显示当前处理进度
         print("HTTP: ", index)
@@ -51,7 +52,7 @@ def process_packet(pkt, index, first_packet_time, request_response_pairs, unmatc
             first_packet_time = sniff_time
         relative_time = (sniff_time - first_packet_time).total_seconds()
 
-        if hasattr(pkt.http, 'request_method'): # 处理HTTP请求
+        if hasattr(pkt.http, 'request_method'):  # 处理HTTP请求
             try:
                 url = pkt.http.request_full_uri
                 seq_num = int(pkt.tcp.seq)
@@ -228,7 +229,8 @@ def extract_packet_info(csv_file_path, request_response_pairs, write_header=True
                     time_since_request = "{:.6f}".format(time_since_request)  # 保留六位小数
 
                     writer.writerow(
-                        [index, pair['request_index'], pair['response_index'], sniff_time, relative_time, parsed_url.scheme,
+                        [index, pair['request_index'], pair['response_index'], sniff_time, relative_time,
+                         parsed_url.scheme,
                          parsed_url.netloc, parsed_url.path, query, time_since_request, pair['ip_src'], pair['ip_dst'],
                          pair['src_port'], pair['dst_port'], pair['request_method'], pair['request_packet_length'],
                          pair['response_packet_length'], pair['response_total_length'], 'matched', pair['response_code']
@@ -246,7 +248,7 @@ def extract_packet_info(csv_file_path, request_response_pairs, write_header=True
         # 移除成功配对的数据
         for key in keys_to_remove:
             del request_response_pairs[key]
-        print("清理已配对matched后，request_response_pairs剩余的未配对字典：",request_response_pairs.keys())
+        print("清理已配对matched后，request_response_pairs剩余的未配对字典：", request_response_pairs.keys())
     return request_response_pairs
 
 
@@ -273,6 +275,7 @@ def sort_csv_by_sniff_time(csv_file_path):
     # 将排序后的数据写回 CSV 文件
     df.to_csv(csv_file_path, index=False)
 
+
 def save_tcp_anomalies_to_file(tcp_anomalies, filename='../results/tcp_anomalies.csv'):
     fieldnames = ['anomaly_type', 'ip_src', 'ip_dst', 'src_port', 'dst_port', 'anomaly_sniff_time', 'anomaly_index']
     with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
@@ -280,11 +283,11 @@ def save_tcp_anomalies_to_file(tcp_anomalies, filename='../results/tcp_anomalies
         writer.writeheader()
         writer.writerows(tcp_anomalies)
 
+
 # 预处理函数
 def preprocess_data(file_paths, csv_file_path):
-
     split_files_dict = {}
-    output_dir = "../raw_data/"
+    output_dir = "/tmp"  # 分割后的文件存储目录
 
     # check if the [0] is type of list
     if isinstance(file_paths[0], list):
@@ -327,7 +330,7 @@ def preprocess_data(file_paths, csv_file_path):
         # # 直接将 split_files 列表赋值给 split_files_dict[file_path]
         # split_files_dict[file_path] = split_files
 
-    print("split_files_dict",split_files_dict)
+    print("split_files_dict", split_files_dict)
 
     for file_path, split_files in split_files_dict.items():
         # Step 2: 分批处理每个path 分割后的多个文件
@@ -337,22 +340,25 @@ def preprocess_data(file_paths, csv_file_path):
         unmatched_requests = []
         first_packet_time = None
         match_num = 0
-        index = 0  #尤其是index 为了保证同一个path下 分段间的index有联系，而不是每一次都是从0开始
+        index = 0  # 尤其是index 为了保证同一个path下 分段间的index有联系，而不是每一次都是从0开始
         tcp_anomalies = []
-        for i, split_file in enumerate(split_files):   #按顺序做处理 enumerate枚举+输出标号
-            cap = pyshark.FileCapture(split_file, keep_packets=False)  #在自己的主机要加上路径：tshark_path="F:\\softwares_f\\Wireshark\\tshark.exe"
+        for i, split_file in enumerate(split_files):  # 按顺序做处理 enumerate枚举+输出标号
+            cap = pyshark.FileCapture(split_file,
+                                      keep_packets=False)  # 在自己的主机要加上路径：tshark_path="F:\\softwares_f\\Wireshark\\tshark.exe"
             # 分批处理每个分割文件中的包
             for pkt in cap:
                 index += 1
                 first_packet_time, match_num = process_packet(pkt, index, first_packet_time, request_response_pairs,
-                                                              unmatched_requests, match_num,tcp_anomalies)
+                                                              unmatched_requests, match_num, tcp_anomalies)
             # 提取并写入配对信息
             # 如果是最后一个分段文件，执行特殊处理
-            if i == len(split_files) - 1:  #写入后，把request_response_pairs中配对成功的键去除，没配对的继续使用，不应该会造成开头的一个包缺少配对啊
-                request_response_pairs = extract_packet_info(csv_file_path, request_response_pairs, write_header=not header_written, final_chunk=True)
+            if i == len(split_files) - 1:  # 写入后，把request_response_pairs中配对成功的键去除，没配对的继续使用，不应该会造成开头的一个包缺少配对啊
+                request_response_pairs = extract_packet_info(csv_file_path, request_response_pairs,
+                                                             write_header=not header_written, final_chunk=True)
             else:
-                request_response_pairs = extract_packet_info(csv_file_path, request_response_pairs, write_header=not header_written, final_chunk=False)
-            print("第",i+1,"段包已写入，共",len(split_files),"段")
+                request_response_pairs = extract_packet_info(csv_file_path, request_response_pairs,
+                                                             write_header=not header_written, final_chunk=False)
+            print("第", i + 1, "段包已写入，共", len(split_files), "段")
 
             # 确保在第一次写入列名后，将 header_written 设置为 True
             if not header_written:
@@ -361,10 +367,9 @@ def preprocess_data(file_paths, csv_file_path):
             # 清理资源
             cap.close()
             os.remove(split_file)  # 删除分割后的文件，节省磁盘空间
-        save_tcp_anomalies_to_file(tcp_anomalies)  #写入异常文件的位置
+        save_tcp_anomalies_to_file(tcp_anomalies)  # 写入异常文件的位置
     sort_csv_by_sniff_time(csv_file_path)
     print("数据处理完成，已生成CSV文件，已排序。")
-
 
     # 提取并写入配对信息
     # extract_packet_info(csv_file_path, request_response_pairs, unmatched_requests)
