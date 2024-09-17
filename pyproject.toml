@@ -12,6 +12,15 @@ dependencies = [
     "urllib3==1.26.18",
     "matplotlib==3.8.3",
     "gradio>=4.26.0",
+    "fastapi>=0.112.0",
+    "uvicorn>=0.30.5",
+    "flask>=3.0.3",
+    "celery>=5.4.0",
+    "redis>=5.0.8",
+    "billiard>=4.2.0",
+    "eventlet>=0.36.1",
+    "scapy>=2.5.0",
+    "PyX>=0.16",
 ]
 requires-python = "==3.10.*"
 readme = "README.md"

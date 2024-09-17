@@ -2,7 +2,7 @@ import shutil
 
 import gradio as gr
 import os
-from packet_analysis.preprocess import extract_to_csv, alignment
+from packet_analysis.preprocess import alignment
 from packet_analysis.analysis import cluster
 
 
