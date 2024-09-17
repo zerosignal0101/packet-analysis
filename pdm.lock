@@ -5,7 +5,7 @@
 groups = ["default"]
 strategy = ["cross_platform", "inherit_metadata"]
 lock_version = "4.4.1"
-content_hash = "sha256:6cbfedf7ec94573c4424e11ecb125313f6877751adeccdfc06140eb356a3e7c1"
+content_hash = "sha256:4b4c05816f5e10be02800000b4ca6d74c469935d3c7586cf15a60218f8b7594a"
 
 [[package]]
 name = "aiofiles"
@@ -1104,6 +1104,16 @@ files = [
 ]
 
 [[package]]
+name = "pyx"
+version = "0.16"
+requires_python = ">=3"
+summary = "Python package for the generation of PostScript, PDF, and SVG files"
+groups = ["default"]
+files = [
+    {file = "PyX-0.16.tar.gz", hash = "sha256:4d8e3e471cd3e9a9bd13d5086cdf7c0af1b0c3f3e195e74f5f63318dc40a66d8"},
+]
+
+[[package]]
 name = "pyyaml"
 version = "6.0.1"
 requires_python = ">=3.6"
@@ -1265,6 +1275,16 @@ files = [
     {file = "ruff-0.5.1-py3-none-win_amd64.whl", hash = "sha256:b1789bf2cd3d1b5a7d38397cac1398ddf3ad7f73f4de01b1e913e2abc7dfc51d"},
     {file = "ruff-0.5.1-py3-none-win_arm64.whl", hash = "sha256:2875b7596a740cbbd492f32d24be73e545a4ce0a3daf51e4f4e609962bfd3cd2"},
     {file = "ruff-0.5.1.tar.gz", hash = "sha256:3164488aebd89b1745b47fd00604fb4358d774465f20d1fcd907f9c0fc1b0655"},
+]
+
+[[package]]
+name = "scapy"
+version = "2.5.0"
+requires_python = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, <4"
+summary = "Scapy: interactive packet manipulation tool"
+groups = ["default"]
+files = [
+    {file = "scapy-2.5.0.tar.gz", hash = "sha256:5b260c2b754fd8d409ba83ee7aee294ecdbb2c235f9f78fe90bc11cb6e5debc2"},
 ]
 
 [[package]]
