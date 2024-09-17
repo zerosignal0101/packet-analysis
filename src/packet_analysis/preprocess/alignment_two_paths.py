@@ -70,7 +70,7 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
 
         # 计算生产请求1和请求2之间的时间差，并取绝对值
         time_diff_production = abs(parse_time(sniff_time2) - parse_time(sniff_time1))
-        time_threshold = min(time_diff_production * 100000000, timedelta(seconds=5))
+        time_threshold = min(time_diff_production * 10000, timedelta(seconds=5))
 
         # 查找回放环境中生产请求2的匹配项 根据有无参数值来寻找
         # if pd.isna(query2):
@@ -190,7 +190,11 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
             aligned_data['Production_Response_Packet_Length'].append(production_df.iloc[index + 1]['Response_Packet_Length'])
             aligned_data['Production_Response_Total_Length'].append(production_df.iloc[index + 1]['Response_Total_Length'])
             aligned_data['Production_Match_Status'].append(production_df.iloc[index + 1]['Match_Status'])
-            aligned_data['Production_Response_Code'].append(production_df.iloc[index + 1]['Response_code'])
+            # 检查存在性
+            if 'Response_code' in production_df.columns:
+                aligned_data['Production_Response_Code'].append(production_df.iloc[index + 1]['Response_code'])
+            else:
+                aligned_data['Production_Response_Code'].append('No Response_code')
 
             aligned_data['Back_Sniff_time'].append('No match found')
             aligned_data['Back_Time_since_request'].append('No match found')

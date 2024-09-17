@@ -8,20 +8,22 @@ import requests
 from celery import Celery, group, chain, chord
 
 # Import the new function
-from src.packet_analysis.preprocess import extract_to_csv, alignment
+from src.packet_analysis.preprocess import extract_to_csv, alignment, alignment_two_paths
+from src.packet_analysis.preprocess import extract_to_csv_split
 from src.packet_analysis.utils import postapi
 
 from src.packet_analysis.json_build.comparison_analysis import *
 from src.packet_analysis.analysis import cluster
 from src.packet_analysis.json_build import anomaly_detection
 from src.packet_analysis.utils.logger_config import logger
+from datetime import datetime
 
 app = Flask(__name__)
 # 使用新格式的配置名称
 app.config.update(
     include=['src.server'],
-    result_backend='redis://redis:6379/0',
-    broker_url='redis://redis:6379/0'
+    result_backend='redis://redis:6379/0',  # 'redis://redis:6379/0'
+    broker_url='redis://redis:6379/0'  # 'redis://redis:6379/0'
 )
 
 celery = Celery(app.name, broker=app.config['broker_url'])
@@ -57,12 +59,12 @@ class PcapInfoList(BaseModel):
 
 @celery.task(name='server.extract_data')
 def extract_data(pcap_file_path, csv_file_path):
-    extract_to_csv.preprocess_data([pcap_file_path], csv_file_path)
+    extract_to_csv_split.preprocess_data([pcap_file_path], csv_file_path)
 
 
 @celery.task(name='server.align_data')
 def align_data(results, production_csv_file_path, replay_csv_file_path, alignment_csv_file_path):
-    alignment.alignment_path_query(production_csv_file_path, replay_csv_file_path, alignment_csv_file_path)
+    alignment_two_paths.alignment_two_paths(production_csv_file_path, replay_csv_file_path, alignment_csv_file_path)
 
 
 @celery.task(name='server.cluster_analysis_data')
@@ -76,12 +78,31 @@ def cluster_analysis_data(results, index, replay_task_id, replay_id, production_
 
     # Process CSV files and get comparison analysis data to build JSON
     # Request_Info_File_Path = f"packet_analysis/json_build/path_function.csv"
+    logger.info(f"json started at {datetime.now()}")
     DataBase = DB(csv_back=replay_csv_file_path, csv_production=production_csv_file_path)
+    # 添加返回值
     data_list = DataBase.built_all_dict()
+
+    # 保存两环境对比数据csv、对比图到本地
+    comparison_csv_path = f"../results/comparison_analysis_data_{index}_{replay_id}.csv"
+    DataBase.save_to_csv(comparison_csv_path)
+    comparison_png_path = f"../results/comparison_analysis_data_{index}_{replay_id}.png"
+    DataBase.plot_mean_difference_ratio(comparison_png_path)
+
     # Update response with the data_list for the current analysis
+    data_legend = {
+        "production": "生产环境",
+        "replay": "回放环境",
+        "mean_difference_ratio": "差异倍数"
+    }
     res['comparison_analysis']['data'] = data_list
     res['replay_task_id'] = replay_task_id
     res['replay_id'] = replay_id
+    res['comparison_analysis']['title'] = "生产与回放环境处理时延对比分析"
+    res['comparison_analysis']['x_axis_label'] = "请求路径"
+    res['comparison_analysis']['y_axis_label'] = "时延（s）"
+    res['comparison_analysis']['data'] = data_list
+    res['comparison_analysis']['legend'] = data_legend
 
     # production cluster anomaly and replay cluster anomaly
     folder_output_pro = f"results/cluster_production_{index}_{replay_id}"
@@ -96,6 +117,77 @@ def cluster_analysis_data(results, index, replay_task_id, replay_id, production_
                                                                      replay_ip)
     combined_anomaly_details = all_pro_anomaly_details + all_replay_anomaly_details
     res['anomaly_detection']['details'] = combined_anomaly_details
+
+    # 先预设的'anomaly_detection'中的dict部分
+    data_dict = [
+        {
+            "request_url": "/portal_todo/api/getAllUserTodoData",
+            "env": "production",
+            "hostip": production_ip,
+            "class_method": "get_api",
+            "bottleneck_cause": "数据库查询慢",
+            "solution": "优化数据库查询，增加索引"
+        }
+    ]
+    res['anomaly_detection']['dict'] = data_dict
+
+    # 先预设的'anomaly_detection'中的correlation部分
+    data_correlation = [
+        {
+            "env": "production",
+            "hostip": production_ip,
+            "class_method": "get_api",
+            "correlation_data": [
+                {
+                    "index_id": "非root用户进程数",
+                    "value": 0.6
+                },
+                {
+                    "index_id": "活动进程数",
+                    "value": 0.7
+                }
+            ]
+        },
+        {
+            "env": "replay",
+            "hostip": replay_ip,
+            "class_method": "get_post",
+            "correlation_data": [
+                {
+                    "index_id": "会话数",
+                    "value": 0.6
+                },
+                {
+                    "index_id": "当前数据库的连接数",
+                    "value": 0.7
+                }
+            ]
+        }
+    ]
+    res['anomaly_detection']['correlation'] = data_correlation
+
+    # 先预设的'anomaly_detection'中的correlation部分
+    data_performance_bottleneck_analysis = {
+        "bottlenecks": [
+            {
+                "env": "replay",
+                "hostip": replay_ip,
+                "class_name": "database",
+                "cause": "数据库查询慢",
+                "criteria": "请求时延超过300ms，查询次数过多",
+                "solution": "优化数据库查询，增加索引"
+            },
+            {
+                "env": "production",
+                "hostip": production_ip,
+                "class_name": "network",
+                "cause": "网络带宽不足",
+                "criteria": "数据传输时延大，带宽利用率高",
+                "solution": "增加网络带宽或优化传输协议"
+            }
+        ]
+    }
+    res['performance_bottleneck_analysis'] = data_performance_bottleneck_analysis
 
     return index, res
 

@@ -286,6 +286,10 @@ def preprocess_data(file_paths, csv_file_path):
     split_files_dict = {}
     output_dir = "../raw_data/"
 
+    # check if the [0] is type of list
+    if isinstance(file_paths[0], list):
+        file_paths = file_paths[0]
+
     header_written = False  # 控制变量，跟踪列名是否已写入
 
     # 创建新的事件循环

@@ -6,6 +6,7 @@
 *.zip
 *.png
 *.jpg
+*.rdb
 */__pycache__
 
 results/*
@@ -17,3 +18,4 @@ raw_data/*
 test_field/*
 
 .pdm-python
+.idea

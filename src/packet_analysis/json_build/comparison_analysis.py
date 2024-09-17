@@ -172,4 +172,4 @@ class DB:
             plt.text(bar.get_x() + bar.get_width() / 2.0, height, f'{height:.2f}', ha='center', va='bottom', fontsize=8)
 
         plt.savefig(file_name)
-        plt.show()
+        # plt.show()
