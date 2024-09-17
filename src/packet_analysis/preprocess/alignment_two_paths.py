@@ -1,5 +1,7 @@
 import pandas as pd
 from datetime import datetime, timedelta
+from src.packet_analysis.utils.logger_config import logger
+
 
 def parse_time(sniff_time):
     """
@@ -13,6 +15,7 @@ def parse_time(sniff_time):
         except ValueError:
             continue
     raise ValueError(f"时间格式不匹配: {sniff_time}")
+
 
 def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_file_path):
     # 读取CSV文件
@@ -83,14 +86,14 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
             back_match = subset_back_df[(subset_back_df['Path'] == path2) & (subset_back_df['Src_Port'] == src_port2)]
         else:
             back_match = subset_back_df[(subset_back_df['Path'] == path2) & (subset_back_df['Query'] == query2) & (
-                        subset_back_df['Src_Port'] == src_port2)]
+                    subset_back_df['Src_Port'] == src_port2)]
 
         # 先初始化没有最佳匹配，时间间隔为最大
         if not back_match.empty:
             best_match = None
             smallest_time_diff = timedelta.max
 
-            if not back_match_times:    # 如果 back_match_times 为空，直接将 back_match 数据集的第一行作为最佳匹配（因为没有其他记录可以比较）
+            if not back_match_times:  # 如果 back_match_times 为空，直接将 back_match 数据集的第一行作为最佳匹配（因为没有其他记录可以比较）
                 best_match = back_match.iloc[0]
             else:
                 recent_back_match_times = back_match_times[-10:]
@@ -125,9 +128,12 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
                 aligned_data['Production_Time_since_request'].append(time_since_request2)
                 aligned_data['Production_Request_Index'].append(production_df.iloc[index + 1]['Request_Index'])
                 aligned_data['Production_Response_Index'].append(production_df.iloc[index + 1]['Response_Index'])
-                aligned_data['Production_Request_Packet_Length'].append(production_df.iloc[index + 1]['Request_Packet_Length'])
-                aligned_data['Production_Response_Packet_Length'].append(production_df.iloc[index + 1]['Response_Packet_Length'])
-                aligned_data['Production_Response_Total_Length'].append(production_df.iloc[index + 1]['Response_Total_Length'])
+                aligned_data['Production_Request_Packet_Length'].append(
+                    production_df.iloc[index + 1]['Request_Packet_Length'])
+                aligned_data['Production_Response_Packet_Length'].append(
+                    production_df.iloc[index + 1]['Response_Packet_Length'])
+                aligned_data['Production_Response_Total_Length'].append(
+                    production_df.iloc[index + 1]['Response_Total_Length'])
                 aligned_data['Production_Match_Status'].append(production_df.iloc[index + 1]['Match_Status'])
                 aligned_data['Production_Response_Code'].append(production_df.iloc[index + 1]['Response_code'])
 
@@ -157,9 +163,12 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
                 aligned_data['Production_Time_since_request'].append(time_since_request2)
                 aligned_data['Production_Request_Index'].append(production_df.iloc[index + 1]['Request_Index'])
                 aligned_data['Production_Response_Index'].append(production_df.iloc[index + 1]['Response_Index'])
-                aligned_data['Production_Request_Packet_Length'].append(production_df.iloc[index + 1]['Request_Packet_Length'])
-                aligned_data['Production_Response_Packet_Length'].append(production_df.iloc[index + 1]['Response_Packet_Length'])
-                aligned_data['Production_Response_Total_Length'].append(production_df.iloc[index + 1]['Response_Total_Length'])
+                aligned_data['Production_Request_Packet_Length'].append(
+                    production_df.iloc[index + 1]['Request_Packet_Length'])
+                aligned_data['Production_Response_Packet_Length'].append(
+                    production_df.iloc[index + 1]['Response_Packet_Length'])
+                aligned_data['Production_Response_Total_Length'].append(
+                    production_df.iloc[index + 1]['Response_Total_Length'])
                 aligned_data['Production_Match_Status'].append(production_df.iloc[index + 1]['Match_Status'])
                 aligned_data['Production_Response_Code'].append(production_df.iloc[index + 1]['Response_code'])
 
@@ -186,9 +195,12 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
             aligned_data['Production_Time_since_request'].append(time_since_request2)
             aligned_data['Production_Request_Index'].append(production_df.iloc[index + 1]['Request_Index'])
             aligned_data['Production_Response_Index'].append(production_df.iloc[index + 1]['Response_Index'])
-            aligned_data['Production_Request_Packet_Length'].append(production_df.iloc[index + 1]['Request_Packet_Length'])
-            aligned_data['Production_Response_Packet_Length'].append(production_df.iloc[index + 1]['Response_Packet_Length'])
-            aligned_data['Production_Response_Total_Length'].append(production_df.iloc[index + 1]['Response_Total_Length'])
+            aligned_data['Production_Request_Packet_Length'].append(
+                production_df.iloc[index + 1]['Request_Packet_Length'])
+            aligned_data['Production_Response_Packet_Length'].append(
+                production_df.iloc[index + 1]['Response_Packet_Length'])
+            aligned_data['Production_Response_Total_Length'].append(
+                production_df.iloc[index + 1]['Response_Total_Length'])
             aligned_data['Production_Match_Status'].append(production_df.iloc[index + 1]['Match_Status'])
             # 检查存在性
             if 'Response_code' in production_df.columns:
@@ -211,8 +223,9 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
 
     aligned_df = pd.DataFrame(aligned_data)
     aligned_df.to_csv(alignment_csv_file_path, index=False)
-    print(f'File saved to {alignment_csv_file_path}')
+    logger.info(f'File saved to {alignment_csv_file_path}')
     return alignment_csv_file_path
+
 
 # Main
 if __name__ == '__main__':

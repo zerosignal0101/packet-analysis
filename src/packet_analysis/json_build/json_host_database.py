@@ -1,5 +1,6 @@
 import datetime
 import json
+from src.packet_analysis.utils.logger_config import logger
 
 # 将DCTIME转换为可读的时间格式
 def convert_dctime(dctime):
@@ -83,4 +84,4 @@ extracted_info = extract_data(json_data)
 
 # 输出提取到的数据
 for info in extracted_info:
-    print(info)
+    logger.info(f'Info: {info}')

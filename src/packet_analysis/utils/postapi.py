@@ -2,6 +2,7 @@ import asyncio
 import requests
 import json
 import time
+from src.packet_analysis.utils.logger_config import logger
 
 
 def post_url(data, url):
@@ -20,12 +21,12 @@ def post_url(data, url):
 
         # 检查响应状态码
         if response.status_code == 200:
-            print('请求成功')
+            logger.info('请求成功')
         else:
-            print('请求失败，状态码:', response.status_code)
-            print('错误信息:', response.text)
+            logger.info(f'请求失败，状态码: {response.status_code}')
+            logger.info(f'错误信息: {response.text}')
     except Exception as e:
-        print('请求异常:', e)
+        logger.info(f'请求异常: {e}')
 
 
 if __name__ == '__main__':
