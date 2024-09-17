@@ -6,6 +6,7 @@ from pydantic import BaseModel, ValidationError
 from typing import List
 import requests
 from celery import Celery, group, chain, chord
+from multiprocessing import Process
 
 # Import the new function
 from src.packet_analysis.preprocess import extract_to_csv, alignment, alignment_two_paths
@@ -84,9 +85,9 @@ def cluster_analysis_data(results, index, replay_task_id, replay_id, production_
     data_list = DataBase.built_all_dict()
 
     # 保存两环境对比数据csv、对比图到本地
-    comparison_csv_path = f"../results/comparison_analysis_data_{index}_{replay_id}.csv"
+    comparison_csv_path = f"./results/comparison_analysis_data_{index}_{replay_id}.csv"
     DataBase.save_to_csv(comparison_csv_path)
-    comparison_png_path = f"../results/comparison_analysis_data_{index}_{replay_id}.png"
+    comparison_png_path = f"./results/comparison_analysis_data_{index}_{replay_id}.png"
     DataBase.plot_mean_difference_ratio(comparison_png_path)
 
     # Update response with the data_list for the current analysis

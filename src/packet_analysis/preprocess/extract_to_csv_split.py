@@ -12,6 +12,8 @@ import glob
 from collections import OrderedDict
 from itertools import islice
 
+from src.packet_analysis.utils.logger_config import logger
+
 
 # 检查最高层协议是否合适
 def check_highest_layer_suitable(layer):
@@ -37,7 +39,7 @@ def check_tcp_anomalies(pkt):
         # 检查 RST 位 (第3位)
         is_rst_set = tcp_flags & 0x04
         if is_rst_set:
-            print("RST flag is set in the TCP packet")
+            logger.info("RST flag is set in the TCP packet")
             anomalies.append('TCP Reset')
     return anomalies
 
@@ -46,7 +48,7 @@ def check_tcp_anomalies(pkt):
 def process_packet(pkt, index, first_packet_time, request_response_pairs, unmatched_requests, match_num, tcp_anomalies):
     if check_highest_layer_suitable(pkt.highest_layer) or hasattr(pkt, 'http'):
         # 显示当前处理进度
-        print("HTTP: ", index)
+        logger.info(f"HTTP: {index}")
         sniff_time = pkt.sniff_time
         if first_packet_time is None:
             first_packet_time = sniff_time
@@ -80,7 +82,7 @@ def process_packet(pkt, index, first_packet_time, request_response_pairs, unmatc
                     'tcp_anomaly_index': None  # 预设为None
                 }
             except AttributeError:  # 有时候会出现解析错误
-                print("error")
+                logger.info("error")
         elif hasattr(pkt.http, 'response_code'):
             try:
                 # 处理HTTP响应
@@ -93,7 +95,7 @@ def process_packet(pkt, index, first_packet_time, request_response_pairs, unmatc
                     (pkt.ip.dst, pkt.ip.src, pkt.tcp.dstport, pkt.tcp.srcport, url, ack_num - 1)
                 ]
             except AttributeError:  # 有时候会出现解析错误
-                print("Attr error")
+                logger.info("Attr error")
                 return first_packet_time, match_num
 
             matched_key = None
@@ -132,7 +134,7 @@ def process_packet(pkt, index, first_packet_time, request_response_pairs, unmatc
             if matched_key:
                 # 处理过程中显示配对成功数
                 match_num += 1
-                print(index, "is matched ", match_num, "in all")
+                logger.info(f"{index} is matched {match_num} in all")
 
                 # 提取 File Data 长度  条件3
                 response_total_length = 0
@@ -143,7 +145,7 @@ def process_packet(pkt, index, first_packet_time, request_response_pairs, unmatc
                     try:
                         response_total_length = pkt.http.chunk_size
                     except:
-                        print("error")
+                        logger.info("error")
                 else:
                     response_total_length = int(pkt.length)
 
@@ -155,14 +157,14 @@ def process_packet(pkt, index, first_packet_time, request_response_pairs, unmatc
                     'response_code': response_code,  # 存储响应状态码
                     'matched': True
                 })
-                print(66666, response_total_length, int(pkt.length))
+                logger.info(f"66666 {response_total_length} {pkt.length}")
 
     # if hasattr(pkt, 'tcp'):
-    #     print("TCP: ", index)
+    #     logger.info("TCP: ", index)
     #     anomalies = check_tcp_anomalies(pkt)
     #     if anomalies:  # 如果检测到TCP异常
-    #         print(f"Detected TCP Anomalies in packet {index}: {anomalies}")
-    #         print(666666666666)
+    #         logger.info(f"Detected TCP Anomalies in packet {index}: {anomalies}")
+    #         logger.info(666666666666)
     #         matched_key_for_tcp = None
     #         for request_key, request_value in islice(reversed(request_response_pairs.items()), 20):  # 只遍历最近的20个请求
     #             if ((pkt.ip.src == request_value['ip_src'] and pkt.ip.dst == request_value['ip_dst'] and
@@ -190,7 +192,7 @@ def process_packet(pkt, index, first_packet_time, request_response_pairs, unmatc
     #                     'anomaly_sniff_time': pkt.sniff_time,
     #                     'anomaly_index': index
     #                 })
-    #                 print("tcp_anomalies:",tcp_anomalies)
+    #                 logger.info("tcp_anomalies:",tcp_anomalies)
 
     return first_packet_time, match_num
 
@@ -248,7 +250,7 @@ def extract_packet_info(csv_file_path, request_response_pairs, write_header=True
         # 移除成功配对的数据
         for key in keys_to_remove:
             del request_response_pairs[key]
-        print("清理已配对matched后，request_response_pairs剩余的未配对字典：", request_response_pairs.keys())
+        logger.info(f"清理已配对matched后，request_response_pairs剩余的未配对字典：{request_response_pairs.keys()}")
     return request_response_pairs
 
 
@@ -276,7 +278,7 @@ def sort_csv_by_sniff_time(csv_file_path):
     df.to_csv(csv_file_path, index=False)
 
 
-def save_tcp_anomalies_to_file(tcp_anomalies, filename='../results/tcp_anomalies.csv'):
+def save_tcp_anomalies_to_file(tcp_anomalies, filename='./results/tcp_anomalies.csv'):
     fieldnames = ['anomaly_type', 'ip_src', 'ip_dst', 'src_port', 'dst_port', 'anomaly_sniff_time', 'anomaly_index']
     with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -293,6 +295,10 @@ def preprocess_data(file_paths, csv_file_path):
     if isinstance(file_paths[0], list):
         file_paths = file_paths[0]
 
+    # 如果csv文件已存在，则删除
+    if os.path.exists(csv_file_path):
+        os.remove(csv_file_path)
+
     header_written = False  # 控制变量，跟踪列名是否已写入
 
     # 创建新的事件循环
@@ -308,6 +314,7 @@ def preprocess_data(file_paths, csv_file_path):
 
         # Run the editcap command to split the pcap file and save the splits in the specified directory
         command = f"editcap -c 200000 {file_path} {split_prefix}"
+        logger.info(command)
         subprocess.run(command, shell=True)
 
         # Use glob to find the split files matching the pattern in the output directory
@@ -330,12 +337,12 @@ def preprocess_data(file_paths, csv_file_path):
         # # 直接将 split_files 列表赋值给 split_files_dict[file_path]
         # split_files_dict[file_path] = split_files
 
-    print("split_files_dict", split_files_dict)
+    logger.info("split_files_dict: {split_files_dict}")
 
     for file_path, split_files in split_files_dict.items():
         # Step 2: 分批处理每个path 分割后的多个文件
         # 我认为应该在这里添加局部变量
-        print(222222222222222)
+        logger.info("222222222222222")
         request_response_pairs = {}
         unmatched_requests = []
         first_packet_time = None
@@ -358,7 +365,7 @@ def preprocess_data(file_paths, csv_file_path):
             else:
                 request_response_pairs = extract_packet_info(csv_file_path, request_response_pairs,
                                                              write_header=not header_written, final_chunk=False)
-            print("第", i + 1, "段包已写入，共", len(split_files), "段")
+            logger.info(f"第 {i + 1} 段包已写入，共 {len(split_files)} 段")
 
             # 确保在第一次写入列名后，将 header_written 设置为 True
             if not header_written:
@@ -366,10 +373,12 @@ def preprocess_data(file_paths, csv_file_path):
 
             # 清理资源
             cap.close()
+            logger.warning(f"Remove split_file: {split_file}")
             os.remove(split_file)  # 删除分割后的文件，节省磁盘空间
+            logger.info("-" * 50)
         save_tcp_anomalies_to_file(tcp_anomalies)  # 写入异常文件的位置
     sort_csv_by_sniff_time(csv_file_path)
-    print("数据处理完成，已生成CSV文件，已排序。")
+    logger.info("数据处理完成，已生成CSV文件，已排序。")
 
     # 提取并写入配对信息
     # extract_packet_info(csv_file_path, request_response_pairs, unmatched_requests)
