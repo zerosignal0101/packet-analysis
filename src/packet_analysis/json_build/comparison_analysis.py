@@ -1,4 +1,5 @@
 import pandas as pd
+import matplotlib.pyplot as plt
 
 
 class df:
@@ -138,3 +139,37 @@ class DB:
             df = self.built_df(url)
             all_df_list.append(self.built_single_dict(df))
         return all_df_list
+
+    def save_to_csv(self, file_name):
+        all_dicts = self.built_all_dict()
+        df_result = pd.DataFrame(all_dicts)
+        df_result.to_csv(file_name, encoding='utf-8-sig', index=False)  # 使用'utf-8-sig'编码保证中文不乱码
+
+    def plot_mean_difference_ratio(self, file_name):
+        all_dicts = self.built_all_dict()
+        df_result = pd.DataFrame(all_dicts)
+
+        # 将'mean_difference_ratio'转为浮点数
+        df_result['mean_difference_ratio'] = df_result['mean_difference_ratio'].astype(float)
+
+        plt.figure(figsize=(14, 8))  # 调整图片尺寸
+
+        # 颜色：如果mean_difference_ratio小于1，则柱状图为红色，否则为蓝色
+        colors = ['red' if ratio < 1 else 'blue' for ratio in df_result['mean_difference_ratio']]
+
+        bars = plt.bar(df_result['url'], df_result['mean_difference_ratio'], color=colors)
+
+        plt.xlabel('URL', fontsize=10)  # 调整x轴标签字体大小
+        plt.ylabel('Mean Difference Ratio', fontsize=10)  # 调整y轴标签字体大小
+        plt.title('Mean Difference Ratio for Each Request', fontsize=12)  # 调整标题字体大小
+
+        plt.xticks(rotation=45, ha='right', fontsize=8)  # 旋转x轴标签并调整字体大小
+        plt.tight_layout()  # 自动调整布局防止重叠
+
+        # 在柱状图上方显示数值，调整字体大小
+        for bar in bars:
+            height = bar.get_height()
+            plt.text(bar.get_x() + bar.get_width() / 2.0, height, f'{height:.2f}', ha='center', va='bottom', fontsize=8)
+
+        plt.savefig(file_name)
+        plt.show()
