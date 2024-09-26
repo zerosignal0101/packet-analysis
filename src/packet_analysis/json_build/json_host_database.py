@@ -2,12 +2,14 @@ import datetime
 import json
 from src.packet_analysis.utils.logger_config import logger
 
+
 # 将DCTIME转换为可读的时间格式
 def convert_dctime(dctime):
     # 将13位毫秒级时间戳转换为可读的日期时间格式
     timestamp_s = dctime / 1000.0
     readable_time = datetime.datetime.fromtimestamp(timestamp_s)
-    return readable_time.strftime('%Y-%m-%d %H:%M:%S')
+    return readable_time.strftime('%Y-%m-%d %H:%M:%S.%f')
+
 
 # KPI_NO 与 采集指标名称的映射关系
 kpi_mapping = {
@@ -24,7 +26,6 @@ kpi_mapping = {
     "20200413185063": "等待连接数",
     "20200413185065": "关闭连接数",
     "20200413185079": "文件系统总利用率",
-
     "20200415181115": "当前连接数",
     "20211118174008": "当前活动会话数",
     "20200508191078": "当前会话数",
@@ -38,6 +39,7 @@ kpi_mapping = {
     "20240702090709": "阻塞会话数",
     # 更多KPI_NO映射关系可以根据需要补充
 }
+
 
 # 提取数据的函数
 def extract_data(json_data):
@@ -75,13 +77,31 @@ def extract_data(json_data):
     return extracted_data
 
 
-# 示例使用方法
-with open('../../../raw_data/生产采集collect_20240829_08301130.json', 'r', encoding='utf-8') as f:
-    json_data = json.load(f)
+if __name__ == "__main__":
+    # 示例使用方法
+    with open('../../../raw_data/生产采集collect_20240829_08301130.json', 'r', encoding='utf-8') as f:
+        json_data = json.load(f)
 
-# 提取数据
-extracted_info = extract_data(json_data)
+    f.close()
 
-# 输出提取到的数据
-for info in extracted_info:
-    logger.info(f'Info: {info}')
+    # 提取数据
+    extracted_info = extract_data(json_data)
+
+    # 输出提取到的数据
+    for info in extracted_info:
+        if '原始数据' in info:
+            print(f"{info['监控类型']} - 原始数据")
+            print(info['原始数据'])
+            # 删除该条记录，不再输出原始数据
+            extracted_info.remove(info)
+            continue
+        monitor_type = info['监控类型']
+        sniff_time = info['DCTIME']
+        name = info['指标名称']
+        value = info['VALUE']
+        print(f'{monitor_type} - {sniff_time}')
+        print(f'Info: {name} - {value}')
+
+    # 保存到Json文件
+    with open('../../../results/performance.json', 'w', encoding='utf-8') as f:
+        json.dump(extracted_info, f, ensure_ascii=False, indent=4)

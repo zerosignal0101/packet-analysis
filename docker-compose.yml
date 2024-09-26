@@ -26,7 +26,7 @@ services:
       - app_network
 
   celery_worker:
-    image: zerosignal0101/packet-analysis-tool:v0.2.2
+    image: zerosignal0101/packet-analysis-tool:v0.2.3
     command: celery -A src.server.celery worker --loglevel=info
     volumes:
       - ./raw_data:/app/raw_data
