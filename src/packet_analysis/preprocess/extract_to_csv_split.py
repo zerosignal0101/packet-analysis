@@ -353,7 +353,8 @@ def preprocess_data(file_paths, csv_file_path):
         split_files = sorted(split_files, key=lambda x: os.path.getmtime(x))
         for i, split_file in enumerate(split_files):  # 按顺序做处理 enumerate枚举+输出标号
             cap = pyshark.FileCapture(split_file,
-                                      keep_packets=False,tshark_path="F:\\softwares_f\\Wireshark\\tshark.exe")  # 在自己的主机要加上路径：tshark_path="F:\\softwares_f\\Wireshark\\tshark.exe"
+                                      keep_packets=False)
+            # 在自己的主机要加上路径：tshark_path="F:\\softwares_f\\Wireshark\\tshark.exe"
             # 分批处理每个分割文件中的包
             for pkt in cap:
                 index += 1
