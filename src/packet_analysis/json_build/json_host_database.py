@@ -39,7 +39,8 @@ kpi_mapping = {
     # 更多KPI_NO映射关系可以根据需要补充
 }
 
-# 提取数据的函数
+
+
 def extract_data(json_data):
     extracted_data = []
 
@@ -48,28 +49,50 @@ def extract_data(json_data):
         if monitor_type in ['server', 'databases']:
             # 遍历主机或数据库类型 (如 MOD_UNIX_LINUX, mysql)
             for machine_type, ips in machines.items():
+                # 确保 ips 是一个字典
+                if not isinstance(ips, dict):
+                    print(f"Warning: {machine_type} 的值不是字典类型, 跳过处理")
+                    continue
+
                 # 遍历IP地址 (如 192.168.49.134)
                 for ip_address, metrics in ips.items():
+                    # 确保 metrics 是一个字典
+                    if not isinstance(metrics, dict):
+                        print(f"Warning: IP地址 {ip_address} 的 metrics 不是字典, 跳过处理")
+                        continue
+
                     # 遍历每种KPI_NO的指标信息列表
                     for kpi_no, items in metrics.items():
+                        # 确保 items 是一个列表
+                        if not isinstance(items, list):
+                            print(f"Warning: KPI_NO {kpi_no} 的 items 不是列表, 跳过处理")
+                            continue
+
                         for item in items:
+                            # 检查 'DCTIME' 和 'VALUE' 是否存在
                             if 'DCTIME' in item and 'VALUE' in item:
-                                readable_time = convert_dctime(int(item['DCTIME']))
-                                kpi_name = kpi_mapping.get(kpi_no, '未知指标')  # 获取对应的指标名称
-                                extracted_data.append({
-                                    '监控类型': monitor_type,
-                                    '主机或数据库类型': machine_type,
-                                    'IP地址': ip_address,
-                                    'DCTIME': readable_time,
-                                    'VALUE': item['VALUE'],
-                                    'KPI_NO': kpi_no,
-                                    '指标名称': kpi_name  # 添加指标名称
-                                })
+                                try:
+                                    readable_time = convert_dctime(int(item['DCTIME']))
+                                    kpi_name = kpi_mapping.get(kpi_no, '未知指标')  # 获取对应的指标名称
+                                    extracted_data.append({
+                                        '监控类型': monitor_type,
+                                        '主机或数据库类型': machine_type,
+                                        'IP地址': ip_address,
+                                        'DCTIME': readable_time,
+                                        'VALUE': item['VALUE'],
+                                        'KPI_NO': kpi_no,
+                                        '指标名称': kpi_name  # 添加指标名称
+                                    })
+                                except ValueError as e:
+                                    print(f"Error: DCTIME 转换失败 for item: {item}, 错误信息: {e}")
+                            else:
+                                print(f"Warning: 缺少 'DCTIME' 或 'VALUE' in item: {item}, 跳过此条记录")
+
         elif monitor_type == 'apm':
-            # 对于apm监控类型，直接将原始数据添加到输出中
+            # 对于 apm 监控类型，直接将原始数据添加到输出中
             extracted_data.append({
                 '监控类型': monitor_type,
-                '原始数据': machines  # 将apm的数据原样保存
+                '原始数据': machines  # 将 apm 的数据原样保存
             })
 
     return extracted_data
@@ -82,6 +105,7 @@ with open('../../../raw_data/生产采集collect_20240829_08301130.json', 'r', e
 # 提取数据
 extracted_info = extract_data(json_data)
 
+print(extracted_info)
 # 输出提取到的数据
-for info in extracted_info:
-    logger.info(f'Info: {info}')
+# for info in extracted_info:
+#     logger.info(f'Info: {info}')
