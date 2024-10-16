@@ -73,7 +73,7 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
 
         # 计算生产请求1和请求2之间的时间差，并取绝对值
         time_diff_production = abs(parse_time(sniff_time2) - parse_time(sniff_time1))
-        time_threshold = min(time_diff_production * 10000, timedelta(seconds=5))
+        time_threshold = min(time_diff_production * 1000000, timedelta(seconds=5))
 
         # 查找回放环境中生产请求2的匹配项 根据有无参数值来寻找
         # if pd.isna(query2):
