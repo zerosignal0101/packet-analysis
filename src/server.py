@@ -23,8 +23,8 @@ app = Flask(__name__)
 # 使用新格式的配置名称
 app.config.update(
     include=['src.server'],
-    result_backend='redis://127.0.0.1:6379/0',  # 'redis://redis:6379/0'
-    broker_url='redis://127.0.0.1:6379/0'  # 'redis://redis:6379/0'
+    result_backend='redis://redis:6379/0',  # 'redis://redis:6379/0'
+    broker_url='redis://redis:6379/0'  # 'redis://redis:6379/0'
 )
 
 celery = Celery(app.name, broker=app.config['broker_url'])
@@ -34,13 +34,13 @@ celery.conf.update(app.config)
 class CollectPcap(BaseModel):
     collect_path: str
     ip: str
-    prot: int
+    port: int
 
 
 class ReplayPcap(BaseModel):
     replay_path: str
     ip: str
-    prot: int
+    port: int
     replay_speed: str
     replay_multiplier: str
 
