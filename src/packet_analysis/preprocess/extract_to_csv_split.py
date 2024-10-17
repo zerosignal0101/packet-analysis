@@ -4,7 +4,7 @@ import pyshark
 from urllib.parse import urlparse, urlunparse
 import time
 import heapq
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 import subprocess
 import pandas as pd
@@ -49,7 +49,11 @@ def process_packet(pkt, index, first_packet_time, request_response_pairs, unmatc
     if check_highest_layer_suitable(pkt.highest_layer) or hasattr(pkt, 'http'):
         # 显示当前处理进度
         logger.info(f"HTTP: {index}")
-        sniff_time = pkt.sniff_time
+
+        # sniff_time = pkt.sniff_time
+        sniff_time = pkt.sniff_time + timedelta(hours=8)
+
+        print("sniff_time",sniff_time)
         if first_packet_time is None:
             first_packet_time = sniff_time
         relative_time = (sniff_time - first_packet_time).total_seconds()
@@ -287,11 +291,14 @@ def save_tcp_anomalies_to_file(tcp_anomalies, filename='./results/tcp_anomalies.
 
 
 # 预处理函数
-def preprocess_data(file_paths, csv_file_path):
-    split_files_dict = {}
-    output_dir = "/tmp"  # 分割后的文件存储目录
+def preprocess_data(file_paths, csv_file_path, anomalies_csv_file_path):
+    print("3333333Current working directory:", os.getcwd())
 
-    # check if the [0] is type of list
+    split_files_dict = {}
+    # output_dir = "/tmp"  # 分割后的文件存储目录
+    output_dir = "./raw_data"  # 分割后的文件存储目录
+
+    # check if the [0] is type of list  这里为什么要使用列表传过来？
     if isinstance(file_paths[0], list):
         file_paths = file_paths[0]
 
@@ -310,8 +317,10 @@ def preprocess_data(file_paths, csv_file_path):
     for file_path in file_paths:
         split_files = []
         base_filename = os.path.basename(file_path)  # Extract the base filename from the file path
-        split_prefix = os.path.join(output_dir, base_filename)  # Prefix includes the target directory
 
+        print("file_path",file_path,"base_filename",base_filename)
+        split_prefix = os.path.join(output_dir, base_filename)  # Prefix includes the target directory
+        print("4444444Current working directory:", os.getcwd())
         # Run the editcap command to split the pcap file and save the splits in the specified directory
         command = f"editcap -c 200000 {file_path} {split_prefix}"
         logger.info(command)
@@ -320,24 +329,15 @@ def preprocess_data(file_paths, csv_file_path):
         # Use glob to find the split files matching the pattern in the output directory
         base_filename_without_extension = os.path.splitext(base_filename)[0]  # 去掉扩展名
         split_file_pattern = os.path.join(output_dir, f"{base_filename_without_extension}_*.pcap")
-        split_files = glob.glob(split_file_pattern)
+        split_files = glob.glob(split_file_pattern) # glob.glob 来根据前面的模式字符串（split_file_pattern）在指定的目录中
+        # 查找匹配的文件。glob 函数会返回一个列表，包含所有符合该模式的文件路径。
 
         # Add the found split files to the dictionary
         split_files_dict[file_path] = split_files
+        # file_path 作为键。这样就为每个源文件 file_path 存储对应的拆分文件列表
 
-        # 将分割后的文件添加到 split_files 列表中
-        # split_index = 0
-        # while True:
-        #     split_file = f"{split_prefix}_*.pcap"
-        #     if os.path.exists(split_file):  #先看000.pcap是否存在 再看001.pcap是否存在......
-        #         split_files.append(split_file)
-        #         split_index += 1
-        #     else:
-        #         break
-        # # 直接将 split_files 列表赋值给 split_files_dict[file_path]
-        # split_files_dict[file_path] = split_files
 
-    logger.info("split_files_dict: {split_files_dict}")
+    logger.info(f"split_files_dict: {split_files_dict}")
 
     for file_path, split_files in split_files_dict.items():
         # Step 2: 分批处理每个path 分割后的多个文件
@@ -349,9 +349,12 @@ def preprocess_data(file_paths, csv_file_path):
         match_num = 0
         index = 0  # 尤其是index 为了保证同一个path下 分段间的index有联系，而不是每一次都是从0开始
         tcp_anomalies = []
+        # 按照时间顺序 对文件排序
+        split_files = sorted(split_files, key=lambda x: os.path.getmtime(x))
         for i, split_file in enumerate(split_files):  # 按顺序做处理 enumerate枚举+输出标号
             cap = pyshark.FileCapture(split_file,
-                                      keep_packets=False)  # 在自己的主机要加上路径：tshark_path="F:\\softwares_f\\Wireshark\\tshark.exe"
+                                      keep_packets=False)
+            # 在自己的主机要加上路径：tshark_path="F:\\softwares_f\\Wireshark\\tshark.exe"
             # 分批处理每个分割文件中的包
             for pkt in cap:
                 index += 1
@@ -376,12 +379,12 @@ def preprocess_data(file_paths, csv_file_path):
             logger.warning(f"Remove split_file: {split_file}")
             os.remove(split_file)  # 删除分割后的文件，节省磁盘空间
             logger.info("-" * 50)
-        save_tcp_anomalies_to_file(tcp_anomalies)  # 写入异常文件的位置
+        save_tcp_anomalies_to_file(tcp_anomalies, anomalies_csv_file_path)  # 写入异常文件的位置
     sort_csv_by_sniff_time(csv_file_path)
-    logger.info("数据处理完成，已生成CSV文件，已排序。")
+    logger.info(f"{csv_file_path} \n 数据处理完成，已生成CSV文件，已排序。")
+    return
 
-    # 提取并写入配对信息
-    # extract_packet_info(csv_file_path, request_response_pairs, unmatched_requests)
+
 
 
 if __name__ == "__main__":
