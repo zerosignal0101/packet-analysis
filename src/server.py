@@ -1,4 +1,5 @@
 import json
+import uuid
 import os
 
 from flask import Flask, request, jsonify
@@ -60,7 +61,7 @@ class PcapInfoList(BaseModel):
 
 @celery.task(name='server.extract_data')
 def extract_data(pcap_file_path, csv_file_path):
-    print("pcap_file_path", pcap_file_path)
+    logger.info(f"pcap_file_path {pcap_file_path}")
     extract_to_csv_split.preprocess_data([pcap_file_path], csv_file_path)
 
 
@@ -71,7 +72,7 @@ def align_data(results, production_csv_file_path, replay_csv_file_path, alignmen
 
 @celery.task(name='server.cluster_analysis_data')
 def cluster_analysis_data(results, index, replay_task_id, replay_id, production_ip, replay_ip, replay_csv_file_path,
-                          production_csv_file_path):
+                          production_csv_file_path, task_id):
     # res variable
     res = {
         "comparison_analysis": {},
@@ -85,10 +86,12 @@ def cluster_analysis_data(results, index, replay_task_id, replay_id, production_
     # 添加返回值
     data_list = DataBase.built_all_dict()
 
+    outputs_path = f'./results/{task_id}'
+
     # 保存两环境对比数据csv、对比图到本地
-    comparison_csv_path = f"./results/comparison_analysis_data_{index}_{replay_id}.csv"
+    comparison_csv_path = os.path.join(outputs_path, f"comparison_analysis_data_{index}.csv")
     DataBase.save_to_csv(comparison_csv_path)
-    comparison_png_path = f"./results/comparison_analysis_data_{index}_{replay_id}.png"
+    comparison_png_path = os.path.join(outputs_path, f"comparison_analysis_data_{index}.png")
     DataBase.plot_mean_difference_ratio(comparison_png_path)
 
     # Update response with the data_list for the current analysis
@@ -107,9 +110,9 @@ def cluster_analysis_data(results, index, replay_task_id, replay_id, production_
     res['comparison_analysis']['legend'] = data_legend
 
     # production cluster anomaly and replay cluster anomaly
-    folder_output_pro = f"results/cluster_production_{index}_{replay_id}"
+    folder_output_pro = os.path.join(outputs_path, f"cluster_production_{index}")
     pro_anomaly_csv_list, pro_plot_cluster_list = cluster.analysis(production_csv_file_path, folder_output_pro)
-    folder_output_replay = f"results/cluster_replay_{index}_{replay_id}"
+    folder_output_replay = os.path.join(outputs_path, f"cluster_replay_{index}")
     replay_anomaly_csv_list, replay_plot_cluster_list = cluster.analysis(replay_csv_file_path, folder_output_replay)
 
     # Process anomaly CSV files to build JSON
@@ -195,10 +198,11 @@ def cluster_analysis_data(results, index, replay_task_id, replay_id, production_
 
 
 @celery.task(name='server.final_task')
-def final_task(results, data, ip_address):
+def final_task(results, data, task_id, ip_address):
     pcap_info_list = PcapInfoList.parse_obj(data)
     # Initialize the global response with predefined values
     response = {
+        "task_id": task_id,
         "individual_analysis_info": [
             {
                 "replay_task_id": info.replay_task_id,
@@ -317,41 +321,47 @@ def final_task(results, data, ip_address):
     postapi.post_url(json.dumps(response), callback_url)
 
 
-def run_tasks_in_parallel(data, ip_address):
+def run_tasks_in_parallel(data, task_id, ip_address):
     # Create results directory if not exists
-    print("11111Current working directory:", os.getcwd())
+    logger.info(f"11111Current working directory: {os.getcwd()}")
 
-    if not os.path.exists('../results'):
-        os.makedirs('../results')
+    if not os.path.exists('results'):
+        os.makedirs('results')
+
+    if not os.path.exists(f'results/{task_id}'):
+        logger.info(f"Mkdir: results/{task_id}")
+        os.makedirs(f'results/{task_id}')
 
     pcap_info_list = PcapInfoList.parse_obj(data)
 
     # high_cost_tasks
     task_groups = []
 
+    outputs_path = f'results/{task_id}'
+
     # Process each pcap info
     for index, pcap_info in enumerate(pcap_info_list.pcap_info):
         logger.info(f"Processing pcap info {index}")
         # Extract production and replay data
-        production_csv_file_path = f"results/extracted_production_data_{index}_{pcap_info.replay_id}.csv"
-        replay_csv_file_path = f"results/extracted_replay_data_{index}_{pcap_info.replay_id}.csv"
+        production_csv_file_path = os.path.join(outputs_path, f"extracted_production_data_{index}.csv")
+        replay_csv_file_path = os.path.join(outputs_path, f"extracted_replay_data_{index}.csv")
 
         # Align production and replay data
-        alignment_csv_file_path = f"results/aligned_data_{index}_{pcap_info.replay_id}.csv"
+        alignment_csv_file_path = os.path.join(outputs_path, f"aligned_data_{index}.csv")
 
         # Parallelize the tasks 调用任务 extract_data 的异步签名 (s)，提取生产环境中的 pcap 数据
         # 使用 os.path.join 拼接 collect.collect_path，生成每个收集到的 pcap 文件的完整路径。
-        print("222222Current working directory:", os.getcwd())
+        logger.info(f"222222Current working directory: {os.getcwd()}")
 
         task_group = group(
             extract_data.s([os.path.join(collect.collect_path) for collect in pcap_info.collect_pcap],production_csv_file_path),
             extract_data.s([os.path.join(pcap_info.replay_pcap.replay_path)], replay_csv_file_path)
             | align_data.s(production_csv_file_path, replay_csv_file_path, alignment_csv_file_path)
-            | cluster_analysis_data.s(index, pcap_info.replay_task_id, pcap_info.replay_id, pcap_info.collect_pcap[0].ip,pcap_info.replay_pcap.ip, replay_csv_file_path, production_csv_file_path))
+            | cluster_analysis_data.s(index, pcap_info.replay_task_id, pcap_info.replay_id, pcap_info.collect_pcap[0].ip,pcap_info.replay_pcap.ip, replay_csv_file_path, production_csv_file_path, task_id))
         task_groups.append(task_group)
 
     # 使用chord确保所有任务子项完成后执行最终任务
-    final_chord = chord(task_groups)(final_task.s(data, ip_address))
+    final_chord = chord(task_groups)(final_task.s(data, task_id, ip_address))
 
 
 @app.route('/api/algorithm/analyze', methods=['POST'])
@@ -360,10 +370,13 @@ def process():
         data = request.json  # 假设请求体是JSON格式
         ip_address = request.remote_addr
 
-        # 异步执行任务
-        run_tasks_in_parallel(data, ip_address)
+        # 生成唯一的 task_id
+        task_id = str(uuid.uuid4())
 
-        return jsonify({"message": "Request received", "task_id": id(data), "status": "queued"}), 202
+        # 异步执行任务
+        run_tasks_in_parallel(data, task_id, ip_address)
+
+        return jsonify({"message": "Request received", "task_id": task_id, "status": "queued"}), 202
     except ValidationError as e:
         return jsonify({"error": str(e)}), 400
 
