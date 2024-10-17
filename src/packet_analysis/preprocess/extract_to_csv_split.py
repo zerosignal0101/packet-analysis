@@ -291,7 +291,7 @@ def save_tcp_anomalies_to_file(tcp_anomalies, filename='./results/tcp_anomalies.
 
 
 # 预处理函数
-def preprocess_data(file_paths, csv_file_path):
+def preprocess_data(file_paths, csv_file_path, anomalies_csv_file_path):
     print("3333333Current working directory:", os.getcwd())
 
     split_files_dict = {}
@@ -379,9 +379,10 @@ def preprocess_data(file_paths, csv_file_path):
             logger.warning(f"Remove split_file: {split_file}")
             os.remove(split_file)  # 删除分割后的文件，节省磁盘空间
             logger.info("-" * 50)
-        save_tcp_anomalies_to_file(tcp_anomalies)  # 写入异常文件的位置
+        save_tcp_anomalies_to_file(tcp_anomalies, anomalies_csv_file_path)  # 写入异常文件的位置
     sort_csv_by_sniff_time(csv_file_path)
-    logger.info("数据处理完成，已生成CSV文件，已排序。")
+    logger.info(f"{csv_file_path} \n 数据处理完成，已生成CSV文件，已排序。")
+    return
 
 
 

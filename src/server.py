@@ -60,9 +60,9 @@ class PcapInfoList(BaseModel):
 
 
 @celery.task(name='server.extract_data')
-def extract_data(pcap_file_path, csv_file_path):
+def extract_data(pcap_file_path, extracted_csv_file_path, anomalies_csv_file_path):
     logger.info(f"pcap_file_path {pcap_file_path}")
-    extract_to_csv_split.preprocess_data([pcap_file_path], csv_file_path)
+    extract_to_csv_split.preprocess_data([pcap_file_path], extracted_csv_file_path, anomalies_csv_file_path)
 
 
 @celery.task(name='server.align_data')
@@ -344,7 +344,9 @@ def run_tasks_in_parallel(data, task_id, ip_address):
         logger.info(f"Processing pcap info {index}")
         # Extract production and replay data
         production_csv_file_path = os.path.join(outputs_path, f"extracted_production_data_{index}.csv")
+        production_anomalies_csv_file_path = os.path.join(outputs_path, "production_tcp_anomalies.csv")
         replay_csv_file_path = os.path.join(outputs_path, f"extracted_replay_data_{index}.csv")
+        replay_anomalies_csv_file_path = os.path.join(outputs_path, "replay_tcp_anomalies.csv")
 
         # Align production and replay data
         alignment_csv_file_path = os.path.join(outputs_path, f"aligned_data_{index}.csv")
@@ -353,11 +355,15 @@ def run_tasks_in_parallel(data, task_id, ip_address):
         # 使用 os.path.join 拼接 collect.collect_path，生成每个收集到的 pcap 文件的完整路径。
         logger.info(f"222222Current working directory: {os.getcwd()}")
 
-        task_group = group(
-            extract_data.s([os.path.join(collect.collect_path) for collect in pcap_info.collect_pcap],production_csv_file_path),
-            extract_data.s([os.path.join(pcap_info.replay_pcap.replay_path)], replay_csv_file_path)
+        task_group = group(group(
+            extract_data.s([os.path.join(collect.collect_path) for collect in pcap_info.collect_pcap],
+                           production_csv_file_path, production_anomalies_csv_file_path),
+            extract_data.s([os.path.join(pcap_info.replay_pcap.replay_path)],
+                           replay_csv_file_path, replay_anomalies_csv_file_path))
             | align_data.s(production_csv_file_path, replay_csv_file_path, alignment_csv_file_path)
-            | cluster_analysis_data.s(index, pcap_info.replay_task_id, pcap_info.replay_id, pcap_info.collect_pcap[0].ip,pcap_info.replay_pcap.ip, replay_csv_file_path, production_csv_file_path, task_id))
+            | cluster_analysis_data.s(index, pcap_info.replay_task_id, pcap_info.replay_id,
+                                      pcap_info.collect_pcap[0].ip,pcap_info.replay_pcap.ip,
+                                      replay_csv_file_path, production_csv_file_path, task_id))
         task_groups.append(task_group)
 
     # 使用chord确保所有任务子项完成后执行最终任务
