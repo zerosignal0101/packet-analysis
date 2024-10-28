@@ -18,12 +18,9 @@ def alignment_path_query(csv_production_output, csv_back_output, alignment_csv_f
         # 生产环境
         'Production_Sniff_time': [],
         'Production_Time_since_request': [],
-        'Production_Request_Index': [],
-        'Production_Response_Index': [],
         'Production_Request_Packet_Length': [],
         'Production_Response_Packet_Length': [],
         'Production_Response_Total_Length': [],
-        'Production_Match_Status': [],
         # 回放环境
         'Back_Sniff_time': [],
         'Back_Time_since_request': [],
@@ -32,7 +29,6 @@ def alignment_path_query(csv_production_output, csv_back_output, alignment_csv_f
         'Back_Request_Packet_Length': [],
         'Back_Response_Packet_Length': [],
         'Back_Response_Total_Length': [],
-        'Back_Match_Status': [],
 
         'Time_since_request_ratio': []  # 新增比值字段
     }
@@ -46,12 +42,9 @@ def alignment_path_query(csv_production_output, csv_back_output, alignment_csv_f
 
         sniff_time = row['Sniff_time']
         time_since_request = row['Time_since_request']
-        Production_Request_Index = row['Request_Index']
-        Production_Response_Index = row['Response_Index']
         request_packet_length = row['Request_Packet_Length']
         Production_Response_Packet_Length = row['Response_Packet_Length']
         response_total_length = row['Response_Total_Length']
-        packet_match_status = row['Match_Status']
 
         if pd.isna(query):  # 检测query是否为空，如为空则仅仅基于path和src_port匹配
             # 在back_df中找到匹配的Path和Src_Port
@@ -81,12 +74,9 @@ def alignment_path_query(csv_production_output, csv_back_output, alignment_csv_f
 
             aligned_data['Production_Sniff_time'].append(sniff_time)
             aligned_data['Production_Time_since_request'].append(time_since_request)
-            aligned_data['Production_Request_Index'].append(Production_Request_Index)
-            aligned_data['Production_Response_Index'].append(Production_Response_Index)
             aligned_data['Production_Request_Packet_Length'].append(request_packet_length)
             aligned_data['Production_Response_Packet_Length'].append(Production_Response_Packet_Length)
             aligned_data['Production_Response_Total_Length'].append(response_total_length)
-            aligned_data['Production_Match_Status'].append(packet_match_status)
 
             aligned_data['Back_Sniff_time'].append(back_row['Sniff_time'])
             aligned_data['Back_Time_since_request'].append(back_row['Time_since_request'])
@@ -95,7 +85,6 @@ def alignment_path_query(csv_production_output, csv_back_output, alignment_csv_f
             aligned_data['Back_Request_Packet_Length'].append(back_row['Request_Packet_Length'])
             aligned_data['Back_Response_Packet_Length'].append(back_row['Response_Packet_Length'])
             aligned_data['Back_Response_Total_Length'].append(back_row['Response_Total_Length'])
-            aligned_data['Back_Match_Status'].append(back_row['Match_Status'])
 
             aligned_data['Time_since_request_ratio'].append(ratio)
 
@@ -110,12 +99,9 @@ def alignment_path_query(csv_production_output, csv_back_output, alignment_csv_f
 
             aligned_data['Production_Sniff_time'].append(sniff_time)
             aligned_data['Production_Time_since_request'].append(time_since_request)
-            aligned_data['Production_Request_Index'].append(Production_Request_Index)
-            aligned_data['Production_Response_Index'].append(Production_Response_Index)
             aligned_data['Production_Request_Packet_Length'].append(request_packet_length)
             aligned_data['Production_Response_Packet_Length'].append(Production_Response_Packet_Length)
             aligned_data['Production_Response_Total_Length'].append(response_total_length)
-            aligned_data['Production_Match_Status'].append(packet_match_status)
 
             aligned_data['Back_Sniff_time'].append('No match found')
             aligned_data['Back_Time_since_request'].append('No match found')

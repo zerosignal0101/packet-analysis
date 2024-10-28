@@ -30,8 +30,6 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
         # 生产环境
         'Production_Sniff_time': [],
         'Production_Time_since_request': [],
-        'Production_Request_Index': [],
-        'Production_Response_Index': [],
         'Production_Request_Packet_Length': [],
         'Production_Response_Packet_Length': [],
         'Production_Response_Total_Length': [],
@@ -126,8 +124,6 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
 
                 aligned_data['Production_Sniff_time'].append(sniff_time2)
                 aligned_data['Production_Time_since_request'].append(time_since_request2)
-                aligned_data['Production_Request_Index'].append(production_df.iloc[index + 1]['Request_Index'])
-                aligned_data['Production_Response_Index'].append(production_df.iloc[index + 1]['Response_Index'])
                 aligned_data['Production_Request_Packet_Length'].append(
                     production_df.iloc[index + 1]['Request_Packet_Length'])
                 aligned_data['Production_Response_Packet_Length'].append(
@@ -161,8 +157,6 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
 
                 aligned_data['Production_Sniff_time'].append(sniff_time2)
                 aligned_data['Production_Time_since_request'].append(time_since_request2)
-                aligned_data['Production_Request_Index'].append(production_df.iloc[index + 1]['Request_Index'])
-                aligned_data['Production_Response_Index'].append(production_df.iloc[index + 1]['Response_Index'])
                 aligned_data['Production_Request_Packet_Length'].append(
                     production_df.iloc[index + 1]['Request_Packet_Length'])
                 aligned_data['Production_Response_Packet_Length'].append(
@@ -193,8 +187,6 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
 
             aligned_data['Production_Sniff_time'].append(sniff_time2)
             aligned_data['Production_Time_since_request'].append(time_since_request2)
-            aligned_data['Production_Request_Index'].append(production_df.iloc[index + 1]['Request_Index'])
-            aligned_data['Production_Response_Index'].append(production_df.iloc[index + 1]['Response_Index'])
             aligned_data['Production_Request_Packet_Length'].append(
                 production_df.iloc[index + 1]['Request_Packet_Length'])
             aligned_data['Production_Response_Packet_Length'].append(

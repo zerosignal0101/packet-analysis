@@ -9,9 +9,9 @@ import requests
 from celery import Celery, group, chain, chord
 from multiprocessing import Process
 
+from src.packet_analysis.json_build.json_host_database_correlation import calc_correlation
 # Import the new function
-from src.packet_analysis.preprocess import extract_to_csv, alignment, alignment_two_paths
-from src.packet_analysis.preprocess import extract_to_csv_split
+from src.packet_analysis.preprocess import extract_to_csv, alignment_two_paths
 from src.packet_analysis.utils import postapi
 
 from src.packet_analysis.json_build.comparison_analysis import *
@@ -62,7 +62,7 @@ class PcapInfoList(BaseModel):
 @celery.task(name='server.extract_data')
 def extract_data(pcap_file_path, extracted_csv_file_path, anomalies_csv_file_path):
     logger.info(f"pcap_file_path {pcap_file_path}")
-    extract_to_csv_split.preprocess_data([pcap_file_path], extracted_csv_file_path, anomalies_csv_file_path)
+    extract_to_csv.preprocess_data([pcap_file_path], extracted_csv_file_path)
 
 
 @celery.task(name='server.align_data')
@@ -72,7 +72,7 @@ def align_data(results, production_csv_file_path, replay_csv_file_path, alignmen
 
 @celery.task(name='server.cluster_analysis_data')
 def cluster_analysis_data(results, index, replay_task_id, replay_id, production_ip, replay_ip, replay_csv_file_path,
-                          production_csv_file_path, task_id):
+                          production_csv_file_path, task_id, production_json_path, replay_json_path):
     # res variable
     res = {
         "comparison_analysis": {},
@@ -88,11 +88,11 @@ def cluster_analysis_data(results, index, replay_task_id, replay_id, production_
 
     outputs_path = f'./results/{task_id}'
 
-    # 保存两环境对比数据csv、对比图到本地
-    comparison_csv_path = os.path.join(outputs_path, f"comparison_analysis_data_{index}.csv")
-    DataBase.save_to_csv(comparison_csv_path)
-    comparison_png_path = os.path.join(outputs_path, f"comparison_analysis_data_{index}.png")
-    DataBase.plot_mean_difference_ratio(comparison_png_path)
+    # # 保存两环境对比数据csv、对比图到本地
+    # comparison_csv_path = os.path.join(outputs_path, f"comparison_analysis_data_{index}.csv")
+    # DataBase.save_to_csv(comparison_csv_path)
+    # comparison_png_path = os.path.join(outputs_path, f"comparison_analysis_data_{index}.png")
+    # DataBase.plot_mean_difference_ratio(comparison_png_path)
 
     # Update response with the data_list for the current analysis
     data_legend = {
@@ -129,46 +129,52 @@ def cluster_analysis_data(results, index, replay_task_id, replay_id, production_
             "request_url": "/portal_todo/api/getAllUserTodoData",
             "env": "production",
             "hostip": production_ip,
-            "class_method": "get_api",
+            "class_method": "api_get",
             "bottleneck_cause": "数据库查询慢",
             "solution": "优化数据库查询，增加索引"
         }
     ]
     res['anomaly_detection']['dict'] = data_dict
 
+    production_correlation_path = os.path.join(outputs_path, 'production_correlation.csv')
+    production_correlation_df = calc_correlation(production_json_path, production_csv_file_path, production_correlation_path)
+
+    replay_correlation_path = os.path.join(outputs_path, 'replay_correlation.csv')
+    replay_correlation_df = calc_correlation(replay_json_path, replay_csv_file_path, replay_correlation_path)
+
     # 先预设的'anomaly_detection'中的correlation部分
     data_correlation = [
         {
             "env": "production",
-            "hostip": production_ip,
-            "class_method": "get_api",
-            "correlation_data": [
-                {
-                    "index_id": "非root用户进程数",
-                    "value": 0.6
-                },
-                {
-                    "index_id": "活动进程数",
-                    "value": 0.7
-                }
-            ]
+            "hostip": "production_ip",
+            "class_method": "api_get",
+            "correlation_data": []
         },
         {
             "env": "replay",
-            "hostip": replay_ip,
+            "hostip": "replay_ip",
             "class_method": "get_post",
-            "correlation_data": [
-                {
-                    "index_id": "会话数",
-                    "value": 0.6
-                },
-                {
-                    "index_id": "当前数据库的连接数",
-                    "value": 0.7
-                }
-            ]
+            "correlation_data": []
         }
     ]
+    # 将 corr_df 中的 KPI名称 和 相关系数 对应到 index_id 和 value
+    for index, row in production_correlation_df.iterrows():
+        if pd.notna(row['相关系数']):  # 只处理非 NaN 的相关系数
+            correlation_data = {
+                "index_id": row['KPI名称'],
+                "value": row['相关系数']
+            }
+            # 将数据添加到 production 和 replay 的 correlation_data 中
+            data_correlation[0]['correlation_data'].append(correlation_data)
+    # 将 corr_df 中的 KPI名称 和 相关系数 对应到 index_id 和 value
+    for index, row in replay_correlation_df.iterrows():
+        if pd.notna(row['相关系数']):  # 只处理非 NaN 的相关系数
+            correlation_data = {
+                "index_id": row['KPI名称'],
+                "value": row['相关系数']
+            }
+            # 将数据添加到 production 和 replay 的 correlation_data 中
+            data_correlation[1]['correlation_data'].append(correlation_data)
     res['anomaly_detection']['correlation'] = data_correlation
 
     # 先预设的'anomaly_detection'中的correlation部分
@@ -229,7 +235,7 @@ def final_task(results, data, task_id, ip_address):
                             "request_url": "/api/v1/data",
                             "env": "production",
                             "hostip": info.collect_pcap[0].ip,
-                            "class_method": "get_api",
+                            "class_method": "api_get",
                             "bottleneck_cause": "数据库查询慢",
                             "solution": "优化数据库查询，增加索引"
                         }
@@ -238,7 +244,7 @@ def final_task(results, data, task_id, ip_address):
                         {
                             "env": "production",
                             "hostip": info.collect_pcap[0].ip,
-                            "class_method": "get_api",
+                            "class_method": "api_get",
                             "correlation_data": [
                                 {
                                     "index_id": "非root用户进程数",
@@ -363,7 +369,7 @@ def run_tasks_in_parallel(data, task_id, ip_address):
             | align_data.s(production_csv_file_path, replay_csv_file_path, alignment_csv_file_path)
             | cluster_analysis_data.s(index, pcap_info.replay_task_id, pcap_info.replay_id,
                                       pcap_info.collect_pcap[0].ip,pcap_info.replay_pcap.ip,
-                                      replay_csv_file_path, production_csv_file_path, task_id))
+                                      replay_csv_file_path, production_csv_file_path, task_id, pcap_info.collect_log, pcap_info.replay_log))
         task_groups.append(task_group)
 
     # 使用chord确保所有任务子项完成后执行最终任务
