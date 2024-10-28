@@ -2,6 +2,7 @@ from collections import defaultdict
 import asyncio
 import csv
 import pyshark
+import pandas as pd
 from urllib.parse import urlparse, urlunparse
 import time
 import heapq
@@ -39,8 +40,8 @@ def preprocess_data(file_paths, csv_file_path):
         # 使用pyshark打开pcap文件
         capture = pyshark.FileCapture(cur_pcap, display_filter='tcp')
 
-        # 用于存储TCP流及其包的字典
-        tcp_streams = defaultdict(list)
+        # 用于存储TCP流及其包
+        data_list = []
 
         for packet in capture:
             if 'TCP' in packet:
@@ -70,142 +71,147 @@ def preprocess_data(file_paths, csv_file_path):
                     'response_code': (packet.http.response_code if hasattr(packet.http,
                                                                            'response_code') else None) if has_http else None
                 }
-                tcp_streams[tcp_stream_key].append(data)
+                data_list.append(data)
 
-        for stream_id, packets in tcp_streams.items():
-            logger.info(f"TCP Stream ID: {stream_id}")
-            # 准备开始分析的Flag标识
-            start_processing = False
-            get_first_ack = False
+        # 创建DataFrame
+        df = pd.DataFrame(data_list)
 
-            # 用于存储开始处理的时间
-            start_time = None
+        # 按照stream字段进行排序
+        df_sorted = df.sort_values(by='stream').reset_index(drop=True)
 
-            # 记录请求的时间戳
-            request_time = None
+        logger.info(f"Pcap read ended, start preprocessing")
+        # 准备开始分析的Flag标识
+        start_processing = False
+        get_first_ack = False
 
-            # 用于存储结束处理的时间
-            end_time = None
+        # 用于存储开始处理的时间
+        start_time = None
 
-            # 成功获取的标识符
-            success_flag = False
+        # 记录请求的时间戳
+        request_time = None
 
-            # 用于存储结果
-            request_method = None
-            request_full_uri = None
-            request_packet_length = None
-            processing_delay = None
+        # 用于存储结束处理的时间
+        end_time = None
 
-            for packet in packets:
-                # 检查是否为HTTP数据包
-                if packet['has_http'] is True:
-                    # 检查是否存在response_code字段，以判断是否为响应包
-                    if packet['response_code'] is None:
-                        request_time = packet['sniff_time']
-                        # 输出HTTP数据包的路径
-                        if packet['request_full_uri'] is not None:
-                            # logger.info(packet['request_full_uri'])
-                            request_full_uri = packet['request_full_uri']
-                        else:
-                            logger.warning("No request_full_uri field")
-                        # 储存HTTP请求方式
-                        request_method = packet['request_http_method']
-                        request_packet_length = packet['packet_length']
-                        start_processing = True
-                        get_first_ack = False
-                        start_time = None
-                        success_flag = False
+        # 成功获取的标识符
+        success_flag = False
+
+        # 用于存储结果
+        request_method = None
+        request_full_uri = None
+        request_packet_length = None
+        processing_delay = None
+
+        for index, packet in df_sorted.iterrows():
+            # 检查是否为HTTP数据包
+            if packet['has_http'] is True:
+                # 检查是否存在response_code字段，以判断是否为响应包
+                if packet['response_code'] is None:
+                    request_time = packet['sniff_time']
+                    # 输出HTTP数据包的路径
+                    if packet['request_full_uri'] is not None:
+                        # logger.info(packet['request_full_uri'])
+                        request_full_uri = packet['request_full_uri']
                     else:
-                        start_processing = False
-                        get_first_ack = False
-                        start_time = None
-                        if success_flag:
-                            # 如果有，记录URL
-                            if packet['request_full_uri'] is not None:
-                                request_full_uri = packet['request_full_uri']
-                            # 如果有，记录 Time since request 时间
-                            if request_time is not None:
-                                time_since_request = packet['sniff_time'] - request_time
-                            else:
-                                time_since_request = None
-                                request_time = None
-                            success_flag = False
-                            # 添加到结果列表
-                            transmission_delay = None
-                            if processing_delay is not None and time_since_request is not None:
-                                transmission_delay = time_since_request - processing_delay
-                            # 提取 File Data 长度  条件3
-                            if packet['content_length'] is not None:
-                                response_total_length = packet['content_length']
-                            elif packet['chunk_size'] is not None:
-                                response_total_length = packet['chunk_size']
-                            else:
-                                response_total_length = packet['packet_length']
-                            # 使用urlparse分解URI
-                            parsed_uri = urlparse(request_full_uri)
-                            # 数据输出
-                            res_data = {
-                                'sniff_time': packet['sniff_time'],
-                                'ip_src': packet['ip_src'],
-                                'ip_dst': packet['ip_dst'],
-                                'src_port': packet['src_port'],  # 添加源端口号
-                                'dst_port': packet['dst_port'],  # 添加目的端口号
-                                'request_http_method': request_method,
-                                'request_scheme': parsed_uri.scheme,
-                                'request_netloc': parsed_uri.netloc,
-                                'request_path': parsed_uri.path,
-                                'request_query': parsed_uri.query,
-                                'request_packet_length': request_packet_length,
-                                'response_packet_length': packet['packet_length'],
-                                'response_total_length': response_total_length,
-                                'response_code': packet['response_code'],
-                                'processing_delay': processing_delay,
-                                'transmission_delay': transmission_delay,
-                                'time_since_request': time_since_request
-                            }
-                            results.append(res_data)
-                            # 清空中间变量
-                            request_method = None
-                            request_full_uri = None
-                            request_packet_length = None
-                            processing_delay = None
-
-                # 检查标识位，如果为True则开始处理
-                if start_processing:
-                    # 输出TCP数据包的标识符
-                    logger.info(packet['flags'])
-                    # 输出TCP数据包的时间戳
-                    logger.info(packet['sniff_time'])
-                    # 检查标识符是否仅有ACK标志
-                    if not get_first_ack:
-                        if int(packet['flags'], 16) == int('0x0010', 16):
-                            # logger.info('Processing started, get the first ACK packet')
-                            # 记录开始处理时间
-                            start_time = packet['sniff_time']
-                            # 设置标识位
-                            get_first_ack = True
-                    # 检查是否为PSH-ACK标志
-                    elif int(packet['flags'], 16) == int('0x0018', 16):
-                        # logger.info('Processing ended, get the last PSH-ACK packet')
-                        # 记录结束处理时间
-                        end_time = packet['sniff_time']
-                        # 计算处理时间
-                        if start_time is not None:
-                            processing_delay = end_time - start_time
-                            logger.info(f"Start time: {start_time}")
-                            logger.info(f"End time: {end_time}")
-                            logger.info(f"Processing time: {processing_delay}")
-                            success_flag = True
+                        logger.warning("No request_full_uri field")
+                    # 储存HTTP请求方式
+                    request_method = packet['request_http_method']
+                    request_packet_length = packet['packet_length']
+                    start_processing = True
+                    get_first_ack = False
+                    start_time = None
+                    success_flag = False
+                else:
+                    start_processing = False
+                    get_first_ack = False
+                    start_time = None
+                    if success_flag:
+                        # 如果有，记录URL
+                        if packet['request_full_uri'] is not None:
+                            request_full_uri = packet['request_full_uri']
+                        # 如果有，记录 Time since request 时间
+                        if request_time is not None:
+                            time_since_request = packet['sniff_time'] - request_time
                         else:
-                            processing_delay = None
-                            start_time = None
-                        # 重置标识位
-                        start_processing = False
-                        get_first_ack = False
+                            time_since_request = None
+                            request_time = None
+                        success_flag = False
+                        # 添加到结果列表
+                        transmission_delay = None
+                        if processing_delay is not None and time_since_request is not None:
+                            transmission_delay = time_since_request - processing_delay
+                        # 提取 File Data 长度  条件3
+                        if packet['content_length'] is not None:
+                            response_total_length = packet['content_length']
+                        elif packet['chunk_size'] is not None:
+                            response_total_length = packet['chunk_size']
+                        else:
+                            response_total_length = packet['packet_length']
+                        # 使用urlparse分解URI
+                        parsed_uri = urlparse(request_full_uri)
+                        # 数据输出
+                        res_data = {
+                            'sniff_time': packet['sniff_time'],
+                            'ip_src': packet['ip_src'],
+                            'ip_dst': packet['ip_dst'],
+                            'src_port': packet['src_port'],  # 添加源端口号
+                            'dst_port': packet['dst_port'],  # 添加目的端口号
+                            'request_http_method': request_method,
+                            'request_scheme': parsed_uri.scheme,
+                            'request_netloc': parsed_uri.netloc,
+                            'request_path': parsed_uri.path,
+                            'request_query': parsed_uri.query,
+                            'request_packet_length': request_packet_length,
+                            'response_packet_length': packet['packet_length'],
+                            'response_total_length': response_total_length,
+                            'response_code': packet['response_code'],
+                            'processing_delay': processing_delay,
+                            'transmission_delay': transmission_delay,
+                            'time_since_request': time_since_request
+                        }
+                        results.append(res_data)
+                        # 清空中间变量
+                        request_method = None
+                        request_full_uri = None
+                        request_packet_length = None
+                        processing_delay = None
 
-            # 输出TCP流的包数量
-            logger.info(f"Stream {stream_id} ended, Number of packets: {len(packets)}")
-            logger.info("-" * 50)
+            # 检查标识位，如果为True则开始处理
+            if start_processing:
+                # 输出TCP数据包的标识符
+                logger.info(packet['flags'])
+                # 输出TCP数据包的时间戳
+                logger.info(packet['sniff_time'])
+                # 检查标识符是否仅有ACK标志
+                if not get_first_ack:
+                    if int(packet['flags'], 16) == int('0x0010', 16):
+                        # logger.info('Processing started, get the first ACK packet')
+                        # 记录开始处理时间
+                        start_time = packet['sniff_time']
+                        # 设置标识位
+                        get_first_ack = True
+                # 检查是否为PSH-ACK标志
+                elif int(packet['flags'], 16) == int('0x0018', 16):
+                    # logger.info('Processing ended, get the last PSH-ACK packet')
+                    # 记录结束处理时间
+                    end_time = packet['sniff_time']
+                    # 计算处理时间
+                    if start_time is not None:
+                        processing_delay = end_time - start_time
+                        logger.info(f"Start time: {start_time}")
+                        logger.info(f"End time: {end_time}")
+                        logger.info(f"Processing time: {processing_delay}")
+                        success_flag = True
+                    else:
+                        processing_delay = None
+                        start_time = None
+                    # 重置标识位
+                    start_processing = False
+                    get_first_ack = False
+
+        # 输出TCP流的包数量
+        logger.info(f"Pcap ended, Number of packets: {len(df_sorted)}")
+        logger.info("-" * 50)
 
     # 按 sniff_time 排序
     results.sort(key=lambda x: x['sniff_time'])
