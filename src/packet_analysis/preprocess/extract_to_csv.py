@@ -1,6 +1,7 @@
 from collections import defaultdict
 import asyncio
 import csv
+import sys
 import pyshark
 import pandas as pd
 from urllib.parse import urlparse, urlunparse
@@ -38,7 +39,7 @@ def preprocess_data(file_paths, csv_file_path):
 
     for cur_pcap in file_paths:
         # 使用pyshark打开pcap文件
-        capture = pyshark.FileCapture(cur_pcap, display_filter='tcp')
+        capture = pyshark.FileCapture(cur_pcap, display_filter='tcp', keep_packets=False)
 
         # 用于存储TCP流及其包
         data_list = []
@@ -48,36 +49,44 @@ def preprocess_data(file_paths, csv_file_path):
                 tcp_stream_key = packet.tcp.stream
                 # 将数据包添加到对应TCP流的列表中，Sniff_time转换为%Y-%m-%d %H:%M:%S.%f字符串
                 has_http = True if 'HTTP' in packet else False
-                data = {
-                    'sniff_time': packet.sniff_time,
-                    'ip_src': packet.ip.src if hasattr(packet, 'ip') else None,
-                    'ip_dst': packet.ip.dst if hasattr(packet, 'ip') else None,
-                    'src_port': packet.tcp.srcport,  # 添加源端口号
-                    'dst_port': packet.tcp.dstport,  # 添加目的端口号
-                    'flags': packet.tcp.flags,
-                    'stream': packet.tcp.stream,
-                    'packet_length': int(packet.length),
-                    'content_length': (int(packet.http.content_length) if
-                                       hasattr(packet.http, 'content_length') else None) if has_http else None,
-                    'chunk_size': (int(packet.http.chunk_size)
-                                   if (hasattr(packet.http, 'transfer_encoding') and
-                                       hasattr(packet.http, 'chunk_size') and
-                                       packet.http.transfer_encoding == 'chunked') else None) if has_http else None,
-                    'has_http': has_http,
-                    'request_http_method': (packet.http.request_method if
-                                            hasattr(packet.http, 'request_method') else None) if has_http else None,
-                    'request_full_uri': (packet.http.request_full_uri if hasattr(packet.http,
-                                                                                 'request_full_uri') else None) if has_http else None,
-                    'response_code': (packet.http.response_code if hasattr(packet.http,
-                                                                           'response_code') else None) if has_http else None
-                }
+                data = (
+                    packet.sniff_time,
+                    packet.ip.src if hasattr(packet, 'ip') else None,
+                    packet.ip.dst if hasattr(packet, 'ip') else None,
+                    packet.tcp.srcport if hasattr(packet, 'tcp') else None,
+                    packet.tcp.dstport if hasattr(packet, 'tcp') else None,
+                    packet.tcp.flags if hasattr(packet, 'tcp') else None,
+                    packet.tcp.stream if hasattr(packet, 'tcp') else None,
+                    int(packet.length),
+                    (int(packet.http.content_length) if hasattr(packet.http,
+                                                                'content_length') else None) if has_http else None,
+                    (int(packet.http.chunk_size) if (hasattr(packet.http, 'transfer_encoding') and
+                                                     hasattr(packet.http, 'chunk_size') and
+                                                     packet.http.transfer_encoding == 'chunked') else None) if has_http else None,
+                    has_http,
+                    (packet.http.request_method if hasattr(packet.http,
+                                                           'request_method') else None) if has_http else None,
+                    (packet.http.request_full_uri if hasattr(packet.http,
+                                                             'request_full_uri') else None) if has_http else None,
+                    (packet.http.response_code if hasattr(packet.http, 'response_code') else None) if has_http else None
+                )
+                # print(sys.getsizeof(data))
                 data_list.append(data)
+                # print(sys.getsizeof(data_list))
+
+        # 创建 DataFrame 并添加表头
+        columns = [
+            'sniff_time', 'ip_src', 'ip_dst', 'src_port', 'dst_port',
+            'flags', 'stream', 'packet_length', 'content_length',
+            'chunk_size', 'has_http', 'request_http_method',
+            'request_full_uri', 'response_code'
+        ]
 
         # 创建DataFrame
-        df = pd.DataFrame(data_list)
+        df = pd.DataFrame(data_list, columns=columns)
 
-        # 按照stream字段进行排序
-        df_sorted = df.sort_values(by='stream').reset_index(drop=True)
+        # 按 'stream' 列排序
+        df_sorted = df.sort_values(by='stream', na_position='last')
 
         logger.info(f"Pcap read ended, start preprocessing")
         # 准备开始分析的Flag标识
