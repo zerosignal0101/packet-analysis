@@ -97,7 +97,7 @@ def extract_data_coordinator(pcap_file_path, csv_file_path, anomalies_csv_file_p
         split_prefix = os.path.join(output_dir, base_filename)  # Prefix includes the target directory
 
         # Run the editcap command to split the pcap file and save the splits in the specified directory
-        command = f"editcap -c 30000 {file_path} {split_prefix}"
+        command = f"editcap -c 100000 {file_path} {split_prefix}"
         logger.info(command)
         subprocess.run(command, shell=True)
 
