@@ -1,14 +1,26 @@
-import os.path
-
 import pandas as pd
+from datetime import datetime, timedelta
 from src.packet_analysis.utils.logger_config import logger
 
 
-def alignment_path_query(csv_production_output, csv_back_output, alignment_csv_file_path):
+def parse_time(sniff_time):
+    """
+    尝试解析时间字符串，支持两种格式:
+    - "%Y-%m-%d %H:%M:%S"
+    - "%M:%S.%f"
+    """
+    for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S", "%M:%S.%f"):
+        try:
+            return datetime.strptime(sniff_time, fmt)
+        except ValueError:
+            continue
+    raise ValueError(f"时间格式不匹配: {sniff_time}")
+
+
+def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_file_path):
     # 读取CSV文件
     production_df = pd.read_csv(csv_production_output)
     back_df = pd.read_csv(csv_back_output)
-
     # 创建新的DataFrame用于存储对齐后的数据
     aligned_data = {
         'Path': [],
@@ -21,106 +33,173 @@ def alignment_path_query(csv_production_output, csv_back_output, alignment_csv_f
         'Production_Request_Packet_Length': [],
         'Production_Response_Packet_Length': [],
         'Production_Response_Total_Length': [],
-        # 回放环境
+        'Production_Response_Code': [],
+
         'Back_Sniff_time': [],
         'Back_Time_since_request': [],
-        'Back_Request_Index': [],
-        'Back_Response_Index': [],
         'Back_Request_Packet_Length': [],
         'Back_Response_Packet_Length': [],
         'Back_Response_Total_Length': [],
+        'Back_Response_Code': [],
 
-        'Time_since_request_ratio': []  # 新增比值字段
+        'Time_since_request_ratio': [],
+        'state': []
     }
 
-    # 遍历production_df的Path+Query+Src_Port列
-    for index, row in production_df.iterrows():
-        path = row['Path']
-        query = row['Query']
-        src_port = row['Src_Port']
-        request_method = row['Request_Method']
+    # 用于存储每次成功匹配的回放请求时间
+    back_match_times = []
 
-        sniff_time = row['Sniff_time']
-        time_since_request = row['Time_since_request']
-        request_packet_length = row['Request_Packet_Length']
-        Production_Response_Packet_Length = row['Response_Packet_Length']
-        response_total_length = row['Response_Total_Length']
+    # 遍历 production_df 的每一对相邻请求
+    for index in range(len(production_df) - 1):
+        path1 = production_df.iloc[index]['Path']
+        query1 = production_df.iloc[index]['Query']
+        src_port1 = production_df.iloc[index]['Src_Port']
+        request_method1 = production_df.iloc[index]['Request_Method']
+        sniff_time1 = production_df.iloc[index]['Sniff_time']
+        time_since_request1 = production_df.iloc[index]['Time_since_request']
 
-        if pd.isna(query):  # 检测query是否为空，如为空则仅仅基于path和src_port匹配
-            # 在back_df中找到匹配的Path和Src_Port
-            back_match = back_df[(back_df['Path'] == path) & (back_df['Src_Port'] == src_port)]
+        path2 = production_df.iloc[index + 1]['Path']
+        query2 = production_df.iloc[index + 1]['Query']
+        src_port2 = production_df.iloc[index + 1]['Src_Port']
+        request_method2 = production_df.iloc[index + 1]['Request_Method']
+        sniff_time2 = production_df.iloc[index + 1]['Sniff_time']
+        time_since_request2 = production_df.iloc[index + 1]['Time_since_request']
+
+        # 计算生产请求1和请求2之间的时间差，并取绝对值
+        time_diff_production = abs(parse_time(sniff_time2) - parse_time(sniff_time1))
+        time_threshold = min(time_diff_production * 1000000, timedelta(seconds=5))
+
+        # 查找回放环境中生产请求2的匹配项 根据有无参数值来寻找
+        # if pd.isna(query2):
+        #     back_match = back_df[(back_df['Path'] == path2) & (back_df['Src_Port'] == src_port2)]
+        # else:
+        #     back_match = back_df[(back_df['Path'] == path2) & (back_df['Query'] == query2) & (back_df['Src_Port'] == src_port2)]
+
+        subset_back_df = back_df.iloc[:5000]  # 只取前20000行 结果ok、前5000测试
+        if pd.isna(query2):
+            back_match = subset_back_df[(subset_back_df['Path'] == path2) & (subset_back_df['Src_Port'] == src_port2)]
         else:
-            # 在back_df中找到匹配的Path、Query和Src_Port
-            back_match = back_df[
-                (back_df['Path'] == path) & (back_df['Query'] == query) & (back_df['Src_Port'] == src_port)]
+            back_match = subset_back_df[(subset_back_df['Path'] == path2) & (subset_back_df['Query'] == query2) & (
+                    subset_back_df['Src_Port'] == src_port2)]
 
+        # 先初始化没有最佳匹配，时间间隔为最大
         if not back_match.empty:
-            # 取第一个匹配的行
-            back_index = back_match.index[0]
-            back_row = back_match.iloc[0]
+            best_match = None
+            smallest_time_diff = timedelta.max
 
-            # 计算Time_since_request的比值
-            back_time_since_request = back_row['Time_since_request']
-            if back_time_since_request != 0:  # 避免除以零
-                ratio = time_since_request / back_time_since_request
+            if not back_match_times:  # 如果 back_match_times 为空，直接将 back_match 数据集的第一行作为最佳匹配（因为没有其他记录可以比较）
+                best_match = back_match.iloc[0]
             else:
-                ratio = 'Infinity'  # 如果回放时间为零，用“Infinity”表示
+                recent_back_match_times = back_match_times[-10:]
+                for back_index, back_row in back_match.iterrows():
+                    back_sniff_time = back_row['Sniff_time']
+                    back_sniff_time_parsed = parse_time(back_sniff_time)
 
-            # 添加到对齐后的数据
-            aligned_data['Path'].append(path)
-            aligned_data['Query'].append(query)
-            aligned_data['Src_Port'].append(src_port)
-            aligned_data['Request_Method'].append(request_method)
+                    for previous_back_sniff_time in reversed(recent_back_match_times):
+                        # 计算时间差，并取绝对值
+                        time_diff_to_last = abs(back_sniff_time_parsed - previous_back_sniff_time)
 
-            aligned_data['Production_Sniff_time'].append(sniff_time)
-            aligned_data['Production_Time_since_request'].append(time_since_request)
-            aligned_data['Production_Request_Packet_Length'].append(request_packet_length)
-            aligned_data['Production_Response_Packet_Length'].append(Production_Response_Packet_Length)
-            aligned_data['Production_Response_Total_Length'].append(response_total_length)
+                        if time_diff_to_last <= time_threshold and time_diff_to_last < smallest_time_diff:
+                            smallest_time_diff = time_diff_to_last
+                            best_match = back_row
+                            break
 
-            aligned_data['Back_Sniff_time'].append(back_row['Sniff_time'])
-            aligned_data['Back_Time_since_request'].append(back_row['Time_since_request'])
-            aligned_data['Back_Request_Index'].append(back_row['Request_Index'])
-            aligned_data['Back_Response_Index'].append(back_row['Response_Index'])
-            aligned_data['Back_Request_Packet_Length'].append(back_row['Request_Packet_Length'])
-            aligned_data['Back_Response_Packet_Length'].append(back_row['Response_Packet_Length'])
-            aligned_data['Back_Response_Total_Length'].append(back_row['Response_Total_Length'])
+                    if best_match is not None:
+                        break
 
-            aligned_data['Time_since_request_ratio'].append(ratio)
+            if best_match is not None:
+                back_sniff_time2 = best_match['Sniff_time']
+                back_time_since_request2 = best_match['Time_since_request']
+                ratio = time_since_request2 / back_time_since_request2 if back_time_since_request2 != 0 else 'Infinity'
 
-            # 从back_df中删除已匹配的行，以避免重复匹配
-            back_df = back_df.drop(back_index)
+                # 保存匹配结果到 aligned_data
+                aligned_data['Path'].append(path2)
+                aligned_data['Query'].append(query2)
+                aligned_data['Src_Port'].append(src_port2)
+                aligned_data['Request_Method'].append(request_method2)
+
+                aligned_data['Production_Sniff_time'].append(sniff_time2)
+                aligned_data['Production_Time_since_request'].append(time_since_request2)
+                aligned_data['Production_Request_Packet_Length'].append(
+                    production_df.iloc[index + 1]['Request_Packet_Length'])
+                aligned_data['Production_Response_Packet_Length'].append(
+                    production_df.iloc[index + 1]['Response_Packet_Length'])
+                aligned_data['Production_Response_Total_Length'].append(
+                    production_df.iloc[index + 1]['Response_Total_Length'])
+                aligned_data['Production_Response_Code'].append(production_df.iloc[index + 1]['Response_code'])
+
+                aligned_data['Back_Sniff_time'].append(back_sniff_time2)
+                aligned_data['Back_Time_since_request'].append(back_time_since_request2)
+                aligned_data['Back_Request_Packet_Length'].append(best_match['Request_Packet_Length'])
+                aligned_data['Back_Response_Packet_Length'].append(best_match['Response_Packet_Length'])
+                aligned_data['Back_Response_Total_Length'].append(best_match['Response_Total_Length'])
+                aligned_data['Back_Response_Code'].append(best_match['Response_code'])
+
+                aligned_data['Time_since_request_ratio'].append(ratio)
+                aligned_data['state'].append("success")
+
+                back_match_times.append(parse_time(back_sniff_time2))
+                back_df = back_df.drop(best_match.name)
+            else:
+                # 记录没有找到匹配项
+                aligned_data['Path'].append(path2)
+                aligned_data['Query'].append(query2)
+                aligned_data['Src_Port'].append(src_port2)
+                aligned_data['Request_Method'].append(request_method2)
+
+                aligned_data['Production_Sniff_time'].append(sniff_time2)
+                aligned_data['Production_Time_since_request'].append(time_since_request2)
+                aligned_data['Production_Request_Packet_Length'].append(
+                    production_df.iloc[index + 1]['Request_Packet_Length'])
+                aligned_data['Production_Response_Packet_Length'].append(
+                    production_df.iloc[index + 1]['Response_Packet_Length'])
+                aligned_data['Production_Response_Total_Length'].append(
+                    production_df.iloc[index + 1]['Response_Total_Length'])
+                aligned_data['Production_Response_Code'].append(production_df.iloc[index + 1]['Response_code'])
+
+                aligned_data['Back_Sniff_time'].append('No match found')
+                aligned_data['Back_Time_since_request'].append('No match found')
+                aligned_data['Back_Request_Packet_Length'].append('No match found')
+                aligned_data['Back_Response_Packet_Length'].append('No match found')
+                aligned_data['Back_Response_Total_Length'].append('No match found')
+                aligned_data['Back_Response_Code'].append('No match found')
+
+                aligned_data['Time_since_request_ratio'].append('No match found')
+                aligned_data['state'].append("fail1 no best match but has match")
+
         else:
-            # 如果back_match为空，则添加提示信息到对齐后的数据
-            aligned_data['Path'].append(path)
-            aligned_data['Query'].append(query)
-            aligned_data['Src_Port'].append(src_port)
-            aligned_data['Request_Method'].append(request_method)
+            aligned_data['Path'].append(path2)
+            aligned_data['Query'].append(query2)
+            aligned_data['Src_Port'].append(src_port2)
+            aligned_data['Request_Method'].append(request_method2)
 
-            aligned_data['Production_Sniff_time'].append(sniff_time)
-            aligned_data['Production_Time_since_request'].append(time_since_request)
-            aligned_data['Production_Request_Packet_Length'].append(request_packet_length)
-            aligned_data['Production_Response_Packet_Length'].append(Production_Response_Packet_Length)
-            aligned_data['Production_Response_Total_Length'].append(response_total_length)
+            aligned_data['Production_Sniff_time'].append(sniff_time2)
+            aligned_data['Production_Time_since_request'].append(time_since_request2)
+            aligned_data['Production_Request_Packet_Length'].append(
+                production_df.iloc[index + 1]['Request_Packet_Length'])
+            aligned_data['Production_Response_Packet_Length'].append(
+                production_df.iloc[index + 1]['Response_Packet_Length'])
+            aligned_data['Production_Response_Total_Length'].append(
+                production_df.iloc[index + 1]['Response_Total_Length'])
+            # 检查存在性
+            if 'Response_code' in production_df.columns:
+                aligned_data['Production_Response_Code'].append(production_df.iloc[index + 1]['Response_code'])
+            else:
+                aligned_data['Production_Response_Code'].append('No Response_code')
 
             aligned_data['Back_Sniff_time'].append('No match found')
             aligned_data['Back_Time_since_request'].append('No match found')
-            aligned_data['Back_Request_Index'].append('No match found')
-            aligned_data['Back_Response_Index'].append('No match found')
             aligned_data['Back_Request_Packet_Length'].append('No match found')
             aligned_data['Back_Response_Packet_Length'].append('No match found')
             aligned_data['Back_Response_Total_Length'].append('No match found')
-            aligned_data['Back_Match_Status'].append('No match found')
+            aligned_data['Back_Response_Code'].append('No match found')
+
             aligned_data['Time_since_request_ratio'].append('No match found')
+            aligned_data['state'].append("fail2 no match")
 
-    # 创建DataFrame保存对齐后的数据
     aligned_df = pd.DataFrame(aligned_data)
-
-    # 保存到新的CSV文件
     aligned_df.to_csv(alignment_csv_file_path, index=False)
-
     logger.info(f'File saved to {alignment_csv_file_path}')
-
     return alignment_csv_file_path
 
 

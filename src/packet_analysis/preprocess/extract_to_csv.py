@@ -22,7 +22,7 @@ def check_highest_layer_suitable(layer):
 
 
 # 预处理函数
-def preprocess_data(file_paths, csv_file_path):
+def preprocess_data(file_paths):
     # log the input file paths
     logger.info(f"Input file paths: {file_paths}")
 
@@ -57,10 +57,10 @@ def preprocess_data(file_paths, csv_file_path):
                     packet.tcp.dstport if hasattr(packet, 'tcp') else None,
                     packet.tcp.flags if hasattr(packet, 'tcp') else None,
                     packet.tcp.stream if hasattr(packet, 'tcp') else None,
-                    int(packet.length),
-                    (int(packet.http.content_length) if hasattr(packet.http,
+                    (packet.length),
+                    ((packet.http.content_length) if hasattr(packet.http,
                                                                 'content_length') else None) if has_http else None,
-                    (int(packet.http.chunk_size) if (hasattr(packet.http, 'transfer_encoding') and
+                    ((packet.http.chunk_size) if (hasattr(packet.http, 'transfer_encoding') and
                                                      hasattr(packet.http, 'chunk_size') and
                                                      packet.http.transfer_encoding == 'chunked') else None) if has_http else None,
                     has_http,
@@ -84,9 +84,14 @@ def preprocess_data(file_paths, csv_file_path):
 
         # 创建DataFrame
         df = pd.DataFrame(data_list, columns=columns)
+        del data_list
+        df['stream'] = pd.to_numeric(df['stream'], errors='coerce')
 
         # 按 'stream' 列排序
-        df_sorted = df.sort_values(by='stream', na_position='last')
+        df_sorted = df.sort_values(by=['stream', 'sniff_time'], na_position='last')
+
+        # # test output
+        # df_sorted.to_csv('results/df_sorted.csv')
 
         logger.info(f"Pcap read ended, start preprocessing")
         # 准备开始分析的Flag标识
@@ -99,9 +104,6 @@ def preprocess_data(file_paths, csv_file_path):
         # 记录请求的时间戳
         request_time = None
 
-        # 用于存储结束处理的时间
-        end_time = None
-
         # 成功获取的标识符
         success_flag = False
 
@@ -110,12 +112,43 @@ def preprocess_data(file_paths, csv_file_path):
         request_full_uri = None
         request_packet_length = None
         processing_delay = None
+        time_since_request = None
+        transmission_delay = None
+
+        # Stream 标识
+        cur_stream_id = None
 
         for index, packet in df_sorted.iterrows():
+            # 检查Stream标识
+            if packet['stream'] != cur_stream_id:
+                # 准备开始分析的Flag标识
+                start_processing = False
+                get_first_ack = False
+
+                # 用于存储开始处理的时间
+                start_time = None
+
+                # 记录请求的时间戳
+                request_time = None
+
+                # 成功获取的标识符
+                success_flag = False
+
+                # 用于存储结果
+                request_method = None
+                request_full_uri = None
+                request_packet_length = None
+                processing_delay = None
+                time_since_request = None
+                transmission_delay = None
+
+                cur_stream_id = packet['stream']
             # 检查是否为HTTP数据包
             if packet['has_http'] is True:
                 # 检查是否存在response_code字段，以判断是否为响应包
                 if packet['response_code'] is None:
+                    # # test log
+                    # logger.info("A response packet found. --S")
                     request_time = packet['sniff_time']
                     # 输出HTTP数据包的路径
                     if packet['request_full_uri'] is not None:
@@ -129,24 +162,15 @@ def preprocess_data(file_paths, csv_file_path):
                     start_processing = True
                     get_first_ack = False
                     start_time = None
-                    success_flag = False
                 else:
-                    start_processing = False
-                    get_first_ack = False
-                    start_time = None
-                    if success_flag:
-                        # 如果有，记录URL
-                        if packet['request_full_uri'] is not None:
-                            request_full_uri = packet['request_full_uri']
-                        # 如果有，记录 Time since request 时间
-                        if request_time is not None:
-                            time_since_request = packet['sniff_time'] - request_time
-                        else:
-                            time_since_request = None
-                            request_time = None
-                        success_flag = False
-                        # 添加到结果列表
-                        transmission_delay = None
+                    # logger.info("A request packet found. ++Q")
+                    # 如果有，记录URL
+                    if packet['request_full_uri'] is not None:
+                        request_full_uri = packet['request_full_uri']
+                    # 如果有，记录 Time since request 时间
+                    if request_time is not None:
+                        time_since_request = packet['sniff_time'] - request_time
+                        # 计算传输时延
                         if processing_delay is not None and time_since_request is not None:
                             transmission_delay = time_since_request - processing_delay
                         # 提取 File Data 长度  条件3
@@ -178,19 +202,31 @@ def preprocess_data(file_paths, csv_file_path):
                             'transmission_delay': transmission_delay,
                             'time_since_request': time_since_request
                         }
+                        # # test print
+                        # sniff_time = packet['sniff_time']
+                        # logger.info(f'Sniff time: {sniff_time}')
+                        # logger.info(f"Time Since Request: {time_since_request}")
+                        # logger.info(f'Transmission delay: {transmission_delay}')
+                        # logger.info(f'Processing delay {processing_delay}')
                         results.append(res_data)
-                        # 清空中间变量
-                        request_method = None
-                        request_full_uri = None
-                        request_packet_length = None
-                        processing_delay = None
+                    # 清空中间变量
+                    start_processing = False
+                    get_first_ack = False
+                    start_time = None
+                    request_method = None
+                    request_full_uri = None
+                    request_time = None
+                    request_packet_length = None
+                    processing_delay = None
+                    transmission_delay = None
+                    time_since_request = None
 
             # 检查标识位，如果为True则开始处理
             if start_processing:
                 # 输出TCP数据包的标识符
-                logger.info(packet['flags'])
+                # logger.info(packet['flags'])
                 # 输出TCP数据包的时间戳
-                logger.info(packet['sniff_time'])
+                # logger.info(packet['sniff_time'])
                 # 检查标识符是否仅有ACK标志
                 if not get_first_ack:
                     if int(packet['flags'], 16) == int('0x0010', 16):
@@ -207,9 +243,6 @@ def preprocess_data(file_paths, csv_file_path):
                     # 计算处理时间
                     if start_time is not None:
                         processing_delay = end_time - start_time
-                        logger.info(f"Start time: {start_time}")
-                        logger.info(f"End time: {end_time}")
-                        logger.info(f"Processing time: {processing_delay}")
                         success_flag = True
                     else:
                         processing_delay = None
@@ -226,71 +259,7 @@ def preprocess_data(file_paths, csv_file_path):
     results.sort(key=lambda x: x['sniff_time'])
     logger.info('CSV Sorted.')
 
-    # 添加序号
-    for i, res in enumerate(results, start=1):
-        res['No'] = i
-
-    # 定义 CSV 文件头
-    csv_headers = [
-        'No', 'Sniff_time', 'Relative_time', 'Scheme', 'Netloc', 'Path', 'Query',
-        'Time_since_request', 'Processing_delay', 'Transmission_delay',
-        'Ip_src', 'Ip_dst', 'Src_Port', 'Dst_Port',
-        'Request_Method', 'Request_Packet_Length', 'Response_Packet_Length',
-        'Response_Total_Length', 'Response_code'
-    ]
-
-    # # Test Results
-    # logger.info(f'{results}')
-
-    # 打开 CSV 文件并写入数据
-    with open(csv_file_path, 'w', newline='') as csvfile:
-        logger.info('CSV Opened.')
-        writer = csv.DictWriter(csvfile, fieldnames=csv_headers)
-
-        # 写入文件头
-        writer.writeheader()
-
-        # 写入数据行
-        count_index = 0
-        for res in results:
-            # 将 sniff_time 转换为字符串格式
-            sniff_time_str = res['sniff_time'].strftime('%Y-%m-%d %H:%M:%S.%f')
-
-            # 计算 Relative_time（假设第一个 sniff_time 为基准时间）
-            if res['No'] == 1:
-                base_time = res['sniff_time']
-            relative_time = (res['sniff_time'] - base_time).total_seconds()
-
-            # 构建写入 CSV 的数据行
-            row = {
-                'No': res['No'],
-                'Sniff_time': sniff_time_str,
-                'Relative_time': relative_time,
-                'Scheme': res['request_scheme'],
-                'Netloc': res['request_netloc'],
-                'Path': res['request_path'],
-                'Query': res['request_query'],
-                'Time_since_request': res['time_since_request'].total_seconds(),
-                'Processing_delay': res['processing_delay'].total_seconds(),
-                'Transmission_delay': res['transmission_delay'].total_seconds(),
-                'Ip_src': res['ip_src'],
-                'Ip_dst': res['ip_dst'],
-                'Src_Port': res['src_port'],
-                'Dst_Port': res['dst_port'],
-                'Request_Method': res['request_http_method'],
-                'Request_Packet_Length': res['request_packet_length'],
-                'Response_Packet_Length': res['response_packet_length'],
-                'Response_Total_Length': res['response_total_length'],
-                'Response_code': res['response_code']
-            }
-
-            logger.info(f'Writing - {count_index}')
-            count_index = count_index + 1
-
-            # 写入数据行
-            writer.writerow(row)
-
-    logger.info(f"数据已成功写入 {csv_file_path} 文件")
+    return results
 
 
 if __name__ == "__main__":
