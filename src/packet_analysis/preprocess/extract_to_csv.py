@@ -30,10 +30,6 @@ def preprocess_data(file_paths):
     if isinstance(file_paths[0], list):
         file_paths = file_paths[0]
 
-    # 创建新的事件循环
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
     # 储存时间戳、Url、业务处理时间、响应时延等信息的列表
     results = []
 
