@@ -492,7 +492,6 @@ def run_tasks_in_parallel(data, task_id, ip_address):
                                        production_csv_file_path, production_anomalies_csv_file_path),
             extract_data_coordinator.s([os.path.join(pcap_info.replay_pcap.replay_path)],
                                        replay_csv_file_path, replay_anomalies_csv_file_path))
-                           | align_data.s(production_csv_file_path, replay_csv_file_path, alignment_csv_file_path)
                            | cluster_analysis_data.s(index, pcap_info.replay_task_id, pcap_info.replay_id,
                                                      pcap_info.collect_pcap[0].ip, pcap_info.replay_pcap.ip,
                                                      replay_csv_file_path, production_csv_file_path, task_id,
