@@ -180,7 +180,7 @@ def preprocess_data(file_paths):
                         parsed_uri = urlparse(request_full_uri)
                         # 数据输出
                         res_data = {
-                            'sniff_time': packet['sniff_time'] + timedelta(hours=8),
+                            'sniff_time': packet['sniff_time'],
                             'ip_src': packet['ip_src'],
                             'ip_dst': packet['ip_dst'],
                             'src_port': packet['src_port'],  # 添加源端口号
