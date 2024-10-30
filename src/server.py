@@ -223,7 +223,7 @@ def align_data(results, production_csv_file_path, replay_csv_file_path, alignmen
 
 
 @celery.task(name='server.cluster_analysis_data')
-def cluster_analysis_data(results, index, replay_task_id, replay_id, production_ip, replay_ip, replay_csv_file_path,
+def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, production_ip, replay_ip, replay_csv_file_path,
                           production_csv_file_path, task_id, production_json_path, replay_json_path):
     # res variable
     res = {
@@ -262,9 +262,9 @@ def cluster_analysis_data(results, index, replay_task_id, replay_id, production_
     res['comparison_analysis']['legend'] = data_legend
 
     # production cluster anomaly and replay cluster anomaly
-    folder_output_pro = os.path.join(outputs_path, f"cluster_production_{index}")
+    folder_output_pro = os.path.join(outputs_path, f"cluster_production_{pcap_index}")
     pro_anomaly_csv_list, pro_plot_cluster_list = cluster.analysis(production_csv_file_path, folder_output_pro)
-    folder_output_replay = os.path.join(outputs_path, f"cluster_replay_{index}")
+    folder_output_replay = os.path.join(outputs_path, f"cluster_replay_{pcap_index}")
     replay_anomaly_csv_list, replay_plot_cluster_list = cluster.analysis(replay_csv_file_path, folder_output_replay)
 
     # Process anomaly CSV files to build JSON
@@ -353,7 +353,7 @@ def cluster_analysis_data(results, index, replay_task_id, replay_id, production_
     }
     res['performance_bottleneck_analysis'] = data_performance_bottleneck_analysis
 
-    return index, res
+    return pcap_index, res
 
 
 @celery.task(name='server.final_task')
@@ -363,63 +363,7 @@ def final_task(results, data, task_id, ip_address):
     response = {
         "task_id": task_id,
         "individual_analysis_info": [
-            {
-                "replay_task_id": info.replay_task_id,
-                "replay_id": info.replay_id,
-                "comparison_analysis": {
-                    "title": "生产与回放环境处理时延对比分析",
-                    "x_axis_label": "请求路径",
-                    "y_axis_label": "时延（s）",
-                    "legend": {
-                        "production": "生产环境",
-                        "replay": "回放环境",
-                        "mean_difference_ratio": "差异倍数"
-                    },
-                    "data": [
-
-                    ]
-                },
-                "anomaly_detection": {
-                    "details": [
-
-                    ],
-                    "dict": [],
-                    "correlation": [
-                        {
-                            "env": "production",
-                            "hostip": info.collect_pcap[0].ip,
-                            "class_method": "api_get",
-                            "correlation_data": []
-                        },
-                        {
-                            "env": "replay",
-                            "hostip": info.replay_pcap.ip,
-                            "class_method": "get_post",
-                            "correlation_data": []
-                        }
-                    ]
-                },
-                "performance_bottleneck_analysis": {
-                    "bottlenecks": [
-                        {
-                            "env": "replay",
-                            "hostip": info.replay_pcap.ip,
-                            "class_name": "database",
-                            "cause": "数据库查询慢",
-                            "criteria": "请求时延超过300ms，查询次数过多",
-                            "solution": "优化数据库查询，增加索引"
-                        },
-                        {
-                            "env": "production",
-                            "hostip": info.collect_pcap[0].ip,
-                            "class_name": "network",
-                            "cause": "网络带宽不足",
-                            "criteria": "数据传输时延大，带宽利用率高",
-                            "solution": "增加网络带宽或优化传输协议"
-                        }
-                    ]
-                }
-            }
+            {}
             for info in pcap_info_list.pcap_info
         ],
         "overall_analysis_info": {
