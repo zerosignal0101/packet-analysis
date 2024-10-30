@@ -292,11 +292,14 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
     ]
     try:
         production_correlation_path = os.path.join(outputs_path, 'production_correlation.csv')
+        production_kpi_csv_path = os.path.join(outputs_path, 'production_kpi.csv')
         production_correlation_df = calc_correlation(production_json_path, production_csv_file_path,
-                                                     production_correlation_path)
+                                                     production_correlation_path, production_kpi_csv_path)
 
         replay_correlation_path = os.path.join(outputs_path, 'replay_correlation.csv')
-        replay_correlation_df = calc_correlation(replay_json_path, replay_csv_file_path, replay_correlation_path)
+        replay_kpi_csv_path = os.path.join(outputs_path, 'replay_kpi.csv')
+        replay_correlation_df = calc_correlation(replay_json_path, replay_csv_file_path,
+                                                 replay_correlation_path, replay_kpi_csv_path)
         # 将 corr_df 中的 KPI名称 和 相关系数 对应到 index_id 和 value
         for index, row in production_correlation_df.iterrows():
             if pd.notna(row['相关系数']):  # 只处理非 NaN 的相关系数
