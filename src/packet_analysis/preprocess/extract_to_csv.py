@@ -7,7 +7,7 @@ import pandas as pd
 from urllib.parse import urlparse, urlunparse
 import time
 import heapq
-from datetime import datetime
+from datetime import datetime, timedelta
 from src.packet_analysis.utils.logger_config import logger
 
 
@@ -164,7 +164,7 @@ def preprocess_data(file_paths):
                     if packet['request_full_uri'] is not None:
                         request_full_uri = packet['request_full_uri']
                     # 如果有，记录 Time since request 时间
-                    if request_time is not None:
+                    if request_time is not None and request_method is not None:
                         time_since_request = packet['sniff_time'] - request_time
                         # 计算传输时延
                         if processing_delay is not None and time_since_request is not None:
@@ -180,7 +180,7 @@ def preprocess_data(file_paths):
                         parsed_uri = urlparse(request_full_uri)
                         # 数据输出
                         res_data = {
-                            'sniff_time': packet['sniff_time'],
+                            'sniff_time': packet['sniff_time'] + timedelta(hours=8),
                             'ip_src': packet['ip_src'],
                             'ip_dst': packet['ip_dst'],
                             'src_port': packet['src_port'],  # 添加源端口号

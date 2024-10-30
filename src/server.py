@@ -31,7 +31,12 @@ app = Flask(__name__)
 app.config.update(
     include=['src.server'],
     result_backend='redis://redis:6379/0',  # 'redis://redis:6379/0'
-    broker_url='redis://redis:6379/0'  # 'redis://redis:6379/0'
+    broker_url='redis://redis:6379/0',  # 'redis://redis:6379/0'
+    task_serializer='json',
+    accept_content=['json'],
+    result_serializer='json',
+    timezone='Asia/Shanghai',
+    enable_utc=True,
 )
 
 celery = Celery(app.name, broker=app.config['broker_url'])
