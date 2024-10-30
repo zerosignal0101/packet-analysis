@@ -54,21 +54,21 @@ def extract_data(json_data):
             for machine_type, ips in machines.items():
                 # 确保 ips 是一个字典
                 if not isinstance(ips, dict):
-                    print(f"Warning: {machine_type} 的值不是字典类型, 跳过处理")
+                    logger.warning(f"{machine_type} 的值不是字典类型, 跳过处理")
                     continue
 
                 # 遍历IP地址 (如 192.168.49.134)
                 for ip_address, metrics in ips.items():
                     # 确保 metrics 是一个字典
                     if not isinstance(metrics, dict):
-                        print(f"Warning: IP地址 {ip_address} 的 metrics 不是字典, 跳过处理")
+                        logger.warning(f"IP地址 {ip_address} 的 metrics 不是字典, 跳过处理")
                         continue
 
                     # 遍历每种KPI_NO的指标信息列表
                     for kpi_no, items in metrics.items():
                         # 确保 items 是一个列表
                         if not isinstance(items, list):
-                            print(f"Warning: KPI_NO {kpi_no} 的 items 不是列表, 跳过处理")
+                            logger.warning(f"KPI_NO {kpi_no} 的 items 不是列表, 跳过处理")
                             continue
 
                         for item in items:
@@ -87,9 +87,9 @@ def extract_data(json_data):
                                         '指标名称': kpi_name  # 添加指标名称
                                     })
                                 except ValueError as e:
-                                    print(f"Error: DCTIME 转换失败 for item: {item}, 错误信息: {e}")
+                                    logger.error(f"DCTIME 转换失败 for item: {item}, 错误信息: {e}")
                             else:
-                                print(f"Warning: 缺少 'DCTIME' 或 'VALUE' in item: {item}, 跳过此条记录")
+                                logger.warning(f"缺少 'DCTIME' 或 'VALUE' in item: {item}, 跳过此条记录")
 
         elif monitor_type == 'apm':
             # 对于 apm 监控类型，直接将原始数据添加到输出中
@@ -102,8 +102,7 @@ def extract_data(json_data):
 
 # 计算相关系数的函数
 # Modified compute_correlation function with adjustable time threshold
-def compute_correlation(kpi_data, request_data, kpi_name, time_threshold=15, ip_address=None, monitor_type=None):
-    print(3333333333)
+def compute_correlation(kpi_data, request_data, kpi_name, time_threshold=10, ip_address=None, monitor_type=None):
     mean_delays = []
     kpi_values = []
 
@@ -111,14 +110,16 @@ def compute_correlation(kpi_data, request_data, kpi_name, time_threshold=15, ip_
     for interval in kpi_data:
         start_time = interval['DCTIME'] - datetime.timedelta(seconds=time_threshold)
         end_time = interval['DCTIME'] + datetime.timedelta(seconds=time_threshold)
-        print(f"时间范围: {start_time} - {end_time}")
+
+        logger.info(f"时间范围: {start_time} - {end_time}")
 
         # Filter request data based on time range and IP address (for server type)
         if monitor_type == 'server' and ip_address:
+        # if monitor_type == 'server' and ip_address =='192.168.49.134': # 还想区分一下服务器主机和数据库主机
             filtered_requests = request_data[
                 (request_data['Sniff_time'] >= start_time) &
                 (request_data['Sniff_time'] <= end_time) &
-                (request_data['Ip_src'] == ip_address)
+                (request_data['Ip_dst'] == ip_address)
                 ]
         else:
             filtered_requests = request_data[
@@ -126,14 +127,15 @@ def compute_correlation(kpi_data, request_data, kpi_name, time_threshold=15, ip_
                 (request_data['Sniff_time'] <= end_time)
                 ]
 
-        print(f"这段时间内有 {len(filtered_requests)}个数据包")
+        logger.info(f"这段时间内有 {len(filtered_requests)}个数据包")
 
         if not filtered_requests.empty:
             mean_delay = filtered_requests['Time_since_request'].mean()
             mean_delays.append(mean_delay)
             kpi_values.append(interval['VALUE'])
         else:
-            print("No requests found in this time window.")
+            pass
+            logger.info("No requests found in this time window.")
 
     # Convert to numeric and filter valid data
     kpi_values = pd.to_numeric(kpi_values, errors='coerce')
@@ -143,67 +145,91 @@ def compute_correlation(kpi_data, request_data, kpi_name, time_threshold=15, ip_
 
     # Calculate Pearson correlation
     if len(mean_delays) > 1 and len(kpi_values) > 1:
-        print(mean_delays)
-        print(kpi_values)
+        # logger.info(mean_delays)
+        # logger.info(kpi_values)
+
+        # # 将数据写入 CSV 文件 'kpi_data.csv'
+        # data_to_write = {kpi_name: kpi_values, '平均时延': mean_delays}
+        # df_to_write = pd.DataFrame(data_to_write)
+        #
+        # # 追加写入 CSV 文件
+        # df_to_write.to_csv('kpi_data111.csv', mode='a', index=False, encoding='utf-8-sig')
+
+
+        # 创建要写入的数据列，KPI列名和时延列名
+        columns = {kpi_name: kpi_values, f'平均时延_{kpi_name}': mean_delays}
+        df_to_write = pd.DataFrame(columns)
+
+        # 追加写入 CSV 文件，列不断增加
+        try:
+            existing_df = pd.read_csv('kpi_data.csv', encoding='utf-8-sig')
+            combined_df = pd.concat([existing_df, df_to_write], axis=1)
+        except FileNotFoundError:
+            # 如果文件不存在，直接写入
+            combined_df = df_to_write
+
+        # 将更新后的DataFrame写回CSV
+        combined_df.to_csv('kpi_data.csv', mode='w', index=False, encoding='utf-8-sig')
+
         correlation, _ = pearsonr(mean_delays, kpi_values)
-        print(f"{kpi_name} Pearson correlation: {correlation}")
+        logger.info(f"{kpi_name} Pearson correlation: {correlation}")
         return {
             '监控类型': monitor_type,
             'KPI名称': kpi_name,
             '相关系数': correlation
         }
     else:
-        print("Insufficient data for correlation calculation.")
+        logger.info("Insufficient data for correlation calculation.")
         return None
 
+def calc_correlation(json_path, csv_file_path, output_csv_path):
+    # 读取 JSON 文件并提取数据
+    with open(json_path, 'r', encoding='utf-8') as f:
+        json_data = json.load(f)
 
-# 读取 JSON 文件并提取数据
-with open('../../../raw_data/生产采集collect_20240829_08301130.json', 'r', encoding='utf-8') as f:
-    json_data = json.load(f)
+    extracted_info = extract_data(json_data)
+    extracted_df = pd.DataFrame(extracted_info)
 
-extracted_info = extract_data(json_data)
-extracted_df = pd.DataFrame(extracted_info)
-extracted_df.to_csv('../../../results/test1.csv', index=False, encoding='utf-8-sig')
+    # 读取应用请求信息的CSV文件
+    request_data = pd.read_csv(csv_file_path, encoding='utf-8')
 
+    # 将时间戳转换为时间格式
+    request_data['Sniff_time'] = pd.to_datetime(request_data['Sniff_time'])
 
-# 读取应用请求信息的CSV文件
-request_data = pd.read_csv('../../../results/extracted_replay_data_3h.csv', encoding='utf-8')
-
-# 将时间戳转换为时间格式
-request_data['Sniff_time'] = pd.to_datetime(request_data['Sniff_time'])
-
-# 初始化结果列表
-all_correlations = []
+    # 初始化结果列表
+    all_correlations = []
 
 
-# Updated grouping logic with different handling for 'server' and 'databases'
-for (monitor_type, kpi_no, host_ip), kpi_group in extracted_df.groupby(['监控类型', 'KPI_NO', 'IP地址']):
-    correlations = None
-    kpi_name = kpi_mapping.get(kpi_no, '未知指标')
-    kpi_group['DCTIME'] = pd.to_datetime(kpi_group['DCTIME'])
-    kpi_group = kpi_group.sort_values(by='DCTIME')
+    # Updated grouping logic with different handling for 'server' and 'databases'
+    for (monitor_type, kpi_no, host_ip), kpi_group in extracted_df.groupby(['监控类型', 'KPI_NO', 'IP地址']):
+        correlations = None
+        kpi_name = kpi_mapping.get(kpi_no, '未知指标')
+        kpi_group['DCTIME'] = pd.to_datetime(kpi_group['DCTIME'])
+        kpi_group = kpi_group.sort_values(by='DCTIME')
 
-    if monitor_type == 'databases':
-        # Standard correlation calculation for databases 数据库的性能数据，两个生产节点一起算
-        correlations = compute_correlation(kpi_group.to_dict('records'), request_data, kpi_name,monitor_type=monitor_type)
-    # elif monitor_type == 'server':
-    #     # Pass IP address and monitor_type to compute_correlation for server 主机的性能数据，两个生产节点分开算
-    #     correlations = compute_correlation(kpi_group.to_dict('records'), request_data, kpi_name, ip_address=host_ip,
-    #                                        monitor_type=monitor_type)
-    # correlations = compute_correlation(kpi_group.to_dict('records'), request_data, kpi_name)
-    # 将 kpi_group 数据框转换为字典 列表 格式，每一行数据变为一个字典，字典的键是列名，值是对应的单元格内容。'records' 表示每一行是一个独立的字典。
-    if correlations:
-        all_correlations.append(correlations)
+        # if monitor_type == 'databases':
+        #     # Standard correlation calculation for databases 数据库的性能数据，两个生产节点一起算
+        #     correlations = compute_correlation(kpi_group.to_dict('records'), request_data, kpi_name,monitor_type=monitor_type)
+        # elif monitor_type == 'server':
+        #     # Pass IP address and monitor_type to compute_correlation for server 主机的性能数据，两个生产节点分开算
+        #     correlations = compute_correlation(kpi_group.to_dict('records'), request_data, kpi_name, ip_address=host_ip,
+        #                                        monitor_type=monitor_type)
+        correlations = compute_correlation(kpi_group.to_dict('records'), request_data, kpi_name)
+        # 将 kpi_group 数据框转换为字典 列表 格式，每一行数据变为一个字典，字典的键是列名，值是对应的单元格内容。'records' 表示每一行是一个独立的字典。
+        if correlations:
+            all_correlations.append(correlations)
 
 
-# 将结果转换为 DataFrame 并按相关系数排序
-print(3333,all_correlations)
-correlation_df = pd.DataFrame(all_correlations)
-correlation_df = correlation_df.sort_values(by='相关系数', ascending=False)
+    # 将结果转换为 DataFrame 并按相关系数排序
+    # logger.info(f"3333,{all_correlations}")
+    correlation_df = pd.DataFrame(all_correlations)
+    correlation_df = correlation_df.sort_values(by='相关系数', ascending=False)
 
-# 输出最高相关性的指标信息
-print(22222,correlation_df.head())
+    # # 输出最高相关性的指标信息
+    # logger.info(22222,correlation_df.head())
 
-# 保存相关系数结果到 CSV
-correlation_df.to_csv('../../../results/kpi_request_correlations.csv', index=False, encoding='utf-8-sig')
-print("结果已经保存到csv文件")
+    # 保存相关系数结果到 CSV
+    correlation_df.to_csv(output_csv_path, index=False, encoding='utf-8-sig')
+    logger.info(f"相关系数计算结果已经保存到{output_csv_path}文件")
+
+    return correlation_df

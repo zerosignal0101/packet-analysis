@@ -12,7 +12,7 @@ def get_anomalies(file, environment, host_ip):
                   'hostip': host_ip, 'class_method': row['request_type'],
                   'anomaly_delay': "{:.6f}".format(row['Time_since_request']),
                   'average_delay': "{:.6f}".format(average), 'anomaly_time': row['Sniff_time'],
-                  'packet_position': "Packet " + str(row['Request_Index'])}
+                  'packet_position': "Packet " + str(row['No'])}
         details.append(df_row)
 
     return details
