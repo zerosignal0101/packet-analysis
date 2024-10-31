@@ -16,6 +16,7 @@ from multiprocessing import Process
 import subprocess
 
 from src.packet_analysis.json_build.json_host_database_correlation import calc_correlation
+from src.packet_analysis.json_build.random_forest_model import calc_forest_model
 # Import the new function
 from src.packet_analysis.preprocess import extract_to_csv, alignment
 from src.packet_analysis.utils import postapi
@@ -291,18 +292,22 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         }
     ]
     try:
-        correlation_analysis_path = os.path.join(outputs_path, 'correlation_analysis_csv')
+        correlation_analysis_path = os.path.join(outputs_path, f'correlation_analysis_csv_{pcap_index}')
         if not os.path.exists(correlation_analysis_path):
             os.mkdir(correlation_analysis_path)
-        production_correlation_path = os.path.join(correlation_analysis_path, f'production_correlation_{pcap_index}.csv')
-        production_kpi_csv_path = os.path.join(correlation_analysis_path, f'production_kpi_{pcap_index}.csv')
+        production_correlation_path = os.path.join(correlation_analysis_path, f'production_correlation.csv')
+        production_kpi_csv_path = os.path.join(correlation_analysis_path, f'production_kpi.csv')
         production_correlation_df = calc_correlation(production_json_path, production_csv_file_path,
                                                      production_correlation_path, production_kpi_csv_path)
+        production_mse_df, production_importance_df = calc_forest_model(production_kpi_csv_path,
+                                                                        correlation_analysis_path, 'production')
 
-        replay_correlation_path = os.path.join(correlation_analysis_path, f'replay_correlation_{pcap_index}.csv')
-        replay_kpi_csv_path = os.path.join(correlation_analysis_path, f'replay_kpi_{pcap_index}.csv')
+        replay_correlation_path = os.path.join(correlation_analysis_path, f'replay_correlation.csv')
+        replay_kpi_csv_path = os.path.join(correlation_analysis_path, f'replay_kpi.csv')
         replay_correlation_df = calc_correlation(replay_json_path, replay_csv_file_path,
                                                  replay_correlation_path, replay_kpi_csv_path)
+        replay_mse_df, replay_importance_df = calc_forest_model(replay_kpi_csv_path,
+                                                                correlation_analysis_path, 'replay')
         # 将 corr_df 中的 KPI名称 和 相关系数 对应到 index_id 和 value
         for index, row in production_correlation_df.iterrows():
             if pd.notna(row['相关系数']):  # 只处理非 NaN 的相关系数
