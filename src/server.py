@@ -291,13 +291,16 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         }
     ]
     try:
-        production_correlation_path = os.path.join(outputs_path, 'production_correlation.csv')
-        production_kpi_csv_path = os.path.join(outputs_path, 'production_kpi.csv')
+        correlation_analysis_path = os.path.join(outputs_path, 'correlation_analysis_csv')
+        if not os.path.exists(correlation_analysis_path):
+            os.mkdir(correlation_analysis_path)
+        production_correlation_path = os.path.join(correlation_analysis_path, f'production_correlation_{pcap_index}.csv')
+        production_kpi_csv_path = os.path.join(correlation_analysis_path, f'production_kpi_{pcap_index}.csv')
         production_correlation_df = calc_correlation(production_json_path, production_csv_file_path,
                                                      production_correlation_path, production_kpi_csv_path)
 
-        replay_correlation_path = os.path.join(outputs_path, 'replay_correlation.csv')
-        replay_kpi_csv_path = os.path.join(outputs_path, 'replay_kpi.csv')
+        replay_correlation_path = os.path.join(correlation_analysis_path, f'replay_correlation_{pcap_index}.csv')
+        replay_kpi_csv_path = os.path.join(correlation_analysis_path, f'replay_kpi_{pcap_index}.csv')
         replay_correlation_df = calc_correlation(replay_json_path, replay_csv_file_path,
                                                  replay_correlation_path, replay_kpi_csv_path)
         # 将 corr_df 中的 KPI名称 和 相关系数 对应到 index_id 和 value
