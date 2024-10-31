@@ -55,10 +55,10 @@ def preprocess_data(file_paths):
                     packet.tcp.stream if hasattr(packet, 'tcp') else None,
                     (packet.length),
                     ((packet.http.content_length) if hasattr(packet.http,
-                                                                'content_length') else None) if has_http else None,
+                                                             'content_length') else None) if has_http else None,
                     ((packet.http.chunk_size) if (hasattr(packet.http, 'transfer_encoding') and
-                                                     hasattr(packet.http, 'chunk_size') and
-                                                     packet.http.transfer_encoding == 'chunked') else None) if has_http else None,
+                                                  hasattr(packet.http, 'chunk_size') and
+                                                  packet.http.transfer_encoding == 'chunked') else None) if has_http else None,
                     has_http,
                     (packet.http.request_method if hasattr(packet.http,
                                                            'request_method') else None) if has_http else None,
@@ -181,10 +181,10 @@ def preprocess_data(file_paths):
                         # 数据输出
                         res_data = {
                             'sniff_time': packet['sniff_time'],
-                            'ip_src': packet['ip_src'],
-                            'ip_dst': packet['ip_dst'],
-                            'src_port': packet['src_port'],  # 添加源端口号
-                            'dst_port': packet['dst_port'],  # 添加目的端口号
+                            'ip_src': packet['ip_dst'],  # 以请求为基准
+                            'ip_dst': packet['ip_src'],  # 以请求为基准
+                            'src_port': packet['dst_port'],  # 添加源端口号，以请求为基准
+                            'dst_port': packet['src_port'],  # 添加目的端口号，以请求为基准
                             'request_http_method': request_method,
                             'request_scheme': parsed_uri.scheme,
                             'request_netloc': parsed_uri.netloc,
