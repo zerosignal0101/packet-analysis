@@ -49,16 +49,17 @@ def preprocess_data(file_paths):
                     packet.sniff_time,
                     packet.ip.src if hasattr(packet, 'ip') else None,
                     packet.ip.dst if hasattr(packet, 'ip') else None,
-                    packet.tcp.srcport if hasattr(packet, 'tcp') else None,
-                    packet.tcp.dstport if hasattr(packet, 'tcp') else None,
-                    packet.tcp.flags if hasattr(packet, 'tcp') else None,
-                    packet.tcp.stream if hasattr(packet, 'tcp') else None,
-                    (packet.length),
-                    ((packet.http.content_length) if hasattr(packet.http,
+                    packet.tcp.srcport,
+                    packet.tcp.dstport,
+                    packet.tcp.flags,
+                    packet.tcp.stream,
+                    packet.tcp.window_size_value if hasattr(packet.tcp, 'window_size_value') else None,
+                    packet.length,
+                    (packet.http.content_length if hasattr(packet.http,
                                                              'content_length') else None) if has_http else None,
-                    ((packet.http.chunk_size) if (hasattr(packet.http, 'transfer_encoding') and
-                                                  hasattr(packet.http, 'chunk_size') and
-                                                  packet.http.transfer_encoding == 'chunked') else None) if has_http else None,
+                    (packet.http.chunk_size if (hasattr(packet.http, 'transfer_encoding') and
+                                                hasattr(packet.http, 'chunk_size') and
+                                                packet.http.transfer_encoding == 'chunked') else None) if has_http else None,
                     has_http,
                     (packet.http.request_method if hasattr(packet.http,
                                                            'request_method') else None) if has_http else None,
@@ -73,7 +74,7 @@ def preprocess_data(file_paths):
         # 创建 DataFrame 并添加表头
         columns = [
             'sniff_time', 'ip_src', 'ip_dst', 'src_port', 'dst_port',
-            'flags', 'stream', 'packet_length', 'content_length',
+            'flags', 'stream', 'window_size_value', 'packet_length', 'content_length',
             'chunk_size', 'has_http', 'request_http_method',
             'request_full_uri', 'response_code'
         ]
@@ -130,6 +131,9 @@ def preprocess_data(file_paths):
                 # 成功获取的标识符
                 success_flag = False
 
+                # 记录零窗口的标识符
+                is_zero_window = False
+
                 # 用于存储结果
                 request_method = None
                 request_full_uri = None
@@ -180,11 +184,12 @@ def preprocess_data(file_paths):
                         parsed_uri = urlparse(request_full_uri)
                         # 数据输出
                         res_data = {
-                            'sniff_time': packet['sniff_time'],
+                            'sniff_time': request_time,
                             'ip_src': packet['ip_dst'],  # 以请求为基准
                             'ip_dst': packet['ip_src'],  # 以请求为基准
                             'src_port': packet['dst_port'],  # 添加源端口号，以请求为基准
                             'dst_port': packet['src_port'],  # 添加目的端口号，以请求为基准
+                            'window_size_value': packet['window_size_value'],
                             'request_http_method': request_method,
                             'request_scheme': parsed_uri.scheme,
                             'request_netloc': parsed_uri.netloc,
@@ -216,6 +221,10 @@ def preprocess_data(file_paths):
                     processing_delay = None
                     transmission_delay = None
                     time_since_request = None
+                    is_zero_window = False
+
+            if packet['window_size_value'] == '0':
+                is_zero_window = True
 
             # 检查标识位，如果为True则开始处理
             if start_processing:

@@ -120,7 +120,7 @@ def extract_data_coordinator(pcap_file_path, csv_file_path, anomalies_csv_file_p
     csv_headers = [
         'Sniff_time', 'Relative_time', 'Scheme', 'Netloc', 'Path', 'Query',
         'Time_since_request', 'Processing_delay', 'Transmission_delay',
-        'Ip_src', 'Ip_dst', 'Src_Port', 'Dst_Port',
+        'Ip_src', 'Ip_dst', 'Src_Port', 'Dst_Port', 'Window_size_value',
         'Request_Method', 'Request_Packet_Length', 'Response_Packet_Length',
         'Response_Total_Length', 'Response_code'
     ]
@@ -206,6 +206,7 @@ def extract_data_executor(pcap_file_path, csv_file_path, csv_headers):
                     'Ip_dst': res['ip_dst'],
                     'Src_Port': res['src_port'],
                     'Dst_Port': res['dst_port'],
+                    'Window_size_value': res['window_size_value'],
                     'Request_Method': res['request_http_method'],
                     'Request_Packet_Length': res['request_packet_length'],
                     'Response_Packet_Length': res['response_packet_length'],
@@ -224,7 +225,8 @@ def align_data(results, production_csv_file_path, replay_csv_file_path, alignmen
 
 
 @celery.task(name='server.cluster_analysis_data')
-def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, production_ip, replay_ip, replay_csv_file_path,
+def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, production_ip, replay_ip,
+                          replay_csv_file_path,
                           production_csv_file_path, task_id, production_json_path, replay_json_path):
     # res variable
     res = {
@@ -340,7 +342,6 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
     }]
     res['anomaly_detection']['dict'] = anomaly_dict
 
-
     # 先预设的'anomaly_detection'中的correlation部分
     data_performance_bottleneck_analysis = {
         "bottlenecks": [
@@ -447,6 +448,7 @@ def run_tasks_in_parallel(data, task_id, ip_address):
                                        production_csv_file_path, production_anomalies_csv_file_path),
             extract_data_coordinator.s([os.path.join(pcap_info.replay_pcap.replay_path)],
                                        replay_csv_file_path, replay_anomalies_csv_file_path))
+                           | align_data.s(production_csv_file_path, replay_csv_file_path, alignment_csv_file_path)
                            | cluster_analysis_data.s(index, pcap_info.replay_task_id, pcap_info.replay_id,
                                                      pcap_info.collect_pcap[0].ip, pcap_info.replay_pcap.ip,
                                                      replay_csv_file_path, production_csv_file_path, task_id,
