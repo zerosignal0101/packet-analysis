@@ -16,6 +16,7 @@ from multiprocessing import Process
 import subprocess
 
 from src.packet_analysis.json_build.json_host_database_correlation import calc_correlation
+from src.packet_analysis.json_build.random_forest_model import calc_forest_model
 # Import the new function
 from src.packet_analysis.preprocess import extract_to_csv, alignment
 from src.packet_analysis.utils import postapi
@@ -119,7 +120,7 @@ def extract_data_coordinator(pcap_file_path, csv_file_path, anomalies_csv_file_p
     csv_headers = [
         'Sniff_time', 'Relative_time', 'Scheme', 'Netloc', 'Path', 'Query',
         'Time_since_request', 'Processing_delay', 'Transmission_delay',
-        'Ip_src', 'Ip_dst', 'Src_Port', 'Dst_Port',
+        'Ip_src', 'Ip_dst', 'Src_Port', 'Dst_Port', 'Window_size_value',
         'Request_Method', 'Request_Packet_Length', 'Response_Packet_Length',
         'Response_Total_Length', 'Response_code'
     ]
@@ -205,6 +206,7 @@ def extract_data_executor(pcap_file_path, csv_file_path, csv_headers):
                     'Ip_dst': res['ip_dst'],
                     'Src_Port': res['src_port'],
                     'Dst_Port': res['dst_port'],
+                    'Window_size_value': res['window_size_value'],
                     'Request_Method': res['request_http_method'],
                     'Request_Packet_Length': res['request_packet_length'],
                     'Response_Packet_Length': res['response_packet_length'],
@@ -223,7 +225,8 @@ def align_data(results, production_csv_file_path, replay_csv_file_path, alignmen
 
 
 @celery.task(name='server.cluster_analysis_data')
-def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, production_ip, replay_ip, replay_csv_file_path,
+def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, production_ip, replay_ip,
+                          replay_csv_file_path,
                           production_csv_file_path, task_id, production_json_path, replay_json_path):
     # res variable
     res = {
@@ -291,12 +294,22 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         }
     ]
     try:
-        production_correlation_path = os.path.join(outputs_path, 'production_correlation.csv')
+        correlation_analysis_path = os.path.join(outputs_path, f'correlation_analysis_csv_{pcap_index}')
+        if not os.path.exists(correlation_analysis_path):
+            os.mkdir(correlation_analysis_path)
+        production_correlation_path = os.path.join(correlation_analysis_path, f'production_correlation.csv')
+        production_kpi_csv_path = os.path.join(correlation_analysis_path, f'production_kpi.csv')
         production_correlation_df = calc_correlation(production_json_path, production_csv_file_path,
-                                                     production_correlation_path)
+                                                     production_correlation_path, production_kpi_csv_path)
+        production_mse_df, production_importance_df = calc_forest_model(production_kpi_csv_path,
+                                                                        correlation_analysis_path, 'production')
 
-        replay_correlation_path = os.path.join(outputs_path, 'replay_correlation.csv')
-        replay_correlation_df = calc_correlation(replay_json_path, replay_csv_file_path, replay_correlation_path)
+        replay_correlation_path = os.path.join(correlation_analysis_path, f'replay_correlation.csv')
+        replay_kpi_csv_path = os.path.join(correlation_analysis_path, f'replay_kpi.csv')
+        replay_correlation_df = calc_correlation(replay_json_path, replay_csv_file_path,
+                                                 replay_correlation_path, replay_kpi_csv_path)
+        replay_mse_df, replay_importance_df = calc_forest_model(replay_kpi_csv_path,
+                                                                correlation_analysis_path, 'replay')
         # 将 corr_df 中的 KPI名称 和 相关系数 对应到 index_id 和 value
         for index, row in production_correlation_df.iterrows():
             if pd.notna(row['相关系数']):  # 只处理非 NaN 的相关系数
@@ -328,7 +341,6 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         "solution": "优化数据库查询，增加索引"
     }]
     res['anomaly_detection']['dict'] = anomaly_dict
-
 
     # 先预设的'anomaly_detection'中的correlation部分
     data_performance_bottleneck_analysis = {
@@ -436,6 +448,7 @@ def run_tasks_in_parallel(data, task_id, ip_address):
                                        production_csv_file_path, production_anomalies_csv_file_path),
             extract_data_coordinator.s([os.path.join(pcap_info.replay_pcap.replay_path)],
                                        replay_csv_file_path, replay_anomalies_csv_file_path))
+                           | align_data.s(production_csv_file_path, replay_csv_file_path, alignment_csv_file_path)
                            | cluster_analysis_data.s(index, pcap_info.replay_task_id, pcap_info.replay_id,
                                                      pcap_info.collect_pcap[0].ip, pcap_info.replay_pcap.ip,
                                                      replay_csv_file_path, production_csv_file_path, task_id,
