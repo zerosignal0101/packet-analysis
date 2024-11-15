@@ -278,7 +278,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
     combined_anomaly_details = all_pro_anomaly_details + all_replay_anomaly_details
     res['anomaly_detection']['details'] = combined_anomaly_details
 
-    # 先预设的'anomaly_detection'中的correlation部分
+    # 先预设的'anomaly_detection'中的correlation, bottleneck部分
     data_correlation = [
         {
             "env": "production",
@@ -293,6 +293,26 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
             "correlation_data": []
         }
     ]
+    data_performance_bottleneck_analysis = {
+        "bottlenecks": [
+            {
+                "env": "replay",
+                "hostip": replay_ip,
+                "class_name": "database",
+                "cause": {},
+                "criteria": {},
+                "solution": "优化数据库查询，增加索引"
+            },
+            {
+                "env": "production",
+                "hostip": production_ip,
+                "class_name": "network",
+                "cause": {},
+                "criteria": {},
+                "solution": "增加网络带宽或优化传输协议"
+            }
+        ]
+    }
     try:
         correlation_analysis_path = os.path.join(outputs_path, f'correlation_analysis_csv_{pcap_index}')
         if not os.path.exists(correlation_analysis_path):
@@ -301,15 +321,12 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         production_kpi_csv_path = os.path.join(correlation_analysis_path, f'production_kpi.csv')
         production_correlation_df = calc_correlation(production_json_path, production_csv_file_path,
                                                      production_correlation_path, production_kpi_csv_path)
-        production_mse_df, production_importance_df = calc_forest_model(production_kpi_csv_path,
-                                                                        correlation_analysis_path, 'production')
 
         replay_correlation_path = os.path.join(correlation_analysis_path, f'replay_correlation.csv')
         replay_kpi_csv_path = os.path.join(correlation_analysis_path, f'replay_kpi.csv')
         replay_correlation_df = calc_correlation(replay_json_path, replay_csv_file_path,
                                                  replay_correlation_path, replay_kpi_csv_path)
-        replay_mse_df, replay_importance_df = calc_forest_model(replay_kpi_csv_path,
-                                                                correlation_analysis_path, 'replay')
+
         # 将 corr_df 中的 KPI名称 和 相关系数 对应到 index_id 和 value
         for index, row in production_correlation_df.iterrows():
             if pd.notna(row['相关系数']):  # 只处理非 NaN 的相关系数
@@ -328,9 +345,45 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
                 }
                 # 将数据添加到 production 和 replay 的 correlation_data 中
                 data_correlation[1]['correlation_data'].append(correlation_data)
+
+        # 随机森林计算
+        production_mse_df, production_importance_df = calc_forest_model(production_kpi_csv_path,
+                                                                        correlation_analysis_path, 'production')
+        replay_mse_df, replay_importance_df = calc_forest_model(replay_kpi_csv_path,
+                                                                correlation_analysis_path, 'replay')
+
+        data_performance_bottleneck_analysis = {
+            "bottlenecks": [
+                {
+                    "env": "replay",
+                    "hostip": replay_ip,
+                    "class_name": "database",
+                    "cause": [
+                        row['KPI'] for index, row in replay_importance_df.iterrows()
+                    ],
+                    "criteria": [
+                        row['Importance'] for index, row in replay_importance_df.iterrows()
+                    ],
+                    "solution": "优化数据库查询，增加索引"
+                },
+                {
+                    "env": "production",
+                    "hostip": production_ip,
+                    "class_name": "network",
+                    "cause": [
+                        row['KPI'] for index, row in production_importance_df.iterrows()
+                    ],
+                    "criteria": [
+                        row['Importance'] for index, row in production_importance_df.iterrows()
+                    ],
+                    "solution": "增加网络带宽或优化传输协议"
+                }
+            ]
+        }
     except KeyError:
         pass
     res['anomaly_detection']['correlation'] = data_correlation
+    res['performance_bottleneck_analysis'] = data_performance_bottleneck_analysis
 
     anomaly_dict = [{
         "request_url": "/portal_todo/api/getAllUserTodoData",
@@ -341,29 +394,6 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         "solution": "优化数据库查询，增加索引"
     }]
     res['anomaly_detection']['dict'] = anomaly_dict
-
-    # 先预设的'anomaly_detection'中的correlation部分
-    data_performance_bottleneck_analysis = {
-        "bottlenecks": [
-            {
-                "env": "replay",
-                "hostip": replay_ip,
-                "class_name": "database",
-                "cause": "数据库查询慢",
-                "criteria": "请求时延超过300ms，查询次数过多",
-                "solution": "优化数据库查询，增加索引"
-            },
-            {
-                "env": "production",
-                "hostip": production_ip,
-                "class_name": "network",
-                "cause": "网络带宽不足",
-                "criteria": "数据传输时延大，带宽利用率高",
-                "solution": "增加网络带宽或优化传输协议"
-            }
-        ]
-    }
-    res['performance_bottleneck_analysis'] = data_performance_bottleneck_analysis
 
     return pcap_index, res
 
