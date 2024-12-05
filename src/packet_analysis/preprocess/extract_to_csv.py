@@ -115,6 +115,12 @@ def preprocess_data(file_paths):
         # Stream 标识
         cur_stream_id = None
 
+        # Zero window
+        is_zero_window = False
+
+        # TCP RST 标识
+        is_tcp_reset = False
+
         for index, packet in df_sorted.iterrows():
             # 检查Stream标识
             if packet['stream'] != cur_stream_id:
@@ -143,6 +149,9 @@ def preprocess_data(file_paths):
                 transmission_delay = None
 
                 cur_stream_id = packet['stream']
+
+                # TCP RST 标识
+                is_tcp_reset = False
             # 检查是否为HTTP数据包
             if packet['has_http'] is True:
                 # 检查是否存在response_code字段，以判断是否为响应包
@@ -189,7 +198,8 @@ def preprocess_data(file_paths):
                             'ip_dst': packet['ip_src'],  # 以请求为基准
                             'src_port': packet['dst_port'],  # 添加源端口号，以请求为基准
                             'dst_port': packet['src_port'],  # 添加目的端口号，以请求为基准
-                            'window_size_value': packet['window_size_value'],
+                            'is_zero_window': is_zero_window,
+                            'is_tcp_reset': is_tcp_reset,
                             'request_http_method': request_method,
                             'request_scheme': parsed_uri.scheme,
                             'request_netloc': parsed_uri.netloc,
@@ -209,6 +219,8 @@ def preprocess_data(file_paths):
                         # logger.info(f"Time Since Request: {time_since_request}")
                         # logger.info(f'Transmission delay: {transmission_delay}')
                         # logger.info(f'Processing delay {processing_delay}')
+                        if is_tcp_reset:
+                            logger.warning('TCP reset detected.')
                         results.append(res_data)
                     # 清空中间变量
                     start_processing = False
@@ -222,9 +234,17 @@ def preprocess_data(file_paths):
                     transmission_delay = None
                     time_since_request = None
                     is_zero_window = False
+                    is_tcp_reset = False
 
             if packet['window_size_value'] == '0':
                 is_zero_window = True
+
+            # pkt.tcp.flags 是一个16进制的字符串, 转换为整数进行位运算
+            tcp_flags = int(packet['flags'], 16)
+            # 检查 RST 位 (第3位)
+            if tcp_flags & 0x04:
+                is_tcp_reset = True
+                # logger.info("RST flag is set in the TCP packet")
 
             # 检查标识位，如果为True则开始处理
             if start_processing:

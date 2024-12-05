@@ -29,17 +29,27 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
         'Request_Method': [],
         # 生产环境
         'Production_Sniff_time': [],
+        'Production_Relative_time': [],  #hyf
         'Production_Time_since_request': [],
+        'Production_Processing_delay': [],  #hyf
+        'Production_Transmission_delay': [],  #hyf
         'Production_Request_Packet_Length': [],
         'Production_Response_Packet_Length': [],
         'Production_Response_Total_Length': [],
+        'Production_Is_zero_window': [],  #hyf
+        'Production_Is_tcp_reset': [],  #hyf
         'Production_Response_Code': [],
 
         'Back_Sniff_time': [],
+        'Back_Relative_time': [],  #hyf
         'Back_Time_since_request': [],
+        'Back_Processing_delay': [],  #hyf
+        'Back_Transmission_delay': [],  #hyf
         'Back_Request_Packet_Length': [],
         'Back_Response_Packet_Length': [],
         'Back_Response_Total_Length': [],
+        'Back_Is_zero_window': [],  #hyf
+        'Back_Is_tcp_reset': [],  #hyf
         'Back_Response_Code': [],
 
         'Time_since_request_ratio': [],
@@ -82,7 +92,7 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
             back_match = subset_back_df[(subset_back_df['Path'] == path2) & (subset_back_df['Query'] == query2) & (
                     subset_back_df['Src_Port'] == src_port2)]
 
-        # 先初始化没有最佳匹配，时间间隔为最大
+        # 如果生产回放对齐有匹配，先初始化没有最佳匹配，时间间隔为最大
         if not back_match.empty:
             best_match = None
             smallest_time_diff = timedelta.max
@@ -110,7 +120,7 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
             if best_match is not None:
                 back_sniff_time2 = best_match['Sniff_time']
                 back_time_since_request2 = best_match['Time_since_request']
-                ratio = time_since_request2 / back_time_since_request2 if back_time_since_request2 != 0 else 'Infinity'
+                ratio = back_time_since_request2 / time_since_request2 if time_since_request2 != 0 else 'Infinity'
 
                 # 保存匹配结果到 aligned_data
                 aligned_data['Path'].append(path2)
@@ -119,20 +129,35 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
                 aligned_data['Request_Method'].append(request_method2)
 
                 aligned_data['Production_Sniff_time'].append(sniff_time2)
+                aligned_data['Production_Relative_time'].append(
+                    production_df.iloc[index + 1]['Relative_time'])  #hyf
                 aligned_data['Production_Time_since_request'].append(time_since_request2)
+                aligned_data['Production_Processing_delay'].append(
+                    production_df.iloc[index + 1]['Processing_delay'])  #hyf
+                aligned_data['Production_Transmission_delay'].append(
+                    production_df.iloc[index + 1]['Transmission_delay'])  #hyf
                 aligned_data['Production_Request_Packet_Length'].append(
                     production_df.iloc[index + 1]['Request_Packet_Length'])
                 aligned_data['Production_Response_Packet_Length'].append(
                     production_df.iloc[index + 1]['Response_Packet_Length'])
                 aligned_data['Production_Response_Total_Length'].append(
                     production_df.iloc[index + 1]['Response_Total_Length'])
+                aligned_data['Production_Is_zero_window'].append(
+                    production_df.iloc[index + 1]['Is_zero_window'])  #hyf
+                aligned_data['Production_Is_tcp_reset'].append(
+                    production_df.iloc[index + 1]['Is_tcp_reset'])  #hyf
                 aligned_data['Production_Response_Code'].append(production_df.iloc[index + 1]['Response_code'])
 
                 aligned_data['Back_Sniff_time'].append(back_sniff_time2)
+                aligned_data['Back_Relative_time'].append(best_match['Relative_time']) #hyf
                 aligned_data['Back_Time_since_request'].append(back_time_since_request2)
+                aligned_data['Back_Processing_delay'].append(best_match['Processing_delay']) #hyf
+                aligned_data['Back_Transmission_delay'].append(best_match['Transmission_delay']) #hyf
                 aligned_data['Back_Request_Packet_Length'].append(best_match['Request_Packet_Length'])
                 aligned_data['Back_Response_Packet_Length'].append(best_match['Response_Packet_Length'])
                 aligned_data['Back_Response_Total_Length'].append(best_match['Response_Total_Length'])
+                aligned_data['Back_Is_zero_window'].append(best_match['Is_zero_window']) #hyf
+                aligned_data['Back_Is_tcp_reset'].append(best_match['Is_tcp_reset']) #hyf
                 aligned_data['Back_Response_Code'].append(best_match['Response_code'])
 
                 aligned_data['Time_since_request_ratio'].append(ratio)
@@ -148,20 +173,35 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
                 aligned_data['Request_Method'].append(request_method2)
 
                 aligned_data['Production_Sniff_time'].append(sniff_time2)
+                aligned_data['Production_Relative_time'].append(
+                    production_df.iloc[index + 1]['Relative_time'])  #hyf
                 aligned_data['Production_Time_since_request'].append(time_since_request2)
+                aligned_data['Production_Processing_delay'].append(
+                    production_df.iloc[index + 1]['Processing_delay'])  #hyf
+                aligned_data['Production_Transmission_delay'].append(
+                    production_df.iloc[index + 1]['Transmission_delay'])  #hyf
                 aligned_data['Production_Request_Packet_Length'].append(
                     production_df.iloc[index + 1]['Request_Packet_Length'])
                 aligned_data['Production_Response_Packet_Length'].append(
                     production_df.iloc[index + 1]['Response_Packet_Length'])
                 aligned_data['Production_Response_Total_Length'].append(
                     production_df.iloc[index + 1]['Response_Total_Length'])
+                aligned_data['Production_Is_zero_window'].append(
+                    production_df.iloc[index + 1]['Is_zero_window'])  #hyf
+                aligned_data['Production_Is_tcp_reset'].append(
+                    production_df.iloc[index + 1]['Is_tcp_reset'])  #hyf
                 aligned_data['Production_Response_Code'].append(production_df.iloc[index + 1]['Response_code'])
 
                 aligned_data['Back_Sniff_time'].append('No match found')
+                aligned_data['Back_Relative_time'].append('No match found') #hyf
                 aligned_data['Back_Time_since_request'].append('No match found')
+                aligned_data['Back_Processing_delay'].append('No match found') #hyf
+                aligned_data['Back_Transmission_delay'].append('No match found') #hyf
                 aligned_data['Back_Request_Packet_Length'].append('No match found')
                 aligned_data['Back_Response_Packet_Length'].append('No match found')
                 aligned_data['Back_Response_Total_Length'].append('No match found')
+                aligned_data['Back_Is_zero_window'].append('No match found') #hyf
+                aligned_data['Back_Is_tcp_reset'].append('No match found') #hyf
                 aligned_data['Back_Response_Code'].append('No match found')
 
                 aligned_data['Time_since_request_ratio'].append('No match found')
@@ -174,13 +214,23 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
             aligned_data['Request_Method'].append(request_method2)
 
             aligned_data['Production_Sniff_time'].append(sniff_time2)
+            aligned_data['Production_Relative_time'].append(
+                production_df.iloc[index + 1]['Relative_time'])  #hyf
             aligned_data['Production_Time_since_request'].append(time_since_request2)
+            aligned_data['Production_Processing_delay'].append(
+                production_df.iloc[index + 1]['Processing_delay'])  #hyf
+            aligned_data['Production_Transmission_delay'].append(
+                production_df.iloc[index + 1]['Transmission_delay'])  #hyf
             aligned_data['Production_Request_Packet_Length'].append(
                 production_df.iloc[index + 1]['Request_Packet_Length'])
             aligned_data['Production_Response_Packet_Length'].append(
                 production_df.iloc[index + 1]['Response_Packet_Length'])
             aligned_data['Production_Response_Total_Length'].append(
                 production_df.iloc[index + 1]['Response_Total_Length'])
+            aligned_data['Production_Is_zero_window'].append(
+                production_df.iloc[index + 1]['Is_zero_window'])  #hyf
+            aligned_data['Production_Is_tcp_reset'].append(
+                production_df.iloc[index + 1]['Is_tcp_reset'])  #hyf
             # 检查存在性
             if 'Response_code' in production_df.columns:
                 aligned_data['Production_Response_Code'].append(production_df.iloc[index + 1]['Response_code'])
@@ -188,10 +238,15 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
                 aligned_data['Production_Response_Code'].append('No Response_code')
 
             aligned_data['Back_Sniff_time'].append('No match found')
+            aligned_data['Back_Relative_time'].append('No match found') #hyf
             aligned_data['Back_Time_since_request'].append('No match found')
+            aligned_data['Back_Processing_delay'].append('No match found') #hyf
+            aligned_data['Back_Transmission_delay'].append('No match found') #hyf
             aligned_data['Back_Request_Packet_Length'].append('No match found')
             aligned_data['Back_Response_Packet_Length'].append('No match found')
             aligned_data['Back_Response_Total_Length'].append('No match found')
+            aligned_data['Back_Is_zero_window'].append('No match found') #hyf
+            aligned_data['Back_Is_tcp_reset'].append('No match found') #hyf
             aligned_data['Back_Response_Code'].append('No match found')
 
             aligned_data['Time_since_request_ratio'].append('No match found')

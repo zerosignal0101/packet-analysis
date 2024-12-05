@@ -120,7 +120,7 @@ def extract_data_coordinator(pcap_file_path, csv_file_path, anomalies_csv_file_p
     csv_headers = [
         'Sniff_time', 'Relative_time', 'Scheme', 'Netloc', 'Path', 'Query',
         'Time_since_request', 'Processing_delay', 'Transmission_delay',
-        'Ip_src', 'Ip_dst', 'Src_Port', 'Dst_Port', 'Window_size_value',
+        'Ip_src', 'Ip_dst', 'Src_Port', 'Dst_Port', 'Is_zero_window', 'Is_tcp_reset',
         'Request_Method', 'Request_Packet_Length', 'Response_Packet_Length',
         'Response_Total_Length', 'Response_code'
     ]
@@ -206,7 +206,8 @@ def extract_data_executor(pcap_file_path, csv_file_path, csv_headers):
                     'Ip_dst': res['ip_dst'],
                     'Src_Port': res['src_port'],
                     'Dst_Port': res['dst_port'],
-                    'Window_size_value': res['window_size_value'],
+                    'Is_zero_window': res['is_zero_window'],
+                    'Is_tcp_reset': res['is_tcp_reset'],
                     'Request_Method': res['request_http_method'],
                     'Request_Packet_Length': res['request_packet_length'],
                     'Response_Packet_Length': res['response_packet_length'],

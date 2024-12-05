@@ -14,8 +14,10 @@
       <excludeFolder url="file://$MODULE_DIR$/raw_data/数据集2" />
       <excludeFolder url="file://$MODULE_DIR$/test_field/flagged" />
       <excludeFolder url="file://$MODULE_DIR$/.venv" />
+      <excludeFolder url="file://$MODULE_DIR$/raw_data" />
+      <excludeFolder url="file://$MODULE_DIR$/results" />
     </content>
-    <orderEntry type="jdk" jdkName="wireshark" jdkType="Python SDK" />
+    <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>
