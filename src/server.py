@@ -26,6 +26,7 @@ from src.packet_analysis.analysis import cluster
 from src.packet_analysis.json_build import anomaly_detection
 from src.packet_analysis.utils.logger_config import logger
 from datetime import datetime
+from src.packet_analysis.json_build import alignment_analysis
 
 app = Flask(__name__)
 # 使用新格式的配置名称
@@ -80,11 +81,11 @@ def mark_task_complete(results, name):
 
 
 @celery.task(name='server.extract_data_coordinator')
-def extract_data_coordinator(pcap_file_path, csv_file_path, anomalies_csv_file_path):
+def extract_data_coordinator(pcap_file_path, csv_file_path, anomalies_csv_file_path,task_id):
     logger.info(f"pcap_file_path {pcap_file_path}")
 
     split_files_list = []
-    output_dir = "raw_data/split_pcap"  # 分割后的文件存储目录
+    output_dir = f'results/{task_id}/split_pcap'  # 分割后的文件存储目录
 
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
@@ -228,7 +229,7 @@ def align_data(results, production_csv_file_path, replay_csv_file_path, alignmen
 @celery.task(name='server.cluster_analysis_data')
 def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, production_ip, replay_ip,
                           replay_csv_file_path,
-                          production_csv_file_path, task_id, production_json_path, replay_json_path):
+                          production_csv_file_path, task_id, production_json_path, replay_json_path,alignment_csv_file_path):
     # res variable
     res = {
         "comparison_analysis": {},
@@ -240,15 +241,15 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
     logger.info(f"json started at {datetime.now()}")
     DataBase = DB(csv_back=replay_csv_file_path, csv_production=production_csv_file_path)
     # 添加返回值
-    data_list = DataBase.built_all_dict()
+    data_list,path_delay_dict = DataBase.built_all_dict()
 
     outputs_path = f'./results/{task_id}'
 
     # # 保存两环境对比数据csv、对比图到本地
-    # comparison_csv_path = os.path.join(outputs_path, f"comparison_analysis_data_{index}.csv")
-    # DataBase.save_to_csv(comparison_csv_path)
-    # comparison_png_path = os.path.join(outputs_path, f"comparison_analysis_data_{index}.png")
-    # DataBase.plot_mean_difference_ratio(comparison_png_path)
+    comparison_csv_path = os.path.join(outputs_path, f"comparison_analysis_data_{pcap_index}.csv")
+    DataBase.save_to_csv(comparison_csv_path)
+    comparison_png_path = os.path.join(outputs_path, f"comparison_analysis_data_{pcap_index}.png")
+    DataBase.plot_mean_difference_ratio(comparison_png_path)
 
     # Update response with the data_list for the current analysis
     data_legend = {
@@ -256,7 +257,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         "replay": "回放环境",
         "mean_difference_ratio": "差异倍数"
     }
-    res['comparison_analysis']['data'] = data_list
+    # res['comparison_analysis']['data'] = data_list
     res['replay_task_id'] = replay_task_id
     res['replay_id'] = replay_id
     res['comparison_analysis']['title'] = "生产与回放环境处理时延对比分析"
@@ -385,6 +386,22 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         pass
     res['anomaly_detection']['correlation'] = data_correlation
     res['performance_bottleneck_analysis'] = data_performance_bottleneck_analysis
+    
+    #分析瓶颈1 状态码
+    bottleneck_analysis_response_code = alignment_analysis.analyze_status_code(alignment_csv_file_path, output_prefix=f'{outputs_path}/test_status_code_analysis')
+    logger.info(f"bottleneck_analysis_response_code: {bottleneck_analysis_response_code}")
+    res['performance_bottleneck_analysis']['bottlenecks'].append(bottleneck_analysis_response_code)
+    
+    #分析瓶颈2 响应包是否完整
+    bottleneck_analysis_empty_response = alignment_analysis.analyze_empty_responses(alignment_csv_file_path, output_prefix=f'{outputs_path}/empty_responses_analysis')
+    logger.info(f"bottleneck_analysis_empty_response: {bottleneck_analysis_empty_response}")
+    res['performance_bottleneck_analysis']['bottlenecks'].append(bottleneck_analysis_empty_response)
+    
+    #分析瓶颈3 传输窗口瓶颈检测
+    bottleneck_analysis_zero_window = alignment_analysis.analyze_zero_window_issues(alignment_csv_file_path, output_prefix=f'{outputs_path}/zero_window_analysis')
+    logger.info(f"bottleneck_analysis_zero_window: {bottleneck_analysis_zero_window}")
+    res['performance_bottleneck_analysis']['bottlenecks'].append(bottleneck_analysis_zero_window)
+
 
     anomaly_dict = [{
         "request_url": "/portal_todo/api/getAllUserTodoData",
@@ -476,14 +493,14 @@ def run_tasks_in_parallel(data, task_id, ip_address):
 
         task_group = group(group(
             extract_data_coordinator.s([os.path.join(collect.collect_path) for collect in pcap_info.collect_pcap],
-                                       production_csv_file_path, production_anomalies_csv_file_path),
+                                       production_csv_file_path, production_anomalies_csv_file_path,task_id),
             extract_data_coordinator.s([os.path.join(pcap_info.replay_pcap.replay_path)],
-                                       replay_csv_file_path, replay_anomalies_csv_file_path))
+                                       replay_csv_file_path, replay_anomalies_csv_file_path,task_id))
                            | align_data.s(production_csv_file_path, replay_csv_file_path, alignment_csv_file_path)
                            | cluster_analysis_data.s(index, pcap_info.replay_task_id, pcap_info.replay_id,
                                                      pcap_info.collect_pcap[0].ip, pcap_info.replay_pcap.ip,
                                                      replay_csv_file_path, production_csv_file_path, task_id,
-                                                     pcap_info.collect_log, pcap_info.replay_log))
+                                                     pcap_info.collect_log, pcap_info.replay_log,alignment_csv_file_path))
         task_groups.append(task_group)
 
     # 使用chord确保所有任务子项完成后执行最终任务

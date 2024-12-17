@@ -44,6 +44,8 @@ class df:
 class DB:
     def __init__(self, csv_production, csv_back):
         pd.options.display.float_format = '{:.6f}'.format  # 保证数值不使用科学计数法
+        self.csv_production = csv_production  # 保存文件路径
+        self.csv_back = csv_back
         self.df_product = pd.read_csv(csv_production, encoding='utf-8')
         self.df_back = pd.read_csv(csv_back, encoding='utf-8')
         self.request_info_dict = {
@@ -90,7 +92,11 @@ class DB:
             request_method = None
 
         dataframe = df(url, request_method, df_back, df_product)
-        return dataframe
+        production_delay_mean = dataframe.get_production_delay_mean()
+
+        replay_delay_mean = dataframe.get_replay_delay_mean()
+
+        return dataframe,production_delay_mean, replay_delay_mean
 
     def get_function_description(self, url):
         """
@@ -135,18 +141,46 @@ class DB:
 
     def built_all_dict(self):
         all_df_list = []
+        path_delay_dict = {}
         for url in self.get_all_path():
-            df = self.built_df(url)
+            df, production_delay_mean, replay_delay_mean= self.built_df(url)
             all_df_list.append(self.built_single_dict(df))
-        return all_df_list
+            path_delay_dict[url] = {
+                "production_delay_mean": production_delay_mean,
+                
+                "replay_delay_mean": replay_delay_mean,
+                
+            }
+        return all_df_list,path_delay_dict
+
+    def add_delay_to_df(self):
+        _, path_delay_dict = self.built_all_dict()
+
+        # 遍历 path，给 self.df_product 和 self.df_back 添加平均值
+        self.df_product['average_delay'] = self.df_product['Path'].map(
+            lambda path: path_delay_dict.get(path, {}).get("production_delay_mean", None)
+        )
+
+
+        self.df_back['average_delay'] = self.df_back['Path'].map(
+            lambda path: path_delay_dict.get(path, {}).get("replay_delay_mean", None)
+        )
+
+        
+
+
 
     def save_to_csv(self, file_name):
-        all_dicts = self.built_all_dict()
+        self.add_delay_to_df()
+        self.df_product.to_csv(self.csv_production, encoding='utf-8-sig', index=False)
+        self.df_back.to_csv(self.csv_back, encoding='utf-8-sig', index=False)
+
+        all_dicts, _ = self.built_all_dict()
         df_result = pd.DataFrame(all_dicts)
         df_result.to_csv(file_name, encoding='utf-8-sig', index=False)  # 使用'utf-8-sig'编码保证中文不乱码
 
     def plot_mean_difference_ratio(self, file_name):
-        all_dicts = self.built_all_dict()
+        all_dicts, _ = self.built_all_dict()
         df_result = pd.DataFrame(all_dicts)
 
         # 将'mean_difference_ratio'转为浮点数
