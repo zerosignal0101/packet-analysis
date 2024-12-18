@@ -415,6 +415,13 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
 
     return pcap_index, res
 
+def save_response_to_file(response, file_path="response.json"):
+    try:
+        with open(file_path, "w", encoding="utf-8") as file:
+            json.dump(response, file, ensure_ascii=False, indent=4)
+        print(f"Response successfully saved to {file_path}")
+    except Exception as e:
+        print(f"Failed to save response: {e}")
 
 @celery.task(name='server.final_task')
 def final_task(results, data, task_id, ip_address):
@@ -444,13 +451,16 @@ def final_task(results, data, task_id, ip_address):
             ]
         }
     }
-
+   
     logger.info(f"Results: {results}")
 
     for result in results:
         if result is not None:
             index, res = result
             response['individual_analysis_info'][index] = res
+
+
+    save_response_to_file(response, f'./results/{task_id}/response.json')
 
     # Post the response to the callback URL
     callback_url = os.getenv("CALLBACK_URL", f'http://{ip_address}:18088/api/replay-core/aglAnalysisResult')
