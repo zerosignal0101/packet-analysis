@@ -179,8 +179,14 @@ def calc_correlation(json_file_path, request_csv_path, output_csv_path, output_k
         if correlations:
             all_correlations.append(correlations)
 
-    correlation_df = pd.DataFrame(all_correlations).sort_values(by='相关系数', ascending=False)
-    correlation_df.to_csv(output_csv_path, index=False, encoding='utf-8-sig')
-    logger.info("结果已保存到CSV文件")
-
-    return correlation_df
+    if all_correlations:  # 检查是否有有效的相关性数据
+        correlation_df = pd.DataFrame(all_correlations).sort_values(by='相关系数', ascending=False)
+        correlation_df.to_csv(output_csv_path, index=False, encoding='utf-8-sig')
+        logger.info("结果已保存到CSV文件")
+    else:
+        logger.warning("没有计算出有效的相关性数据，输出文件将为空")
+        # 创建一个空的 DataFrame，并添加相关列，写入文件
+        empty_df = pd.DataFrame(columns=['监控类型', 'KPI名称', '相关系数'])
+        empty_df.to_csv(output_csv_path, index=False, encoding='utf-8-sig')
+    
+    return correlation_df if 'correlation_df' in locals() else pd.DataFrame(columns=['监控类型', 'KPI名称', '相关系数'])

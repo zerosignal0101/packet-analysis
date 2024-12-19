@@ -286,13 +286,21 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
             "env": "production",
             "hostip": "production_ip",
             "class_method": "api_get",
-            "correlation_data": []
+            "correlation_data": [{
+                "index_id": "生产环境采集的性能数据json文件与pcap包时间不匹配，无法计算相关系数",
+                "value": 9999
+            }
+            ]
         },
         {
             "env": "replay",
             "hostip": "replay_ip",
-            "class_method": "get_post",
-            "correlation_data": []
+            "class_method": "api_post",
+            "correlation_data": [{
+                "index_id": "回放环境采集的性能数据json文件与pcap包时间不匹配，无法计算相关系数",
+                "value": 9999
+            }
+            ]
         }
     ]
     data_performance_bottleneck_analysis = {
@@ -330,75 +338,129 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
                                                  replay_correlation_path, replay_kpi_csv_path)
 
         # 将 corr_df 中的 KPI名称 和 相关系数 对应到 index_id 和 value
-        for index, row in production_correlation_df.iterrows():
-            if pd.notna(row['相关系数']):  # 只处理非 NaN 的相关系数
-                correlation_data = {
-                    "index_id": row['KPI名称'],
-                    "value": row['相关系数']
-                }
-                # 将数据添加到 production 和 replay 的 correlation_data 中
-                data_correlation[0]['correlation_data'].append(correlation_data)
+        if not production_correlation_df.empty:
+            if '相关系数' in production_correlation_df.columns and 'KPI名称' in production_correlation_df.columns:
+                for index, row in production_correlation_df.iterrows():
+                    if pd.notna(row['相关系数']):  # 只处理非 NaN 的相关系数
+                        correlation_data = {
+                            "index_id": row['KPI名称'],
+                            "value": row['相关系数']
+                        }
+                        # 检查是否需要清除默认值
+                        if len(data_correlation[0]['correlation_data']) == 1 and data_correlation[0]['correlation_data'][0]['value'] == 9999:
+                        # 如果列表中只有默认值，清空它
+                            data_correlation[0]['correlation_data'].clear()
+
+                        # 将数据添加到 production 和 replay 的 correlation_data 中
+                        data_correlation[0]['correlation_data'].append(correlation_data)
+            else:
+                print("列 '相关系数' 或 'KPI名称' 不存在于 生产 DataFrame 中")
         # 将 corr_df 中的 KPI名称 和 相关系数 对应到 index_id 和 value
-        for index, row in replay_correlation_df.iterrows():
-            if pd.notna(row['相关系数']):  # 只处理非 NaN 的相关系数
-                correlation_data = {
-                    "index_id": row['KPI名称'],
-                    "value": row['相关系数']
-                }
-                # 将数据添加到 production 和 replay 的 correlation_data 中
-                data_correlation[1]['correlation_data'].append(correlation_data)
+        if not replay_correlation_df.empty:
+            if '相关系数' in replay_correlation_df.columns and 'KPI名称' in replay_correlation_df.columns:
+                for index, row in replay_correlation_df.iterrows():
+                    if pd.notna(row['相关系数']):  # 只处理非 NaN 的相关系数
+                        correlation_data = {
+                            "index_id": row['KPI名称'],
+                            "value": row['相关系数']
+                        }
+
+                        # 检查是否需要清除默认值
+                        if len(data_correlation[1]['correlation_data']) == 1 and data_correlation[1]['correlation_data'][0]['value'] == 9999:
+                        # 如果列表中只有默认值，清空它
+                            data_correlation[1]['correlation_data'].clear()
+                        # 将数据添加到 production 和 replay 的 correlation_data 中
+                        data_correlation[1]['correlation_data'].append(correlation_data)
+            else:
+                print("列 '相关系数' 或 'KPI名称' 不存在于 回放 DataFrame 中")
 
         # 随机森林计算
-        production_mse_df, production_importance_df = calc_forest_model(production_kpi_csv_path,
-                                                                        correlation_analysis_path, 'production')
-        replay_mse_df, replay_importance_df = calc_forest_model(replay_kpi_csv_path,
-                                                                correlation_analysis_path, 'replay')
+        try:
+            production_mse_df, production_importance_df = calc_forest_model(production_kpi_csv_path,
+                                                                            correlation_analysis_path, 'production')
+            replay_mse_df, replay_importance_df = calc_forest_model(replay_kpi_csv_path,
+                                                                    correlation_analysis_path, 'replay')
+        except Exception as e:
+            logger.info(f"计算随机森林模型时报错，报错如下：{e}")
+            production_mse_df = None
+            production_importance_df = pd.DataFrame()
+            replay_mse_df = None
+            replay_importance_df = pd.DataFrame()
+
+        # 检查 replay_importance_df 是否为空
+        if not replay_importance_df.empty:
+            # 如果不为空，构建 cause 和 criteria 字符串
+            replay_cause = ", ".join([row['KPI'] for index, row in replay_importance_df.iterrows()])
+            replay_criteria = ", ".join([str(row['Importance']) for index, row in replay_importance_df.iterrows()])
+            # 提取最重要的两个 KPI
+            kpi_index_0 = replay_importance_df.iloc[0]['KPI'] if replay_importance_df.shape[0] > 0 else ''
+            kpi_index_1 = replay_importance_df.iloc[1]['KPI'] if replay_importance_df.shape[0] > 1 else ''
+            replay_solution = f"{kpi_index_0}和{kpi_index_1}指标对服务器处理时延影响力较大，建议排查该方面的原因进行优化。" if kpi_index_0 and kpi_index_1 else "回放环境采集的性能数据json文件指标数目太少,不能建立随机森林模型"
+        else:
+            replay_cause = "回放环境采集的性能数据json文件与pcap包时间段不匹配"
+            replay_criteria = "无法建立随机森林模型，计算重要性"
+            replay_solution = "请检测输入的回放log文件与回放pcap包是否一致"
+
+        if not production_importance_df.empty:
+            # 如果不为空，构建 cause 和 criteria 字符串
+            production_cause = ", ".join([row['KPI'] for index, row in production_importance_df.iterrows()])
+            production_criteria = ", ".join([str(row['Importance']) for index, row in production_importance_df.iterrows()])
+            # 提取最重要的两个 KPI
+            kpi_index_0 = production_importance_df.iloc[0]['KPI'] if production_importance_df.shape[0] > 0 else ''
+            kpi_index_1 = production_importance_df.iloc[1]['KPI'] if production_importance_df.shape[0] > 1 else ''
+            production_solution = f"{kpi_index_0}和{kpi_index_1}指标对服务器处理时延影响力较大，建议排查该方面的原因进行优化。" if kpi_index_0 and kpi_index_1 else "生产环境采集的性能数据json文件指标数目太少,不能建立随机森林模型"
+        else:
+            production_cause = "生产环境采集的性能数据json文件与pcap包时间段不匹配"
+            production_criteria = "无法建立随机森林模型，计算重要性"
+            production_solution = "请检测输入的生产log文件与生产pcap包是否一致"
+
+
 
         data_performance_bottleneck_analysis = {
             "bottlenecks": [
                 {
                     "env": "replay",
                     "hostip": replay_ip,
-                    "class_name": "database",
-                    "cause": [
-                        row['KPI'] for index, row in replay_importance_df.iterrows()
-                    ],
-                    "criteria": [
-                        row['Importance'] for index, row in replay_importance_df.iterrows()
-                    ],
-                    "solution": "优化数据库查询，增加索引"
+                    "class_name": "随机森林模型对回放环境KPI性能数据做重要性排序(从大到小)",
+                    "cause": replay_cause,
+                    "criteria": replay_criteria,
+                    "solution": replay_solution
                 },
                 {
                     "env": "production",
                     "hostip": production_ip,
-                    "class_name": "network",
-                    "cause": [
-                        row['KPI'] for index, row in production_importance_df.iterrows()
-                    ],
-                    "criteria": [
-                        row['Importance'] for index, row in production_importance_df.iterrows()
-                    ],
-                    "solution": "增加网络带宽或优化传输协议"
+                    "class_name": "随机森林模型对生产环境KPI性能数据做重要性排序(从大到小)",
+                    "cause": production_cause, 
+                    "criteria": production_criteria, 
+                    "solution": production_solution
                 }
             ]
         }
-    except KeyError:
+    except KeyError as e:
+        # print(f"发生 KeyError: {e}")
+        logger.info(f"发生 KeyError: {e}")
         pass
     res['anomaly_detection']['correlation'] = data_correlation
     res['performance_bottleneck_analysis'] = data_performance_bottleneck_analysis
     
     #分析瓶颈1 状态码
     bottleneck_analysis_response_code = alignment_analysis.analyze_status_code(alignment_csv_file_path, output_prefix=f'{outputs_path}/test_status_code_analysis')
+    bottleneck_analysis_response_code["env"] = "replay"    #此处应该是生产加上回放，两环境的
+    bottleneck_analysis_response_code["hostip"] = replay_ip
     logger.info(f"bottleneck_analysis_response_code: {bottleneck_analysis_response_code}")
     res['performance_bottleneck_analysis']['bottlenecks'].append(bottleneck_analysis_response_code)
     
     #分析瓶颈2 响应包是否完整
     bottleneck_analysis_empty_response = alignment_analysis.analyze_empty_responses(alignment_csv_file_path, output_prefix=f'{outputs_path}/empty_responses_analysis')
+    bottleneck_analysis_empty_response["env"] = "replay"    #此处应该是生产加上回放，两环境的
+    bottleneck_analysis_empty_response["hostip"] = replay_ip
     logger.info(f"bottleneck_analysis_empty_response: {bottleneck_analysis_empty_response}")
     res['performance_bottleneck_analysis']['bottlenecks'].append(bottleneck_analysis_empty_response)
     
     #分析瓶颈3 传输窗口瓶颈检测
     bottleneck_analysis_zero_window = alignment_analysis.analyze_zero_window_issues(alignment_csv_file_path, output_prefix=f'{outputs_path}/zero_window_analysis')
+    bottleneck_analysis_zero_window["env"] = "replay"    #此处应该是生产加上回放，两环境的
+    bottleneck_analysis_zero_window["hostip"] = replay_ip
     logger.info(f"bottleneck_analysis_zero_window: {bottleneck_analysis_zero_window}")
     res['performance_bottleneck_analysis']['bottlenecks'].append(bottleneck_analysis_zero_window)
 
@@ -408,8 +470,8 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         "env": "production",
         "hostip": production_ip,
         "class_method": "api_get",
-        "bottleneck_cause": "数据库查询慢",
-        "solution": "优化数据库查询，增加索引"
+        "bottleneck_cause": "(当前该部分为展示样例)",
+        "solution": "(当前该部分为展示样例)"
     }]
     res['anomaly_detection']['dict'] = anomaly_dict
 
@@ -452,7 +514,8 @@ def final_task(results, data, task_id, ip_address):
         }
     }
    
-    logger.info(f"Results: {results}")
+    # 控制台输出内容
+    # logger.info(f"Results: {results}")
 
     for result in results:
         if result is not None:

@@ -278,7 +278,7 @@ def analyze_empty_responses(file_path, output_prefix, result_dict=None, result_k
     res = {
         "class_name": "响应包为空",
         "cause": '没有响应数据',
-        "criteria": conclusions,
+        "criteria": "\n".join(conclusions),
         "solution": "1. 检查对应路径的服务端日志，确认是否因为程序错误、超时或配置导致返回空响应包。2. 对于生产环境，建议重点排查登录和权限问题，有没有和数据库建立连接3. 在回放环境中，验证是否有因数据回放设置不完整导致的空响应包情况。"
     }
     return res #hyf
@@ -352,7 +352,7 @@ def analyze_zero_window_issues(file_path, output_prefix, result_dict=None, resul
     res = {
         "class_name": "网络传输瓶颈",
         "cause": '传输窗口已满使得传输等待，造成时延偏大',
-        "criteria": conclusions,
+        "criteria": "\n".join(conclusions),
         "solution": "1. 检查对应路径的网络状况，确认是否因带宽、负载或硬件问题导致传输窗口已满。2. 对生产环境，建议优化服务器端响应机制，避免发送过多数据超过接收端处理能力。3. 在回放环境中，确认回放机制是否准确模拟生产环境流量，并排查可能的配置问题。"
     }
     return res #hyf
