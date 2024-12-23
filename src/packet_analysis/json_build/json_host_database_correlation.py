@@ -32,13 +32,14 @@ def convert_dctime(dctime):
 # 提取数据的函数
 def extract_data(json_data, kpi_mapping):
     extracted_data = []
+    logger.info("0000000")
     for monitor_type, machines in json_data.items():
         if monitor_type in ['server', 'databases']:
-            for machine_type, ips in machines.items():
+            for machine_type, ips in machines.items():                
                 if not isinstance(ips, dict):
                     logger.warning(f"Warning: {machine_type} 的值不是字典类型, 跳过处理")
                     continue
-                for ip_address, metrics in ips.items():
+                for ip_address, metrics in ips.items():                    
                     if not isinstance(metrics, dict):
                         logger.warning(f"Warning: IP地址 {ip_address} 的 metrics 不是字典, 跳过处理")
                         continue
@@ -155,29 +156,37 @@ def calc_correlation(json_file_path, request_csv_path, output_csv_path, output_k
     with open(json_file_path, 'r', encoding='utf-8') as f:
         json_data = json.load(f)
     extracted_info = extract_data(json_data, kpi_mapping)
+    logger.info("11111111111111111111")
+    logger.info(extracted_info)
+    
     extracted_df = pd.DataFrame(extracted_info)
+    # extracted_df = extracted_df.dropna(subset=['KPI_NO', 'IP地址']) #hyf 在分组之前，过滤掉不包含目标字段的数据
+
 
     request_data = pd.read_csv(request_csv_path, encoding='utf-8')
     request_data['Sniff_time'] = pd.to_datetime(request_data['Sniff_time'])
 
     all_correlations = []
-    for (monitor_type, kpi_no, host_ip), kpi_group in extracted_df.groupby(['监控类型', 'KPI_NO', 'IP地址']):
-        kpi_name = kpi_mapping.get(kpi_no, '未知指标')
-        kpi_group['DCTIME'] = pd.to_datetime(kpi_group['DCTIME'])
-        kpi_group = kpi_group.sort_values(by='DCTIME')
+    try:
+        for (monitor_type, kpi_no, host_ip), kpi_group in extracted_df.groupby(['监控类型', 'KPI_NO', 'IP地址']):
+            kpi_name = kpi_mapping.get(kpi_no, '未知指标')
+            kpi_group['DCTIME'] = pd.to_datetime(kpi_group['DCTIME'])
+            kpi_group = kpi_group.sort_values(by='DCTIME')
 
-        # if monitor_type == 'databases':
-        #     # Standard correlation calculation for databases 数据库的性能数据，两个生产节点一起算
-        #     correlations = compute_correlation(kpi_group.to_dict('records'), request_data, kpi_name,monitor_type=monitor_type)
-        # elif monitor_type == 'server':
-        #     # Pass IP address and monitor_type to compute_correlation for server 主机的性能数据，两个生产节点分开算
-        #     correlations = compute_correlation(kpi_group.to_dict('records'), request_data, kpi_name, ip_address=host_ip,
-        #                                        monitor_type=monitor_type)
-        correlations = compute_correlation(kpi_group.to_dict('records'), request_data, kpi_name, output_kpi_csv_path,
-                                           time_threshold, ip_address=host_ip, monitor_type=monitor_type)
-        # 将 kpi_group 数据框转换为字典 列表 格式，每一行数据变为一个字典，字典的键是列名，值是对应的单元格内容。'records' 表示每一行是一个独立的字典。
-        if correlations:
-            all_correlations.append(correlations)
+            # if monitor_type == 'databases':
+            #     # Standard correlation calculation for databases 数据库的性能数据，两个生产节点一起算
+            #     correlations = compute_correlation(kpi_group.to_dict('records'), request_data, kpi_name,monitor_type=monitor_type)
+            # elif monitor_type == 'server':
+            #     # Pass IP address and monitor_type to compute_correlation for server 主机的性能数据，两个生产节点分开算
+            #     correlations = compute_correlation(kpi_group.to_dict('records'), request_data, kpi_name, ip_address=host_ip,
+            #                                        monitor_type=monitor_type)
+            correlations = compute_correlation(kpi_group.to_dict('records'), request_data, kpi_name, output_kpi_csv_path,
+                                            time_threshold, ip_address=host_ip, monitor_type=monitor_type)
+            # 将 kpi_group 数据框转换为字典 列表 格式，每一行数据变为一个字典，字典的键是列名，值是对应的单元格内容。'records' 表示每一行是一个独立的字典。
+            if correlations:
+                all_correlations.append(correlations)
+    except Exception as e:
+        logger.info(f'计算相关系数分组时候发生错误：{e}')
 
     if all_correlations:  # 检查是否有有效的相关性数据
         correlation_df = pd.DataFrame(all_correlations).sort_values(by='相关系数', ascending=False)

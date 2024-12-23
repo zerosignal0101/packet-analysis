@@ -14,6 +14,7 @@ from contextlib import contextmanager
 import glob
 from multiprocessing import Process
 import subprocess
+import traceback
 
 from src.packet_analysis.json_build.json_host_database_correlation import calc_correlation
 from src.packet_analysis.json_build.random_forest_model import calc_forest_model
@@ -88,7 +89,8 @@ def extract_data_coordinator(pcap_file_path, csv_file_path, anomalies_csv_file_p
     output_dir = f'results/{task_id}/split_pcap'  # 分割后的文件存储目录
 
     if not os.path.exists(output_dir):
-        os.mkdir(output_dir)
+        # os.mkdir(output_dir)  
+        os.makedirs(output_dir, exist_ok=True) #hyf
 
     # check if the [0] is type of list
     if isinstance(pcap_file_path[0], list):
@@ -308,18 +310,18 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
             {
                 "env": "replay",
                 "hostip": replay_ip,
-                "class_name": "database",
-                "cause": {},
-                "criteria": {},
-                "solution": "优化数据库查询，增加索引"
+                "class_name": "error warning",
+                "cause": "回放环境随机森林模型建立失败，为确保顺利返回，当前为预设值，具体原因请排查",
+                "criteria": "可能是日志文件和数据包文件时间不匹配",
+                "solution": "具体原因可以结合输出日志分析"
             },
             {
                 "env": "production",
                 "hostip": production_ip,
-                "class_name": "network",
-                "cause": {},
-                "criteria": {},
-                "solution": "增加网络带宽或优化传输协议"
+                "class_name": "error warning",
+                "cause": "生产环境随机森林模型建立失败，为确保顺利返回，当前为预设值，具体原因请排查",
+                "criteria": "可能是日志文件和数据包文件时间不匹配",
+                "solution": "具体原因可以结合输出日志分析"
             }
         ]
     }
@@ -331,11 +333,13 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         production_kpi_csv_path = os.path.join(correlation_analysis_path, f'production_kpi.csv')
         production_correlation_df = calc_correlation(production_json_path, production_csv_file_path,
                                                      production_correlation_path, production_kpi_csv_path)
+        logger.info("生产环境相关系数计算完毕")
 
         replay_correlation_path = os.path.join(correlation_analysis_path, f'replay_correlation.csv')
         replay_kpi_csv_path = os.path.join(correlation_analysis_path, f'replay_kpi.csv')
         replay_correlation_df = calc_correlation(replay_json_path, replay_csv_file_path,
                                                  replay_correlation_path, replay_kpi_csv_path)
+        logger.info("回放环境相关系数计算完毕")
 
         # 将 corr_df 中的 KPI名称 和 相关系数 对应到 index_id 和 value
         if not production_correlation_df.empty:
@@ -378,12 +382,19 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         try:
             production_mse_df, production_importance_df = calc_forest_model(production_kpi_csv_path,
                                                                             correlation_analysis_path, 'production')
-            replay_mse_df, replay_importance_df = calc_forest_model(replay_kpi_csv_path,
-                                                                    correlation_analysis_path, 'replay')
+            logger.info(f"生产计算随机森林模型ok")
         except Exception as e:
-            logger.info(f"计算随机森林模型时报错，报错如下：{e}")
+            logger.info(f"生产环境计算随机森林模型时报错，报错如下：{e}")
             production_mse_df = None
             production_importance_df = pd.DataFrame()
+
+        
+        try:
+            replay_mse_df, replay_importance_df = calc_forest_model(replay_kpi_csv_path,
+                                                                    correlation_analysis_path, 'replay')
+            logger.info(f"回放计算随机森林模型ok")
+        except Exception as e:
+            logger.info(f"回放计算随机森林模型时报错，报错如下：{e}")
             replay_mse_df = None
             replay_importance_df = pd.DataFrame()
 
@@ -436,9 +447,9 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
                 }
             ]
         }
-    except KeyError as e:
+    except Exception as e:
         # print(f"发生 KeyError: {e}")
-        logger.info(f"发生 KeyError: {e}")
+        logger.info(f"发生 错误: {e}")
         pass
     res['anomaly_detection']['correlation'] = data_correlation
     res['performance_bottleneck_analysis'] = data_performance_bottleneck_analysis
