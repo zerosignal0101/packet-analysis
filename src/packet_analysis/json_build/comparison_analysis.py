@@ -107,18 +107,57 @@ class DB:
         else:
             return {"function_description": "未查询到功能介绍"}
 
+    # def built_single_dict(self, df: df):
+    #     df_dict = {}
+    #     production_delay_mean = "{:.6f}".format(df.get_production_delay_mean())
+    #     replay_delay_mean = "{:.6f}".format(df.get_replay_delay_mean())
+    #     replay_delay_median = "{:.6f}".format(df.get_replay_delay_median())
+    #     production_delay_median = "{:.6f}".format(df.get_production_delay_median())
+    #     production_delay_max = "{:.6f}".format(df.get_production_delay_max())
+    #     replay_delay_max = "{:.6f}".format(df.get_replay_delay_max())
+    #     production_delay_min = "{:.6f}".format(df.get_production_delay_min())
+    #     replay_delay_min = "{:.6f}".format(df.get_replay_delay_min())
+    #     request_count = df.get_request_count()
+    #     difference_ratio = "{:.6f}".format(df.get_difference_ratio())
+
+    #     # Get additional information from the function description file
+    #     description_info = self.get_function_description(df.url)
+
+    #     df_dict['url'] = df.url
+    #     df_dict['request_method'] = df.request_method
+    #     df_dict['production_delay_mean'] = production_delay_mean
+    #     df_dict['replay_delay_mean'] = replay_delay_mean
+    #     df_dict['production_delay_median'] = production_delay_median
+    #     df_dict['replay_delay_median'] = replay_delay_median
+    #     df_dict['production_delay_min'] = production_delay_min
+    #     df_dict['replay_delay_min'] = replay_delay_min
+    #     df_dict['production_delay_max'] = production_delay_max
+    #     df_dict['replay_delay_max'] = replay_delay_max
+    #     df_dict['mean_difference_ratio'] = difference_ratio
+    #     df_dict['request_count'] = request_count
+    #     df_dict.update(description_info)
+
+    #     return df_dict
+    
     def built_single_dict(self, df: df):
+        def safe_format(value):
+            # 如果值是 NaN 或 None，则返回 0 或其他默认值
+            if pd.isna(value):
+                return "999999.999999"  # 或者根据需求返回 None
+            return "{:.6f}".format(value)
+
         df_dict = {}
-        production_delay_mean = "{:.6f}".format(df.get_production_delay_mean())
-        replay_delay_mean = "{:.6f}".format(df.get_replay_delay_mean())
-        replay_delay_median = "{:.6f}".format(df.get_replay_delay_median())
-        production_delay_median = "{:.6f}".format(df.get_production_delay_median())
-        production_delay_max = "{:.6f}".format(df.get_production_delay_max())
-        replay_delay_max = "{:.6f}".format(df.get_replay_delay_max())
-        production_delay_min = "{:.6f}".format(df.get_production_delay_min())
-        replay_delay_min = "{:.6f}".format(df.get_replay_delay_min())
+        production_delay_mean = safe_format(df.get_production_delay_mean())
+        replay_delay_mean = safe_format(df.get_replay_delay_mean())
+        replay_delay_median = safe_format(df.get_replay_delay_median())
+        production_delay_median = safe_format(df.get_production_delay_median())
+        production_delay_max = safe_format(df.get_production_delay_max())
+        replay_delay_max = safe_format(df.get_replay_delay_max())
+        production_delay_min = safe_format(df.get_production_delay_min())
+        replay_delay_min = safe_format(df.get_replay_delay_min())
+        difference_ratio = safe_format(df.get_difference_ratio())
+
         request_count = df.get_request_count()
-        difference_ratio = "{:.6f}".format(df.get_difference_ratio())
 
         # Get additional information from the function description file
         description_info = self.get_function_description(df.url)
@@ -138,6 +177,7 @@ class DB:
         df_dict.update(description_info)
 
         return df_dict
+
 
     def built_all_dict(self):
         all_df_list = []
