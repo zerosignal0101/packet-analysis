@@ -56,6 +56,8 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
         'Production_Is_zero_window': [],  #hyf
         'Production_Is_tcp_reset': [],  #hyf
         'Production_Response_Code': [],
+        'Production_Src_Ip': [], #hyf
+        'Production_Dst_Ip': [], #hyf
 
         'Back_Sniff_time': [],
         'Back_Relative_time': [],  #hyf
@@ -68,6 +70,9 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
         'Back_Is_zero_window': [],  #hyf
         'Back_Is_tcp_reset': [],  #hyf
         'Back_Response_Code': [],
+        'Back_Src_Ip': [], #hyf
+        'Back_Dst_Ip': [], #hyf
+
 
         'Request_type':[],
         'Time_since_request_ratio': [],
@@ -124,6 +129,10 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
             production_df.iloc[index + 1]['Is_tcp_reset'])  #hyf
         aligned_data['Production_Response_Code'].append(production_df.iloc[index + 1]['Response_code'])
         aligned_data['Request_type'].append(classify_path(path2)) #添加分类列
+        aligned_data['Production_Src_Ip'].append(production_df.iloc[index + 1]['Ip_src'])
+        aligned_data['Production_Dst_Ip'].append(production_df.iloc[index + 1]['Ip_dst'])
+
+
 
        #随着包数量的增减，回放环境中未配对的请求累计会越来越多，需要调整读取的数量
        #方法一 if判断条件 由包的数量决定读取的数量
@@ -201,6 +210,8 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
                 aligned_data['Back_Is_zero_window'].append(best_match['Is_zero_window']) #hyf
                 aligned_data['Back_Is_tcp_reset'].append(best_match['Is_tcp_reset']) #hyf
                 aligned_data['Back_Response_Code'].append(best_match['Response_code'])
+                aligned_data['Back_Src_Ip'].append(best_match['Ip_src']) #hyf
+                aligned_data['Back_Dst_Ip'].append(best_match['Ip_dst'])
 
                 aligned_data['Time_since_request_ratio'].append(ratio)
                 aligned_data['state'].append("success")
@@ -223,6 +234,8 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
                 aligned_data['Back_Is_zero_window'].append(no_best_match['Is_zero_window']) #hyf
                 aligned_data['Back_Is_tcp_reset'].append(no_best_match['Is_tcp_reset']) #hyf
                 aligned_data['Back_Response_Code'].append(no_best_match['Response_code'])
+                aligned_data['Back_Src_Ip'].append(no_best_match['Ip_src']) #hyf
+                aligned_data['Back_Dst_Ip'].append(no_best_match['Ip_dst'])
 
                 aligned_data['Time_since_request_ratio'].append(ratio)
                 aligned_data['state'].append("fail1 no best match but has match")
@@ -241,6 +254,8 @@ def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_fi
             aligned_data['Back_Is_zero_window'].append('') #hyf
             aligned_data['Back_Is_tcp_reset'].append('') #hyf
             aligned_data['Back_Response_Code'].append('')
+            aligned_data['Back_Src_Ip'].append('') #hyf
+            aligned_data['Back_Dst_Ip'].append('')
 
             aligned_data['Time_since_request_ratio'].append('')
             aligned_data['state'].append("fail2 no match")

@@ -72,6 +72,11 @@ def extract_data(json_data, kpi_mapping):
             })
     return extracted_data
 
+def safe_format(value):
+            # 如果值是 NaN 或 None，则返回 0 或其他默认值
+            if pd.isna(value):
+                return "0.000000"  # 或者根据需求返回 None
+            return "{:.6f}".format(value)
 
 # 计算相关系数的函数
 def compute_correlation(kpi_data, request_data, kpi_name, output_kpi_csv_path, time_threshold=10, ip_address=None,
@@ -87,7 +92,7 @@ def compute_correlation(kpi_data, request_data, kpi_name, output_kpi_csv_path, t
             filtered_requests = request_data[
                 (request_data['Sniff_time'] >= start_time) &
                 (request_data['Sniff_time'] <= end_time) &
-                (request_data['Ip_dst'] == ip_address)
+                (request_data['Ip_dst'] == ip_address)    #hyf 此处用的的目的IP dstIP 对应服务器
                 ]
             if filtered_requests.empty:
                 filtered_requests = request_data[
@@ -140,7 +145,8 @@ def compute_correlation(kpi_data, request_data, kpi_name, output_kpi_csv_path, t
         return {
             '监控类型': monitor_type,
             'KPI名称': kpi_name,
-            '相关系数': correlation
+            '相关系数': safe_format(correlation)
+            # '相关系数': "{:.6f}".format(correlation)  #hyf
         }
     else:
         logger.warning("数据不足以进行相关性计算")

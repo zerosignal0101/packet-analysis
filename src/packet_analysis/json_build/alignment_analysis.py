@@ -109,6 +109,33 @@ status_code_descriptions = {
     # 添加其他状态码
 }
 
+status_code_solutions = {
+    206: "如果服务器配置不正确，可能导致只返回部分内容。检查服务器配置，确保响应头`Accept-Ranges`设置正确，并且客户端请求包含`Range`请求头。",
+    302: "检查重定向链是否过长或循环重定向。优化URL重写规则，确保重定向目标URL是正确的，并且客户端能够正确处理重定向。",
+    304: "检查服务器配置，确保`Last-Modified`或`ETag`响应头正确设置。对于回放环境，检查是否正确配置了gzip压缩和缓存策略。",
+    400: "审查API文档，确保客户端请求与API要求一致。如果问题持续存在，考虑增加输入验证和错误处理逻辑。",
+    403: "检查权限配置，确保正确的用户和角色权限设置。对于敏感资源，增加审计日志以追踪权限问题。",
+    404: "审查网站地图和路由配置，确保所有资源都正确映射。对于动态内容，确保数据库和后端服务能够正确响应请求。",
+    405: "检查路由和控制器配置，确保正确的HTTP方法被允许。对于RESTful API，确保方法正确映射到资源。",
+    428: "检查客户端请求头，确保包含正确的`If-Match`或`If-None-Match`。服务器端，确保正确处理条件请求。",
+    429: "优化限流策略，确保`Retry-After`响应头提供明确的重试时间。对于客户端，实现重试机制和速率限制。",
+    431: "减少请求头大小，避免发送不必要的大请求头。服务器端，配置请求头大小限制。",
+    500: "检查应用和系统日志，定位具体错误。优化错误处理和异常捕获，确保问题能够被正确记录和处理。",
+    502: "检查后端服务健康检查机制，确保网关能够正确处理后端服务失败。优化超时设置和故障转移策略。",
+    503: "优化服务器启动脚本，确保依赖服务按顺序启动。对于高流量服务，考虑增加服务器预热和负载均衡。",
+}
+
+def classify_path(path):
+    if 'post' in path.lower() or path == '/portal_todo_moa/api/getDataByUserId':
+        return 'api_post'
+    elif 'get' in path.lower():
+        return 'api_get'
+    elif '/static/' in path or path.endswith(('.css', '.js', '.png', '.jpg', '.gif')):
+        return 'static_resource'
+    elif path.endswith(('.php', '.asp', '.jsp', '.html')):
+        return 'dynamic_resource'
+    else:
+        return 'other'
 
 
 def analyze_status_code(file_path, output_prefix):
@@ -135,16 +162,43 @@ def analyze_status_code(file_path, output_prefix):
     # 生成异常状态码的文字总结
     def summarize_abnormal(env_name, abnormal_data, response_code_column, sniff_time_column):
         summary = []
+        dics = {
+            "class_name":f"{env_name}异常状态码分析",
+            "details":[],
+
+        }
         for code, group in abnormal_data.groupby(response_code_column):
             description = status_code_descriptions.get(code, "未知状态码")
             request_counts = group['Path'].value_counts()
-            total_requests = len(abnormal_data)
-            
+            total_requests = len(abnormal_data)   
+
+            detail_entry = {
+                "bottleneck_type": str(code),
+                "cause": description,
+                "count": len(group),
+                "total_count": total_requests,
+                "ratio": round(len(group) / total_requests, 6) if total_requests > 0 else 999999.999999,
+                "solution":status_code_solutions.get(code, "未知解决方案"),
+                "request_paths": []
+            }
+                   
             summary.append(f"\n环境：{env_name}\n状态码 {code} ({description})：\n共有 {len(group)} 条异常请求，占总异常数的比例为 {len(group) / total_requests:.2%}。\n")
+            
             for path, count in request_counts.items():
                 path_total = len(data[data['Path'] == path])
-                proportion = count / path_total if path_total > 0 else 0
+                proportion = round(count / path_total, 6) if path_total > 0 else 99.999999
+
+                detail_entry["request_paths"].append({
+                    "request_url": path,
+                    "class_method": classify_path(path),  # 如果有具体方法信息，可以替换此值
+                    "path_abnormal_count": count,
+                    "path_request_total_count": path_total,
+                    "abnormal_ratio": proportion
+                })
+
                 summary.append(f"  请求路径：{path}，异常次数：{count}，占该请求总数的比例：{proportion:.2%}。\n")
+            
+            dics["details"].append(detail_entry)
 
         # 时间分布分析
         abnormal_data = abnormal_data.copy()
@@ -153,11 +207,17 @@ def analyze_status_code(file_path, output_prefix):
         time_distribution = abnormal_data.groupby('time_group').size()
         time_distribution.to_csv(f"{output_prefix}_{env_name}_time_distribution.csv")
 
-        return "".join(summary)
+        return "".join(summary), dics
 
     # 生成生产和回放环境的异常总结
-    prod_summary = summarize_abnormal("生产环境", prod_abnormal, 'Production_Response_Code', 'Production_Sniff_time')
-    back_summary = summarize_abnormal("回放环境", back_abnormal, 'Back_Response_Code', 'Back_Sniff_time')
+    prod_summary, pro_json = summarize_abnormal("生产环境", prod_abnormal, 'Production_Response_Code', 'Production_Sniff_time')
+    back_summary, back_json = summarize_abnormal("回放环境", back_abnormal, 'Back_Response_Code', 'Back_Sniff_time')
+    pro_json['env'] = 'production'
+    back_json['env'] = 'replay'
+    response_code=[]
+    response_code.append(pro_json)
+    response_code.append(back_json)
+
 
     # 两环境均异常请求统计
     both_summary_text = []
@@ -209,7 +269,8 @@ def analyze_status_code(file_path, output_prefix):
     print(f"文字总结已保存至 {output_prefix}_summary.txt，异常路径分析已保存至文件。")
     print(type(res))
     print(res)
-    return res #hyf
+    # return res #hyf
+    return response_code
 
 
 
@@ -230,15 +291,33 @@ def analyze_empty_responses(file_path, output_prefix, result_dict=None, result_k
     back_empty = data[data['Back_Response_Total_Length'] == 0]
 
     conclusions = []
+    empty_response = []
+
 
     for env, empty_data, sniff_time_column, response_column in [
         ("生产环境", prod_empty, 'Production_Sniff_time', 'Production_Response_Total_Length'),
         ("回放环境", back_empty, 'Back_Sniff_time', 'Back_Response_Total_Length')
     ]:
+
+        dics = {
+            "class_name": f"{env}异常状态码分析",
+            "details": [],
+        }
+
         # 总结总数
-        total_empty = len(empty_data)
-        total_requests = len(data)
+        total_empty = int(len(empty_data))
+        total_requests = int(len(data))
         conclusions.append(f"{env}中共有 {total_empty} 条请求响应包为空，占总请求数的 {total_empty / total_requests:.2%}。")
+        
+        detail_entry = {
+            "bottleneck_type": "服务器响应包异常，返回内容为空",
+            "cause": "服务器内部的错误或配置问题可能导致回包为空。例如，服务未启动或异常终止，路由配置错误，权限限制等‌",
+            "count": total_empty,
+            "total_count": total_requests,
+            "ratio": float(round(total_empty / total_requests, 6)) if total_requests > 0 else 999999.999999,
+            "solution":"1. 检查对应路径的服务端日志，确认是否因为程序错误、超时或配置导致返回空响应包。\n2. 对于生产环境，建议重点排查登录和权限问题，有没有和数据库建立连接\n3. 在回放环境中，验证是否有因数据回放设置不完整导致的空响应包情况。",
+            "request_paths": []
+        }
 
         # 按请求路径统计
         path_counts = empty_data['Path'].value_counts()
@@ -246,8 +325,18 @@ def analyze_empty_responses(file_path, output_prefix, result_dict=None, result_k
         detailed_summary = []
         for path, count in path_counts.items():
             total_count = total_path_counts.get(path, 0)
-            percentage = count / total_count if total_count > 0 else 0
+            percentage = round(count / total_count, 6) if total_count > 0 else 99.999999
             detailed_summary.append(f"请求路径 {path}: {count} 条，占该路径总请求数的 {percentage:.2%}。")
+            detail_entry["request_paths"].append({
+                "request_url": path,
+                "class_method": classify_path(path),  # 如果有具体方法信息，可以替换此值
+                "path_abnormal_count": int(count),
+                "path_request_total_count": int(total_count),
+                "abnormal_ratio": float(percentage)
+            })
+        dics["details"].append(detail_entry)
+
+        empty_response.append(dics)
 
         conclusions.append(f"{env}中响应包为空的请求分布情况如下：\n" + "\n".join(detailed_summary))
 
@@ -279,9 +368,10 @@ def analyze_empty_responses(file_path, output_prefix, result_dict=None, result_k
         "class_name": "响应包为空",
         "cause": '没有响应数据',
         "criteria": "\n".join(conclusions),
-        "solution": "1. 检查对应路径的服务端日志，确认是否因为程序错误、超时或配置导致返回空响应包。2. 对于生产环境，建议重点排查登录和权限问题，有没有和数据库建立连接3. 在回放环境中，验证是否有因数据回放设置不完整导致的空响应包情况。"
+        "solution": "1. 检查对应路径的服务端日志,确认是否因为程序错误、超时或配置导致返回空响应包。2. 对于生产环境,建议重点排查登录和权限问题,有没有和数据库建立连接3. 在回放环境中，验证是否有因数据回放设置不完整导致的空响应包情况。"
     }
-    return res #hyf
+    # return res #hyf
+    return empty_response
 
 
 
@@ -302,15 +392,29 @@ def analyze_zero_window_issues(file_path, output_prefix, result_dict=None, resul
     back_zero_window = data[data['Back_Is_zero_window'] == True]
 
     conclusions = []
+    transmission_window = []
 
     for env, zero_window_data, time_ratio_column in [
         ("生产环境", prod_zero_window, 'Time_since_request_ratio'),
         ("回放环境", back_zero_window, 'Time_since_request_ratio')
     ]:
         # 总结总数
-        total_zero_window = len(zero_window_data)
-        total_requests = len(data)
+        total_zero_window = int(len(zero_window_data))
+        total_requests = int(len(data))
         conclusions.append(f"{env}中共有 {total_zero_window} 次传输窗口已满问题，占总请求数的 {total_zero_window / total_requests:.2%}。")
+        dics = {
+            "class_name": f"{env}异常状态码分析",
+            "details": [],
+        }
+        detail_entry = {
+            "bottleneck_type": "网络传输异常,TCP传输窗口为0",
+            "cause": "TCP连接中接收方的接收缓冲区已满,无法接收更多数据,导致发送方停止发送数据的情况‌,会造成传输时延增大,服务器响应时间受到影响",
+            "count": total_zero_window,
+            "total_count": total_requests,
+            "ratio": float(round(total_zero_window / total_requests, 6)) if total_requests > 0 else 99.999999,
+            "solution":"1. 检查对应路径的网络状况，确认是否因带宽、负载或硬件问题导致传输窗口已满。\n2. 对生产环境，建议优化服务器端响应机制，避免发送过多数据超过接收端处理能力。\n3. 在回放环境中，确认回放机制是否准确模拟生产环境流量，并排查可能的配置问题。",
+            "request_paths": []
+        }
 
         # 按请求路径统计
         path_counts = zero_window_data['Path'].value_counts()
@@ -318,8 +422,17 @@ def analyze_zero_window_issues(file_path, output_prefix, result_dict=None, resul
         detailed_summary = []
         for path, count in path_counts.items():
             total_count = total_path_counts.get(path, 0)
-            percentage = count / total_count if total_count > 0 else 0
+            percentage = round(count / total_count, 6) if total_count > 0 else 999999.999999
             detailed_summary.append(f"请求路径 {path}: {count} 次，占该路径总请求数的 {percentage:.2%}。")
+            detail_entry["request_paths"].append({
+                "request_url": path,
+                "class_method": classify_path(path),  # 如果有具体方法信息，可以替换此值
+                "path_abnormal_count": int(count),
+                "path_request_total_count": int(total_count),
+                "abnormal_ratio": float(percentage)
+            })
+        dics["details"].append(detail_entry)
+        transmission_window.append(dics)
 
         conclusions.append(f"{env}中传输窗口已满问题的请求分布情况如下：\n" + "\n".join(detailed_summary))
 
@@ -355,7 +468,8 @@ def analyze_zero_window_issues(file_path, output_prefix, result_dict=None, resul
         "criteria": "\n".join(conclusions),
         "solution": "1. 检查对应路径的网络状况，确认是否因带宽、负载或硬件问题导致传输窗口已满。2. 对生产环境，建议优化服务器端响应机制，避免发送过多数据超过接收端处理能力。3. 在回放环境中，确认回放机制是否准确模拟生产环境流量，并排查可能的配置问题。"
     }
-    return res #hyf
+    # return res #hyf
+    return transmission_window
 
 
 
