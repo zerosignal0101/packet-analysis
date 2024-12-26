@@ -38,7 +38,7 @@ class df:
         return self.data_production.shape[0]
 
     def get_difference_ratio(self):
-        return round(self.get_production_delay_mean() / self.get_replay_delay_mean(), 6)
+        return round(self.get_replay_delay_mean() / self.get_production_delay_mean(), 6)
 
 
 class DB:
