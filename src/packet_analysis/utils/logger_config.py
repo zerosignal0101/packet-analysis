@@ -1,6 +1,11 @@
 # logger_config.py
 import logging
 import logging.config
+import os
+
+# 确保日志目录存在
+log_dir = 'results/logs'
+os.makedirs(log_dir, exist_ok=True)
 
 # 配置日志记录
 logging.config.dictConfig({
@@ -14,8 +19,11 @@ logging.config.dictConfig({
     'handlers': {
         'file': {
             'level': 'DEBUG',
-            'class': 'logging.FileHandler',
-            'filename': 'app.log',
+            'class': 'logging.handlers.TimedRotatingFileHandler',
+            'filename': os.path.join(log_dir, 'app.log'),
+            'when': 'midnight',  # 每天午夜滚动日志
+            'interval': 1,  # 每天滚动一次
+            'backupCount': 7,  # 保留最近7天的日志
             'formatter': 'standard',
         },
         'console': {
