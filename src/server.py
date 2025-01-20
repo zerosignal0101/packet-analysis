@@ -82,13 +82,13 @@ def mark_task_complete(results, name):
 
 
 @celery.task(name='server.extract_data_coordinator')
-def extract_data_coordinator(pcap_file_path, csv_file_path, anomalies_csv_file_path,task_id):
+def extract_data_coordinator(pcap_file_path, csv_file_path, anomalies_csv_file_path, task_id):
     try:
         # 更新任务状态为 "正在处理"
         redis_client.hset(f"task_status:{task_id}", "status", "正在处理")
         redis_client.hset(f"task_status:{task_id}", "step", "extract_data_coordinator")
         redis_client.hset(f"task_status:{task_id}", "message", "正在对 pcap 文件信息提取处理")
-        
+
         # 原有的处理逻辑
         logger.info(f"pcap_file_path {pcap_file_path}")
 
@@ -97,7 +97,7 @@ def extract_data_coordinator(pcap_file_path, csv_file_path, anomalies_csv_file_p
 
         if not os.path.exists(output_dir):
             # os.mkdir(output_dir)  
-            os.makedirs(output_dir, exist_ok=True) #hyf
+            os.makedirs(output_dir, exist_ok=True)  # hyf
 
         # check if the [0] is type of list
         if isinstance(pcap_file_path[0], list):
@@ -144,7 +144,7 @@ def extract_data_coordinator(pcap_file_path, csv_file_path, anomalies_csv_file_p
 
         for pcap_file_path in split_files_list:
             extract_data_executor.apply_async((pcap_file_path, csv_file_path, csv_headers),
-                                            link=mark_task_complete.s(pcap_file_path))
+                                              link=mark_task_complete.s(pcap_file_path))
 
         for pcap_file_path in split_files_list:
             while True:
@@ -181,8 +181,6 @@ def extract_data_coordinator(pcap_file_path, csv_file_path, anomalies_csv_file_p
         redis_client.hset(f"task_status:{task_id}", "message", f" pcap 文件信息提取时出错: {str(e)}")
         logger.error(f"对 pcap 文件信息提取时出错: {str(e)}")
         raise
-
-
 
 
 @contextmanager
@@ -243,7 +241,7 @@ def extract_data_executor(pcap_file_path, csv_file_path, csv_headers):
 
 
 @celery.task(name='server.align_data')
-def align_data(results, production_csv_file_path, replay_csv_file_path, alignment_csv_file_path,task_id):
+def align_data(results, production_csv_file_path, replay_csv_file_path, alignment_csv_file_path, task_id):
     try:
         # 更新任务状态为 "正在处理"
         redis_client.hset(f"task_status:{task_id}", "status", "正在处理")
@@ -263,16 +261,19 @@ def align_data(results, production_csv_file_path, replay_csv_file_path, alignmen
         logger.error(f"数据对齐时出错: {str(e)}")
         raise
 
+
 def safe_format(value):
     # 如果值是 NaN 或 None，则返回 0 或其他默认值
     if pd.isna(value):
         return "999999.999999"  # 或者根据需求返回 None
     return "{:.6f}".format(value)
 
+
 @celery.task(name='server.cluster_analysis_data')
 def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, production_ip, replay_ip,
                           replay_csv_file_path,
-                          production_csv_file_path, task_id, production_json_path, replay_json_path,alignment_csv_file_path):
+                          production_csv_file_path, task_id, production_json_path, replay_json_path,
+                          alignment_csv_file_path):
     try:
         # 更新任务状态为 "正在处理"
         redis_client.hset(f"task_status:{task_id}", "status", "正在处理")
@@ -290,7 +291,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         logger.info(f"json started at {datetime.now()}")
         DataBase = DB(csv_back=replay_csv_file_path, csv_production=production_csv_file_path)
         # 添加返回值
-        data_list,path_delay_dict = DataBase.built_all_dict()
+        data_list, path_delay_dict = DataBase.built_all_dict()
 
         outputs_path = f'./results/{task_id}'
 
@@ -323,9 +324,9 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
 
         # Process anomaly CSV files to build JSON
         all_pro_anomaly_details = anomaly_detection.process_anomalies(pro_anomaly_csv_list, "production",
-                                                                    production_ip)
+                                                                      production_ip)
         all_replay_anomaly_details = anomaly_detection.process_anomalies(replay_anomaly_csv_list, "replay",
-                                                                        replay_ip)
+                                                                         replay_ip)
         combined_anomaly_details = all_pro_anomaly_details + all_replay_anomaly_details
         res['anomaly_detection']['details'] = combined_anomaly_details
 
@@ -337,17 +338,17 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         redis_client.hset(f"task_status:{task_id}", "status", "失败")
         redis_client.hset(f"task_status:{task_id}", "message", f"聚类分析时出错: {str(e)}")
         logger.error(f"聚类分析时出错: {str(e)}")
-        raise   
+        raise
 
-    # 先预设的'anomaly_detection'中的correlation, bottleneck部分
+        # 先预设的'anomaly_detection'中的correlation, bottleneck部分
     data_correlation = [
         {
             "env": "production",
             "hostip": production_ip,
             # "class_method": "api_get",  #hyf删掉这个字段，没用到
-            "description": "生产环境采集点的性能数据与服务器平均处理时延的相关系数",      #新增 关于介绍谁和谁的相关系数的描述字段
-            "conclusion": "生产环境中与平均处理时延相关性最强的指标是xxx",               #新增 通过计算相关系数，给出分析结论
-            "solution": "优化建议是xxx",                                              #新增给出优化建议的字段
+            "description": "生产环境采集点的性能数据与服务器平均处理时延的相关系数",  # 新增 关于介绍谁和谁的相关系数的描述字段
+            "conclusion": "生产环境中与平均处理时延相关性最强的指标是xxx",  # 新增 通过计算相关系数，给出分析结论
+            "solution": "优化建议是xxx",  # 新增给出优化建议的字段
             "correlation_data": [{
                 "index_id": "生产环境采集的性能数据json文件与pcap包时间不匹配，无法计算相关系数",
                 "value": 9999
@@ -358,9 +359,9 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
             "env": "replay",
             "hostip": replay_ip,
             # "class_method": "api_post",  #hyf删掉这个字段，没用到
-            "description": "回放环境采集点的性能数据与服务器平均处理时延的相关系数",      #新增 关于介绍谁和谁的相关系数的描述字段
-            "conclusion": "回放环境中与平均处理时延相关性最强的指标是xxx",               #新增 通过计算相关系数，给出分析结论
-            "solution": "优化建议是xxx",                                              #新增给出优化建议的字段
+            "description": "回放环境采集点的性能数据与服务器平均处理时延的相关系数",  # 新增 关于介绍谁和谁的相关系数的描述字段
+            "conclusion": "回放环境中与平均处理时延相关性最强的指标是xxx",  # 新增 通过计算相关系数，给出分析结论
+            "solution": "优化建议是xxx",  # 新增给出优化建议的字段
             "correlation_data": [{
                 "index_id": "回放环境采集的性能数据json文件与pcap包时间不匹配，无法计算相关系数",
                 "value": 9999
@@ -374,9 +375,9 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
             "env": "production",
             "hostip": production_ip,
             # "class_method": "api_get",  #hyf删掉这个字段，没用到
-            "description": "生产环境采集点的性能数据与服务器平均处理时延的相关系数",      #新增 关于介绍谁和谁的相关系数的描述字段
-            "conclusion": "生产环境中与平均处理时延相关性最强的指标是xxx",               #新增 通过计算相关系数，给出分析结论
-            "solution": "优化建议是xxx",                                              #新增给出优化建议的字段
+            "description": "生产环境采集点的性能数据与服务器平均处理时延的相关系数",  # 新增 关于介绍谁和谁的相关系数的描述字段
+            "conclusion": "生产环境中与平均处理时延相关性最强的指标是xxx",  # 新增 通过计算相关系数，给出分析结论
+            "solution": "优化建议是xxx",  # 新增给出优化建议的字段
             "importance_data": [{
                 "index_id": "生产环境采集的性能数据json文件与pcap包时间不匹配，无法计算相关系数",
                 "value": 9999
@@ -387,9 +388,9 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
             "env": "replay",
             "hostip": replay_ip,
             # "class_method": "api_post",  #hyf删掉这个字段，没用到
-            "description": "回放环境采集点的性能数据与服务器平均处理时延的相关系数",      #新增 关于介绍谁和谁的相关系数的描述字段
-            "conclusion": "回放环境中与平均处理时延相关性最强的指标是xxx",               #新增 通过计算相关系数，给出分析结论
-            "solution": "优化建议是xxx",                                              #新增给出优化建议的字段
+            "description": "回放环境采集点的性能数据与服务器平均处理时延的相关系数",  # 新增 关于介绍谁和谁的相关系数的描述字段
+            "conclusion": "回放环境中与平均处理时延相关性最强的指标是xxx",  # 新增 通过计算相关系数，给出分析结论
+            "solution": "优化建议是xxx",  # 新增给出优化建议的字段
             "importance_data": [{
                 "index_id": "回放环境采集的性能数据json文件与pcap包时间不匹配，无法计算相关系数",
                 "value": 9999
@@ -397,7 +398,6 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
             ]
         }
     ]
-
 
     data_performance_bottleneck_analysis = {
         "bottlenecks": [
@@ -423,7 +423,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         # 更新任务状态为 "正在处理"
         redis_client.hset(f"task_status:{task_id}", "status", "正在处理")
         redis_client.hset(f"task_status:{task_id}", "step", "cluster_analysis_data")
-        redis_client.hset(f"task_status:{task_id}", "message", "开始进行相关系数和随机森林模型分析")   
+        redis_client.hset(f"task_status:{task_id}", "message", "开始进行相关系数和随机森林模型分析")
 
         correlation_analysis_path = os.path.join(outputs_path, f'correlation_analysis_csv_{pcap_index}')
         if not os.path.exists(correlation_analysis_path):
@@ -450,12 +450,13 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
                             "value": row['相关系数']
                         }
                         # 检查是否需要清除默认值
-                        if len(data_correlation[0]['correlation_data']) == 1 and data_correlation[0]['correlation_data'][0]['value'] == 9999:
-                        # 如果列表中只有默认值，清空它
+                        if len(data_correlation[0]['correlation_data']) == 1 and \
+                                data_correlation[0]['correlation_data'][0]['value'] == 9999:
+                            # 如果列表中只有默认值，清空它
                             data_correlation[0]['correlation_data'].clear()
-                            data_correlation[0]['conclusion']=f"生产环境中与平均处理时延相关性最强的指标是{row['KPI名称']}"
+                            data_correlation[0][
+                                'conclusion'] = f"生产环境中与平均处理时延相关性最强的指标是{row['KPI名称']}"
                             # data_correlation[0]['solution']=f"生产环境中与平均处理时延相关性最强的指标是{row['KPI名称']}"
-
 
                         # 将数据添加到 production 和 replay 的 correlation_data 中
                         data_correlation[0]['correlation_data'].append(correlation_data)
@@ -472,10 +473,12 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
                         }
 
                         # 检查是否需要清除默认值
-                        if len(data_correlation[1]['correlation_data']) == 1 and data_correlation[1]['correlation_data'][0]['value'] == 9999:
-                        # 如果列表中只有默认值，清空它
+                        if len(data_correlation[1]['correlation_data']) == 1 and \
+                                data_correlation[1]['correlation_data'][0]['value'] == 9999:
+                            # 如果列表中只有默认值，清空它
                             data_correlation[1]['correlation_data'].clear()
-                            data_correlation[1]['conclusion']=f"回放环境中与平均处理时延相关性最强的指标是{row['KPI名称']}"
+                            data_correlation[1][
+                                'conclusion'] = f"回放环境中与平均处理时延相关性最强的指标是{row['KPI名称']}"
 
                         # 将数据添加到 production 和 replay 的 correlation_data 中
                         data_correlation[1]['correlation_data'].append(correlation_data)
@@ -492,7 +495,6 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
             production_mse_df = None
             production_importance_df = pd.DataFrame()
 
-        
         try:
             replay_mse_df, replay_importance_df = calc_forest_model(replay_kpi_csv_path,
                                                                     correlation_analysis_path, 'replay')
@@ -501,7 +503,6 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
             logger.info(f"回放计算随机森林模型时报错，报错如下：{e}")
             replay_mse_df = None
             replay_importance_df = pd.DataFrame()
-        
 
         if not production_importance_df.empty:
             if 'Importance' in production_importance_df.columns and 'KPI' in production_importance_df.columns:
@@ -512,10 +513,11 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
                             "value": safe_format(row['Importance'])
                         }
                         # 检查是否需要清除默认值
-                        if len(data_random_forest[0]['importance_data']) == 1 and data_random_forest[0]['importance_data'][0]['value'] == 9999:
-                        # 如果列表中只有默认值，清空它
+                        if len(data_random_forest[0]['importance_data']) == 1 and \
+                                data_random_forest[0]['importance_data'][0]['value'] == 9999:
+                            # 如果列表中只有默认值，清空它
                             data_random_forest[0]['importance_data'].clear()
-                            data_random_forest[0]['conclusion']=f"生产环境中重要性排序最强的指标是{row['KPI']}"
+                            data_random_forest[0]['conclusion'] = f"生产环境中重要性排序最强的指标是{row['KPI']}"
 
                         # 将数据添加到 production 和 replay 的 correlation_data 中
                         data_random_forest[0]['importance_data'].append(importance_data)
@@ -531,10 +533,11 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
                             "value": safe_format(row['Importance'])
                         }
                         # 检查是否需要清除默认值
-                        if len(data_random_forest[1]['importance_data']) == 1 and data_random_forest[1]['importance_data'][0]['value'] == 9999:
-                        # 如果列表中只有默认值，清空它
+                        if len(data_random_forest[1]['importance_data']) == 1 and \
+                                data_random_forest[1]['importance_data'][0]['value'] == 9999:
+                            # 如果列表中只有默认值，清空它
                             data_random_forest[1]['importance_data'].clear()
-                            data_random_forest[1]['conclusion']=f"回放环境中重要性排序最强的指标是{row['KPI']}"
+                            data_random_forest[1]['conclusion'] = f"回放环境中重要性排序最强的指标是{row['KPI']}"
 
                         # 将数据添加到 production 和 replay 的 correlation_data 中
                         data_random_forest[1]['importance_data'].append(importance_data)
@@ -544,7 +547,6 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         # 更新任务状态为 "完成"
         redis_client.hset(f"task_status:{task_id}", "status", "完成")
         redis_client.hset(f"task_status:{task_id}", "message", "相关系数和随机森林模型分析完成")
-
 
         # 检查 replay_importance_df 是否为空
         # if not replay_importance_df.empty:
@@ -587,8 +589,8 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
                     "env": "production",
                     "hostip": production_ip,
                     "class_name": "随机森林模型对生产环境KPI性能数据做重要性排序(从大到小)",
-                    "cause": "production_cause", 
-                    "criteria": "production_criteria", 
+                    "cause": "production_cause",
+                    "criteria": "production_criteria",
                     "solution": "production_solution"
                 }
             ]
@@ -603,62 +605,61 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         pass
     res['anomaly_detection']['correlation'] = data_correlation
     res['anomaly_detection']['random_forest'] = data_random_forest
-    res['performance_bottleneck_analysis'] = data_performance_bottleneck_analysis   #txt old
-    
-    #分析瓶颈1 状态码
-    bottleneck_analysis_response_code = alignment_analysis.analyze_status_code(alignment_csv_file_path, output_prefix=f'{outputs_path}/test_status_code_analysis')
-    #方式1 返回的是txt文本内容
+    res['performance_bottleneck_analysis'] = data_performance_bottleneck_analysis  # txt old
+
+    # 分析瓶颈1 状态码
+    bottleneck_analysis_response_code = alignment_analysis.analyze_status_code(alignment_csv_file_path,
+                                                                               output_prefix=f'{outputs_path}/test_status_code_analysis')
+    # 方式1 返回的是txt文本内容
     # bottleneck_analysis_response_code["env"] = "replay"    #此处应该是生产加上回放，两环境的
     # bottleneck_analysis_response_code["hostip"] = replay_ip
     # logger.info(f"bottleneck_analysis_response_code: {bottleneck_analysis_response_code}")
     # res['performance_bottleneck_analysis']['bottlenecks'].append(bottleneck_analysis_response_code)
 
-    #方式2 返回json格式的信息
-    bottleneck_analysis_response_code[0]["hostip"]=production_ip
-    bottleneck_analysis_response_code[1]["hostip"]=replay_ip
+    # 方式2 返回json格式的信息
+    bottleneck_analysis_response_code[0]["hostip"] = production_ip
+    bottleneck_analysis_response_code[1]["hostip"] = replay_ip
     res['performance_bottleneck_analysis']['response_code'] = bottleneck_analysis_response_code
 
-    
-    #分析瓶颈2 响应包是否完整
-    bottleneck_analysis_empty_response = alignment_analysis.analyze_empty_responses(alignment_csv_file_path, output_prefix=f'{outputs_path}/empty_responses_analysis')
-    
-    #方式1 返回的是txt文本内容
+    # 分析瓶颈2 响应包是否完整
+    bottleneck_analysis_empty_response = alignment_analysis.analyze_empty_responses(alignment_csv_file_path,
+                                                                                    output_prefix=f'{outputs_path}/empty_responses_analysis')
+
+    # 方式1 返回的是txt文本内容
     # bottleneck_analysis_empty_response["env"] = "replay"    #此处应该是生产加上回放，两环境的
     # bottleneck_analysis_empty_response["hostip"] = replay_ip
     # logger.info(f"bottleneck_analysis_empty_response: {bottleneck_analysis_empty_response}")
     # res['performance_bottleneck_analysis']['bottlenecks'].append(bottleneck_analysis_empty_response)
-    
-    #方式2 返回json格式的信息
-    bottleneck_analysis_empty_response[0]["hostip"]=production_ip
-    bottleneck_analysis_empty_response[1]["hostip"]=replay_ip
-    bottleneck_analysis_empty_response[0]["env"]="production"
-    bottleneck_analysis_empty_response[1]["env"]="replay"
+
+    # 方式2 返回json格式的信息
+    bottleneck_analysis_empty_response[0]["hostip"] = production_ip
+    bottleneck_analysis_empty_response[1]["hostip"] = replay_ip
+    bottleneck_analysis_empty_response[0]["env"] = "production"
+    bottleneck_analysis_empty_response[1]["env"] = "replay"
     res['performance_bottleneck_analysis']['empty_response'] = bottleneck_analysis_empty_response
     # print("222222222222")
     # print(bottleneck_analysis_empty_response)
 
-
-    #分析瓶颈3 传输窗口瓶颈检测
-    bottleneck_analysis_zero_window = alignment_analysis.analyze_zero_window_issues(alignment_csv_file_path, output_prefix=f'{outputs_path}/zero_window_analysis')
-    #方式1 返回的是txt文本内容
+    # 分析瓶颈3 传输窗口瓶颈检测
+    bottleneck_analysis_zero_window = alignment_analysis.analyze_zero_window_issues(alignment_csv_file_path,
+                                                                                    output_prefix=f'{outputs_path}/zero_window_analysis')
+    # 方式1 返回的是txt文本内容
     # bottleneck_analysis_zero_window["env"] = "replay"    #此处应该是生产加上回放，两环境的
     # bottleneck_analysis_zero_window["hostip"] = replay_ip
     # logger.info(f"bottleneck_analysis_zero_window: {bottleneck_analysis_zero_window}")
     # res['performance_bottleneck_analysis']['bottlenecks'].append(bottleneck_analysis_zero_window)
-    
-    #方式2 返回json格式的信息
-    bottleneck_analysis_zero_window[0]["hostip"]=production_ip
-    bottleneck_analysis_zero_window[1]["hostip"]=replay_ip
-    bottleneck_analysis_zero_window[0]["env"]="production"
-    bottleneck_analysis_zero_window[1]["env"]="replay"
+
+    # 方式2 返回json格式的信息
+    bottleneck_analysis_zero_window[0]["hostip"] = production_ip
+    bottleneck_analysis_zero_window[1]["hostip"] = replay_ip
+    bottleneck_analysis_zero_window[0]["env"] = "production"
+    bottleneck_analysis_zero_window[1]["env"] = "replay"
     res['performance_bottleneck_analysis']['transmission_window'] = bottleneck_analysis_zero_window
-
-
 
     anomaly_dict = [{
         "request_url": "/portal_todo/api/getAllUserTodoData",
         "env": "production",
-        "count": 9999,                  #hyf 修改格式
+        "count": 9999,  # hyf 修改格式
         "hostip": production_ip,
         "class_method": "api_get",
         "bottleneck_cause": "(当前该部分为展示样例)",
@@ -668,6 +669,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
 
     return pcap_index, res
 
+
 def save_response_to_file(response, file_path="response.json"):
     try:
         with open(file_path, "w", encoding="utf-8") as file:
@@ -675,6 +677,7 @@ def save_response_to_file(response, file_path="response.json"):
         print(f"Response successfully saved to {file_path}")
     except Exception as e:
         print(f"Failed to save response: {e}")
+
 
 @celery.task(name='server.final_task')
 def final_task(results, data, task_id, ip_address):
@@ -710,7 +713,7 @@ def final_task(results, data, task_id, ip_address):
                 ]
             }
         }
-    
+
         # 控制台输出内容
         # logger.info(f"Results: {results}")
 
@@ -719,13 +722,12 @@ def final_task(results, data, task_id, ip_address):
                 index, res = result
                 response['individual_analysis_info'][index] = res
 
-
         save_response_to_file(response, f'./results/{task_id}/response.json')
 
         # Post the response to the callback URL
         callback_url = os.getenv("CALLBACK_URL", f'http://{ip_address}:18088/api/replay-core/aglAnalysisResult')
         postapi.post_url(json.dumps(response), callback_url)
-        
+
         # 更新任务状态为 "完成"
         redis_client.hset(f"task_status:{task_id}", "status", "完成")
         redis_client.hset(f"task_status:{task_id}", "message", "最终报告生成完成")
@@ -736,6 +738,7 @@ def final_task(results, data, task_id, ip_address):
         redis_client.hset(f"task_status:{task_id}", "message", f"生成最终报告时出错: {str(e)}")
         logger.error(f"生成最终报告时出错: {str(e)}")
         raise
+
 
 def run_tasks_in_parallel(data, task_id, ip_address):
     # Create results directory if not exists
@@ -773,14 +776,16 @@ def run_tasks_in_parallel(data, task_id, ip_address):
 
         task_group = group(group(
             extract_data_coordinator.s([os.path.join(collect.collect_path) for collect in pcap_info.collect_pcap],
-                                       production_csv_file_path, production_anomalies_csv_file_path,task_id),
+                                       production_csv_file_path, production_anomalies_csv_file_path, task_id),
             extract_data_coordinator.s([os.path.join(pcap_info.replay_pcap.replay_path)],
-                                       replay_csv_file_path, replay_anomalies_csv_file_path,task_id))
-                           | align_data.s(production_csv_file_path, replay_csv_file_path, alignment_csv_file_path,task_id)
+                                       replay_csv_file_path, replay_anomalies_csv_file_path, task_id))
+                           | align_data.s(production_csv_file_path, replay_csv_file_path, alignment_csv_file_path,
+                                          task_id)
                            | cluster_analysis_data.s(index, pcap_info.replay_task_id, pcap_info.replay_id,
                                                      pcap_info.collect_pcap[0].ip, pcap_info.replay_pcap.ip,
                                                      replay_csv_file_path, production_csv_file_path, task_id,
-                                                     pcap_info.collect_log, pcap_info.replay_log,alignment_csv_file_path))
+                                                     pcap_info.collect_log, pcap_info.replay_log,
+                                                     alignment_csv_file_path))
         task_groups.append(task_group)
 
     # 使用chord确保所有任务子项完成后执行最终任务
@@ -802,6 +807,7 @@ def process():
         return jsonify({"message": "Request received", "task_id": task_id, "status": "queued"}), 202
     except ValidationError as e:
         return jsonify({"error": str(e)}), 400
+
 
 @app.route('/api/algorithm/status/<task_id>', methods=['GET'])
 def get_task_status(task_id):
@@ -825,6 +831,7 @@ def get_task_status(task_id):
     except Exception as e:
         # 如果发生异常，返回错误信息
         return jsonify({"error": f"查询任务状态时出错: {str(e)}"}), 500
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', debug=True, port=7956)
