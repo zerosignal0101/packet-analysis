@@ -49,7 +49,8 @@ def match_logs(database_logs, csv_logs):
             time_since_request = float(csv_log["Time_since_request"])
 
             # 检查是否在时间范围内，并且 Time_since_request 大于数据库执行时间
-            if time_end - timedelta(seconds=time_since_request) <= csv_time <= time_end and time_since_request > db_exec_time:
+            if time_end - timedelta(
+                    seconds=time_since_request) <= csv_time <= time_end and time_since_request > db_exec_time:
                 # 计算时间差
                 time_diff = abs((db_time - csv_time).total_seconds())
 

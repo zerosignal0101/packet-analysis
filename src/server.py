@@ -27,7 +27,7 @@ from src.packet_analysis.analysis import cluster
 from src.packet_analysis.json_build import anomaly_detection
 from src.packet_analysis.utils.logger_config import logger
 from datetime import datetime
-from src.packet_analysis.json_build import alignment_analysis
+from src.packet_analysis.json_build import alignment_analysis, db_analysis
 
 app = Flask(__name__)
 # 使用新格式的配置名称
@@ -655,6 +655,17 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
     bottleneck_analysis_zero_window[0]["env"] = "production"
     bottleneck_analysis_zero_window[1]["env"] = "replay"
     res['performance_bottleneck_analysis']['transmission_window'] = bottleneck_analysis_zero_window
+
+    # 分析瓶颈4 数据库查询瓶颈检测
+    production_bottleneck_analysis_database = db_analysis.match_logs(production_csv_file_path, production_json_path)
+    replay_bottleneck_analysis_database = db_analysis.match_logs(replay_csv_file_path, replay_json_path)
+    bottleneck_analysis_database = [production_bottleneck_analysis_database, replay_bottleneck_analysis_database]
+    # 方式2 返回json格式的信息
+    bottleneck_analysis_database[0]["hostip"] = production_ip
+    bottleneck_analysis_database[1]["hostip"] = replay_ip
+    bottleneck_analysis_database[0]["env"] = "production"
+    bottleneck_analysis_database[1]["env"] = "replay"
+    res['performance_bottleneck_analysis']['database'] = bottleneck_analysis_database
 
     anomaly_dict = [{
         "request_url": "/portal_todo/api/getAllUserTodoData",
