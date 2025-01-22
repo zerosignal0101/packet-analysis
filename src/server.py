@@ -657,14 +657,18 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
     res['performance_bottleneck_analysis']['transmission_window'] = bottleneck_analysis_zero_window
 
     # 分析瓶颈4 数据库查询瓶颈检测
-    production_bottleneck_analysis_database = db_analysis.match_logs(production_csv_file_path, production_json_path)
-    replay_bottleneck_analysis_database = db_analysis.match_logs(replay_csv_file_path, replay_json_path)
+    # 设置执行时间阈值（单位：毫秒）
+    exec_time_threshold = 400
+    production_bottleneck_analysis_database = db_analysis.match_logs(
+        db_analysis.load_database_logs(production_json_path, exec_time_threshold),
+        db_analysis.load_csv_logs(production_csv_file_path)
+    )
+    replay_bottleneck_analysis_database = db_analysis.match_logs(
+        db_analysis.load_database_logs(replay_json_path, exec_time_threshold),
+        db_analysis.load_csv_logs(replay_csv_file_path)
+    )
     bottleneck_analysis_database = [production_bottleneck_analysis_database, replay_bottleneck_analysis_database]
     # 方式2 返回json格式的信息
-    bottleneck_analysis_database[0]["hostip"] = production_ip
-    bottleneck_analysis_database[1]["hostip"] = replay_ip
-    bottleneck_analysis_database[0]["env"] = "production"
-    bottleneck_analysis_database[1]["env"] = "replay"
     res['performance_bottleneck_analysis']['database'] = bottleneck_analysis_database
 
     anomaly_dict = [{
