@@ -4,12 +4,16 @@ from datetime import datetime
 from datetime import timedelta
 
 from src.packet_analysis.utils.logger_config import logger
+from src.packet_analysis.analysis.cluster import classify_path
 
 
 # 1. 加载数据库日志并筛选处理时间长的日志
 def load_database_logs(json_file, exec_time_threshold):
     with open(json_file, "r", encoding="utf-8") as file:
         data = json.load(file)
+
+    # 总数量
+    total_count = len(data["apm"]["DATABASE_INFO"]["CSchinatower-smc-inner-service"])
 
     # 筛选出执行时间超过阈值的日志
     long_running_logs = [
@@ -22,7 +26,7 @@ def load_database_logs(json_file, exec_time_threshold):
     # for log in long_running_logs:
     #     logger.info(log)
 
-    return long_running_logs
+    return long_running_logs, total_count
 
 
 # 2. 加载 CSV 文件
@@ -76,11 +80,10 @@ def match_logs(database_logs, csv_logs):
                 "url_path": closest_log["Path"],
                 "url_sniff_time": closest_log["Sniff_time"],
                 "time_since_request": closest_log["Time_since_request"],
+                "ratio": db_log["execTime"] / 1000 / float(closest_log["Time_since_request"]),
                 "response_code": closest_log["Response_code"],
                 "request_method": closest_log["Request_Method"],
-                "request_packet_length": closest_log["Request_Packet_Length"],
-                "response_packet_length": closest_log["Response_Packet_Length"],
-                "time_diff": min_time_diff  # 添加时间差信息
+                "class_method": classify_path(closest_log["Path"])
             })
 
     return matched_results
@@ -110,12 +113,11 @@ def main():
         print(f"SQL 查询内容: {result['sql_content']}")
         print(f"URL 请求路径: {result['url_path']}")
         print(f"URL 请求时间: {result['url_sniff_time']}")
-        print(f"时间差: {result['time_diff']} 秒")
         print(f"Time since request: {result['time_since_request']} 秒")
+        print(f"Ratio: {result['ratio']}")
         print(f"响应状态码: {result['response_code']}")
         print(f"请求方法: {result['request_method']}")
-        print(f"请求数据包长度: {result['request_packet_length']} 字节")
-        print(f"响应数据包长度: {result['response_packet_length']} 字节")
+        print(f"请求类别：{result['class_method']}")
         print("-----------------------------")
 
 

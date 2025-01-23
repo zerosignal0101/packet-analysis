@@ -659,15 +659,52 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
     # 分析瓶颈4 数据库查询瓶颈检测
     # 设置执行时间阈值（单位：毫秒）
     exec_time_threshold = 400
+    production_database_logs, production_database_logs_count \
+        = db_analysis.load_database_logs(production_json_path, exec_time_threshold)
     production_bottleneck_analysis_database = db_analysis.match_logs(
-        db_analysis.load_database_logs(production_json_path, exec_time_threshold),
+        production_database_logs,
         db_analysis.load_csv_logs(production_csv_file_path)
     )
+    replay_database_logs, replay_database_logs_count \
+        = db_analysis.load_database_logs(replay_json_path, exec_time_threshold)
     replay_bottleneck_analysis_database = db_analysis.match_logs(
-        db_analysis.load_database_logs(replay_json_path, exec_time_threshold),
+        replay_database_logs,
         db_analysis.load_csv_logs(replay_csv_file_path)
     )
-    bottleneck_analysis_database = [production_bottleneck_analysis_database, replay_bottleneck_analysis_database]
+    bottleneck_analysis_database = [
+        {
+            "hostip": production_ip,
+            "env": "production",
+            "class_name": "生产环境数据库日志分析",
+            "details": [
+                {
+                    "bottleneck_type": "数据库查询时间异常",
+                    "cause": "异常请求影响",
+                    "count": len(production_bottleneck_analysis_database),
+                    "total_count": production_database_logs_count,
+                    "ratio": len(production_bottleneck_analysis_database) / production_database_logs_count,
+                    "solution": "排查对应请求的数据库查询性能",
+                    "request_paths": production_bottleneck_analysis_database
+                }
+            ]
+        },
+        {
+            "hostip": replay_ip,
+            "env": "replay",
+            "class_name": "生产环境数据库日志分析",
+            "details": [
+                {
+                    "bottleneck_type": "数据库查询时间异常",
+                    "cause": "异常请求影响",
+                    "count": len(replay_bottleneck_analysis_database),
+                    "total_count": replay_database_logs_count,
+                    "ratio": len(replay_bottleneck_analysis_database) / replay_database_logs_count,
+                    "solution": "排查对应请求的数据库查询性能",
+                    "request_paths": replay_bottleneck_analysis_database
+                }
+            ]
+        }
+    ]
     # 方式2 返回json格式的信息
     res['performance_bottleneck_analysis']['database'] = bottleneck_analysis_database
 
