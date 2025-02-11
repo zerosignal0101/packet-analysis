@@ -11,16 +11,20 @@ from src.packet_analysis.analysis.cluster import classify_path
 def load_database_logs(json_file, exec_time_threshold):
     with open(json_file, "r", encoding="utf-8") as file:
         data = json.load(file)
+    
+    try:    
+        # 总数量
+        total_count = len(data["apm"]["DATABASE_INFO"]["CSchinatower-smc-inner-service"])
 
-    # 总数量
-    total_count = len(data["apm"]["DATABASE_INFO"]["CSchinatower-smc-inner-service"])
-
-    # 筛选出执行时间超过阈值的日志
-    long_running_logs = [
-        entry for entry in data["apm"]["DATABASE_INFO"]["CSchinatower-smc-inner-service"]
-        if entry["execTime"] > exec_time_threshold
-    ]
-
+        # 筛选出执行时间超过阈值的日志
+        long_running_logs = [
+            entry for entry in data["apm"]["DATABASE_INFO"]["CSchinatower-smc-inner-service"]
+            if entry["execTime"] > exec_time_threshold
+        ]
+    except Exception as e:
+        total_count = 0
+        long_running_logs = []
+    
     # # 打印调试信息
     # logger.info(f"Loaded {len(long_running_logs)} long-running logs.")
     # for log in long_running_logs:

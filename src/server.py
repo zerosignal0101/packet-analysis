@@ -682,7 +682,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
                     "cause": "异常请求影响",
                     "count": len(production_bottleneck_analysis_database),
                     "total_count": production_database_logs_count,
-                    "ratio": len(production_bottleneck_analysis_database) / production_database_logs_count,
+                    "ratio": (len(production_bottleneck_analysis_database) / production_database_logs_count) if production_database_logs_count else 0,
                     "solution": "排查对应请求的数据库查询性能",
                     "request_paths": production_bottleneck_analysis_database
                 }
@@ -698,7 +698,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
                     "cause": "异常请求影响",
                     "count": len(replay_bottleneck_analysis_database),
                     "total_count": replay_database_logs_count,
-                    "ratio": len(replay_bottleneck_analysis_database) / replay_database_logs_count,
+                    "ratio": (len(replay_bottleneck_analysis_database) / replay_database_logs_count) if replay_database_logs_count else 0,
                     "solution": "排查对应请求的数据库查询性能",
                     "request_paths": replay_bottleneck_analysis_database
                 }

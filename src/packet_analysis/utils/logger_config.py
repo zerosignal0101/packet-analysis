@@ -4,7 +4,7 @@ import logging.config
 import os
 
 # 确保日志目录存在
-log_dir = 'results/logs'
+log_dir = 'logs'
 os.makedirs(log_dir, exist_ok=True)
 
 # 配置日志记录

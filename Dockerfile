@@ -3,6 +3,8 @@ FROM python:3.10-slim-bullseye as builder
 
 # 设置非交互式环境变量
 ENV DEBIAN_FRONTEND=noninteractive
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
 
 # 设置工作目录
 WORKDIR /app
