@@ -4,6 +4,8 @@ services:
   redis:
     image: redis:alpine
     restart: always
+    volumes:
+      - ./results/redis:/data
     networks:
       - app_network
 
@@ -17,8 +19,11 @@ services:
       - ./results:/app/results
       - ./results/logs_flask:/app/logs
       - ./src:/app/src
-#    environment:
-#      - CALLBACK_URL=http://10.180.124.116:18088/api/replay-core/aglAnalysisResult
+      - /app/userdata:/app/userdata
+      - /app/userdata2:/app/userdata2
+      - /home/replay:/home/replay
+    environment:
+      - CALLBACK_URL=http://10.180.124.113:18088/api/replay-core/aglAnalysisResult
     ports:
       - "7956:7956"
     depends_on:
@@ -29,13 +34,20 @@ services:
   celery_worker:
     image: zerosignal0101/packet-analysis-tool:v0.2.3
     command: celery -A src.server.celery worker --loglevel=info
+    deploy:
+      resources:
+        limits:
+          memory: 128g
     volumes:
       - ./raw_data:/app/raw_data
       - ./results/logs_celery:/app/logs
       - ./results:/app/results
       - ./src:/app/src
-#    environment:
-#      - CALLBACK_URL=http://10.180.124.116:18088/api/replay-core/aglAnalysisResult
+      - /app/userdata:/app/userdata
+      - /app/userdata2:/app/userdata2
+      - /home/replay:/home/replay
+    environment:
+      - CALLBACK_URL=http://10.180.124.113:18088/api/replay-core/aglAnalysisResult
     depends_on:
       - redis
     networks:

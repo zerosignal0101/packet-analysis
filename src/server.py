@@ -87,7 +87,7 @@ def extract_data_coordinator(pcap_file_path, csv_file_path, anomalies_csv_file_p
         # 更新任务状态为 "正在处理"
         redis_client.hset(f"task_status:{task_id}", "status", "正在处理")
         redis_client.hset(f"task_status:{task_id}", "step", "extract_data_coordinator")
-        redis_client.hset(f"task_status:{task_id}", "message", "正在对 pcap 文件信息提取处理")
+        redis_client.hset(f"task_status:{task_id}", "message", "正在进行第一步，对 pcap 文件信息提取处理，共5步")
 
         # 原有的处理逻辑
         logger.info(f"pcap_file_path {pcap_file_path}")
@@ -173,12 +173,12 @@ def extract_data_coordinator(pcap_file_path, csv_file_path, anomalies_csv_file_p
 
         # 更新任务状态为 "完成"
         redis_client.hset(f"task_status:{task_id}", "status", "完成")
-        redis_client.hset(f"task_status:{task_id}", "message", "pcap 文件信息提取处理完成")
+        redis_client.hset(f"task_status:{task_id}", "message", "第一步pcap 文件信息提取处理完成，共5步")
 
     except Exception as e:
         # 更新任务状态为 "失败"
         redis_client.hset(f"task_status:{task_id}", "status", "失败")
-        redis_client.hset(f"task_status:{task_id}", "message", f" pcap 文件信息提取时出错: {str(e)}")
+        redis_client.hset(f"task_status:{task_id}", "message", f" 第一步pcap 文件信息提取时出错，共5步，错误如下: {str(e)}")
         logger.error(f"对 pcap 文件信息提取时出错: {str(e)}")
         raise
 
@@ -246,17 +246,17 @@ def align_data(results, production_csv_file_path, replay_csv_file_path, alignmen
         # 更新任务状态为 "正在处理"
         redis_client.hset(f"task_status:{task_id}", "status", "正在处理")
         redis_client.hset(f"task_status:{task_id}", "step", "align_data")
-        redis_client.hset(f"task_status:{task_id}", "message", "正在进行生成、回放数据对齐")
+        redis_client.hset(f"task_status:{task_id}", "message", "正在进行第二步：生产、回放数据对齐，共5步")
         alignment.alignment_two_paths(production_csv_file_path, replay_csv_file_path, alignment_csv_file_path)
 
         # 更新任务状态为 "完成"
         redis_client.hset(f"task_status:{task_id}", "status", "完成")
-        redis_client.hset(f"task_status:{task_id}", "message", "生成、回放数据对齐完成")
+        redis_client.hset(f"task_status:{task_id}", "message", "第二步生成、回放数据对齐完成，共5步")
 
     except Exception as e:
         # 更新任务状态为 "失败"
         redis_client.hset(f"task_status:{task_id}", "status", "失败")
-        redis_client.hset(f"task_status:{task_id}", "message", f"生成、回放数据对齐时出错: {str(e)}")
+        redis_client.hset(f"task_status:{task_id}", "message", f"第二步生成、回放数据对齐时出错，共5步，报错如下: {str(e)}")
         redis_client.hset(f"task_status:{task_id}", "error", str(e))
         logger.error(f"数据对齐时出错: {str(e)}")
         raise
@@ -278,7 +278,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         # 更新任务状态为 "正在处理"
         redis_client.hset(f"task_status:{task_id}", "status", "正在处理")
         redis_client.hset(f"task_status:{task_id}", "step", "cluster_analysis_data")
-        redis_client.hset(f"task_status:{task_id}", "message", "开始进行聚类分析")
+        redis_client.hset(f"task_status:{task_id}", "message", "正在进行第三步，聚类分析，共5步")
 
         # res variable
         res = {
@@ -316,11 +316,11 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         res['comparison_analysis']['data'] = data_list
         res['comparison_analysis']['legend'] = data_legend
 
-        # production cluster anomaly and replay cluster anomaly
+        # production cluster anomaly and replay cluster anomaly 在这一步，不同组数据发生报错
         folder_output_pro = os.path.join(outputs_path, f"cluster_production_{pcap_index}")
-        pro_anomaly_csv_list, pro_plot_cluster_list = cluster.analysis(production_csv_file_path, folder_output_pro)
+        pro_anomaly_csv_list, pro_plot_cluster_list = cluster.analysis(production_csv_file_path, folder_output_pro,pcap_index,env='pro')
         folder_output_replay = os.path.join(outputs_path, f"cluster_replay_{pcap_index}")
-        replay_anomaly_csv_list, replay_plot_cluster_list = cluster.analysis(replay_csv_file_path, folder_output_replay)
+        replay_anomaly_csv_list, replay_plot_cluster_list = cluster.analysis(replay_csv_file_path, folder_output_replay,pcap_index,env='replay')
 
         # Process anomaly CSV files to build JSON
         all_pro_anomaly_details = anomaly_detection.process_anomalies(pro_anomaly_csv_list, "production",
@@ -331,12 +331,12 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         res['anomaly_detection']['details'] = combined_anomaly_details
 
         redis_client.hset(f"task_status:{task_id}", "status", "完成")
-        redis_client.hset(f"task_status:{task_id}", "message", "聚类分析完成")
+        redis_client.hset(f"task_status:{task_id}", "message", "第三步聚类分析完成，共5步")
 
     except Exception as e:
         # 更新任务状态为 "失败"
         redis_client.hset(f"task_status:{task_id}", "status", "失败")
-        redis_client.hset(f"task_status:{task_id}", "message", f"聚类分析时出错: {str(e)}")
+        redis_client.hset(f"task_status:{task_id}", "message", f"第三步聚类分析时出错，共5步，报错如下： {str(e)}")
         logger.error(f"聚类分析时出错: {str(e)}")
         raise
 
@@ -419,11 +419,41 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
             }
         ]
     }
+    optimization_suggestions_correlation = {
+        "非root用户进程数": "1. 使用`ulimit`命令限制用户的最大进程数。2. 检查是否有异常进程（如僵尸进程），使用`ps aux`和`kill`命令清理。3. 优化应用程序，减少不必要的进程创建。",
+        "活动进程数": "1. 检查是否有不必要的后台进程，使用`ps aux`和`kill`命令终止。2. 优化应用程序逻辑，减少并发进程数。3. 使用进程池（如Python的`multiprocessing.Pool`）限制并发进程数。",
+        "当前运行队列等待运行的进程数": "1. 增加CPU资源（如升级CPU或增加CPU核心数）。2. 优化任务调度，使用优先级调度（如`nice`命令）确保关键任务优先执行。3. 减少不必要的任务并发，避免任务堆积。",
+        "处在非中断睡眠状态的进程数": "1. 检查是否有进程因I/O操作阻塞，优化I/O性能（如使用SSD、增加磁盘带宽）。2. 优化数据库查询，减少锁等待时间。3. 检查是否有死锁或资源竞争问题，使用工具（如`strace`）分析进程状态。",
+        "CPU利用率": "1. 优化代码逻辑，减少CPU密集型操作（如循环嵌套、复杂计算）。2. 使用多线程或多进程分担CPU负载。3. 升级CPU或增加CPU核心数。",
+        "内存利用率": "1. 优化应用程序，减少内存泄漏（如使用内存分析工具`Valgrind`）。2. 增加物理内存或使用交换区（Swap）。3. 减少不必要的缓存，释放未使用的内存。",
+        "1分钟平均负载": "1. 检查是否有高负载进程，使用`top`或`htop`命令定位并优化。2. 增加服务器资源（如CPU、内存）。3. 优化任务调度，避免短时间内大量任务并发。",
+        "CPU平均等待IO率": "1. 优化磁盘I/O性能（如使用SSD、增加磁盘带宽）。2. 减少不必要的I/O操作（如批量读写数据）。3. 使用缓存（如Redis）减少对磁盘的依赖。",
+        "中央处理器平均系统调用率": "1. 优化应用程序，减少频繁的系统调用（如合并小文件读写操作）。2. 使用更高效的系统调用（如`sendfile`替代`read/write`）。3. 检查是否有异常的系统调用（如频繁的文件打开/关闭），使用`strace`工具分析。",
+        "交换区利用率": "1. 增加物理内存，减少对交换区的依赖。2. 优化应用程序，减少内存使用（如释放未使用的内存）。3. 调整交换区配置（如`swappiness`参数），减少交换区使用频率。",
+        "等待连接数": "1. 优化服务器配置（如增加`backlog`参数）。2. 增加服务器资源（如CPU、内存）以处理更多连接。3. 使用负载均衡（如Nginx）分散连接压力。",
+        "关闭连接数": "1. 检查是否有连接泄漏，使用工具（如`netstat`）分析连接状态。2. 优化应用程序，及时关闭不再使用的连接。3. 调整连接超时时间（如`keepalive_timeout`）。",
+        "文件系统总利用率": "1. 清理不必要的文件（如日志文件、临时文件）。2. 增加磁盘容量或使用分布式文件系统（如HDFS）。3. 优化文件存储（如压缩文件、使用更高效的文件系统）。"
+    }
+    optimization_suggestions_random_forest = {
+        "非root用户进程数": "1. 使用`ulimit`命令限制用户的最大进程数。2. 检查是否有异常进程（如僵尸进程），使用`ps aux`和`kill`命令清理。3. 优化应用程序，减少不必要的进程创建。4. 使用容器化技术（如Docker）限制每个容器的进程数。",
+        "活动进程数": "1. 检查是否有不必要的后台进程，使用`ps aux`和`kill`命令终止。2. 优化应用程序逻辑，减少并发进程数。3. 使用进程池（如Python的`multiprocessing.Pool`）限制并发进程数。4. 使用任务队列（如Celery）管理异步任务。",
+        "当前运行队列等待运行的进程数": "1. 增加CPU资源（如升级CPU或增加CPU核心数）。2. 优化任务调度，使用优先级调度（如`nice`命令）确保关键任务优先执行。3. 减少不必要的任务并发，避免任务堆积。4. 使用分布式任务调度系统（如Kubernetes）分散任务负载。",
+        "处在非中断睡眠状态的进程数": "1. 检查是否有进程因I/O操作阻塞，优化I/O性能（如使用SSD、增加磁盘带宽）。2. 优化数据库查询，减少锁等待时间。3. 检查是否有死锁或资源竞争问题，使用工具（如`strace`）分析进程状态。4. 使用异步I/O（如AIO）减少阻塞。",
+        "CPU利用率": "1. 优化代码逻辑，减少CPU密集型操作（如循环嵌套、复杂计算）。2. 使用多线程或多进程分担CPU负载。3. 升级CPU或增加CPU核心数。4. 使用JIT编译器（如PyPy）优化代码执行效率。",
+        "内存利用率": "1. 优化应用程序，减少内存泄漏（如使用内存分析工具`Valgrind`）。2. 增加物理内存或使用交换区（Swap）。3. 减少不必要的缓存，释放未使用的内存。4. 使用内存池技术（如jemalloc）优化内存分配。",
+        "1分钟平均负载": "1. 检查是否有高负载进程，使用`top`或`htop`命令定位并优化。2. 增加服务器资源（如CPU、内存）。3. 优化任务调度，避免短时间内大量任务并发。4. 使用自动扩展机制（如AWS Auto Scaling）动态调整资源。",
+        "CPU平均等待IO率": "1. 优化磁盘I/O性能（如使用SSD、增加磁盘带宽）。2. 减少不必要的I/O操作（如批量读写数据）。3. 使用缓存（如Redis）减少对磁盘的依赖。4. 使用异步I/O模型（如Node.js）提高I/O效率。",
+        "中央处理器平均系统调用率": "1. 优化应用程序，减少频繁的系统调用（如合并小文件读写操作）。2. 使用更高效的系统调用（如`sendfile`替代`read/write`）。3. 检查是否有异常的系统调用（如频繁的文件打开/关闭），使用`strace`工具分析。4. 使用用户态网络栈（如DPDK）减少内核态系统调用。",
+        "交换区利用率": "1. 增加物理内存，减少对交换区的依赖。2. 优化应用程序，减少内存使用（如释放未使用的内存）。3. 调整交换区配置（如`swappiness`参数），减少交换区使用频率。4. 使用内存压缩技术（如Zswap）减少交换区压力。",
+        "等待连接数": "1. 优化服务器配置（如增加`backlog`参数）。2. 增加服务器资源（如CPU、内存）以处理更多连接。3. 使用负载均衡（如Nginx）分散连接压力。4. 使用连接池技术（如HikariCP）管理数据库连接。",
+        "关闭连接数": "1. 检查是否有连接泄漏，使用工具（如`netstat`）分析连接状态。2. 优化应用程序，及时关闭不再使用的连接。3. 调整连接超时时间（如`keepalive_timeout`）。4. 使用长连接复用技术（如HTTP/2）减少连接开销。",
+        "文件系统总利用率": "1. 清理不必要的文件（如日志文件、临时文件）。2. 增加磁盘容量或使用分布式文件系统（如HDFS）。3. 优化文件存储（如压缩文件、使用更高效的文件系统）。4. 使用对象存储（如S3）替代本地文件系统。"
+    }
     try:
         # 更新任务状态为 "正在处理"
         redis_client.hset(f"task_status:{task_id}", "status", "正在处理")
         redis_client.hset(f"task_status:{task_id}", "step", "cluster_analysis_data")
-        redis_client.hset(f"task_status:{task_id}", "message", "开始进行相关系数和随机森林模型分析")
+        redis_client.hset(f"task_status:{task_id}", "message", "开始进行第四步：相关系数和随机森林模型分析，共5步")
 
         correlation_analysis_path = os.path.join(outputs_path, f'correlation_analysis_csv_{pcap_index}')
         if not os.path.exists(correlation_analysis_path):
@@ -454,9 +484,8 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
                                 data_correlation[0]['correlation_data'][0]['value'] == 9999:
                             # 如果列表中只有默认值，清空它
                             data_correlation[0]['correlation_data'].clear()
-                            data_correlation[0][
-                                'conclusion'] = f"生产环境中与平均处理时延相关性最强的指标是{row['KPI名称']}"
-                            # data_correlation[0]['solution']=f"生产环境中与平均处理时延相关性最强的指标是{row['KPI名称']}"
+                            data_correlation[0]['conclusion'] = f"生产环境中与平均处理时延相关性最强的指标是{row['KPI名称']}"
+                            data_correlation[0]['solution']=optimization_suggestions_correlation.get(row['KPI名称'],'该项指标暂无更好的优化建议')
 
                         # 将数据添加到 production 和 replay 的 correlation_data 中
                         data_correlation[0]['correlation_data'].append(correlation_data)
@@ -477,8 +506,8 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
                                 data_correlation[1]['correlation_data'][0]['value'] == 9999:
                             # 如果列表中只有默认值，清空它
                             data_correlation[1]['correlation_data'].clear()
-                            data_correlation[1][
-                                'conclusion'] = f"回放环境中与平均处理时延相关性最强的指标是{row['KPI名称']}"
+                            data_correlation[1]['conclusion'] = f"回放环境中与平均处理时延相关性最强的指标是{row['KPI名称']}"
+                            data_correlation[1]['solution'] = optimization_suggestions_correlation.get(row['KPI名称'],'该项指标暂无更好的优化建议')
 
                         # 将数据添加到 production 和 replay 的 correlation_data 中
                         data_correlation[1]['correlation_data'].append(correlation_data)
@@ -518,6 +547,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
                             # 如果列表中只有默认值，清空它
                             data_random_forest[0]['importance_data'].clear()
                             data_random_forest[0]['conclusion'] = f"生产环境中重要性排序最强的指标是{row['KPI']}"
+                            data_random_forest[0]['solution'] = optimization_suggestions_random_forest.get(row['KPI'],'该项指标暂无更好的优化建议')
 
                         # 将数据添加到 production 和 replay 的 correlation_data 中
                         data_random_forest[0]['importance_data'].append(importance_data)
@@ -538,6 +568,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
                             # 如果列表中只有默认值，清空它
                             data_random_forest[1]['importance_data'].clear()
                             data_random_forest[1]['conclusion'] = f"回放环境中重要性排序最强的指标是{row['KPI']}"
+                            data_random_forest[1]['solution'] = optimization_suggestions_random_forest.get(row['KPI'],'该项指标暂无更好的优化建议')
 
                         # 将数据添加到 production 和 replay 的 correlation_data 中
                         data_random_forest[1]['importance_data'].append(importance_data)
@@ -546,7 +577,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
 
         # 更新任务状态为 "完成"
         redis_client.hset(f"task_status:{task_id}", "status", "完成")
-        redis_client.hset(f"task_status:{task_id}", "message", "相关系数和随机森林模型分析完成")
+        redis_client.hset(f"task_status:{task_id}", "message", "第四步：相关系数和随机森林模型分析完成，共5步")
 
         # 检查 replay_importance_df 是否为空
         # if not replay_importance_df.empty:
@@ -598,7 +629,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
     except Exception as e:
         # 更新任务状态为 "失败"
         redis_client.hset(f"task_status:{task_id}", "status", "失败")
-        redis_client.hset(f"task_status:{task_id}", "message", f"相关系数和随机森林模型分析时出错: {str(e)}")
+        redis_client.hset(f"task_status:{task_id}", "message", f"第四步：相关系数和随机森林模型分析时出错，共5步，报错如下: {str(e)}")
 
         # print(f"发生 KeyError: {e}")
         logger.info(f"发生 错误: {e}")
@@ -609,7 +640,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
 
     # 分析瓶颈1 状态码
     bottleneck_analysis_response_code = alignment_analysis.analyze_status_code(alignment_csv_file_path,
-                                                                               output_prefix=f'{outputs_path}/test_status_code_analysis')
+                                                                               output_prefix=f'{outputs_path}/test_status_code_analysis_{pcap_index}')
     # 方式1 返回的是txt文本内容
     # bottleneck_analysis_response_code["env"] = "replay"    #此处应该是生产加上回放，两环境的
     # bottleneck_analysis_response_code["hostip"] = replay_ip
@@ -623,7 +654,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
 
     # 分析瓶颈2 响应包是否完整
     bottleneck_analysis_empty_response = alignment_analysis.analyze_empty_responses(alignment_csv_file_path,
-                                                                                    output_prefix=f'{outputs_path}/empty_responses_analysis')
+                                                                                    output_prefix=f'{outputs_path}/empty_responses_analysis_{pcap_index}')
 
     # 方式1 返回的是txt文本内容
     # bottleneck_analysis_empty_response["env"] = "replay"    #此处应该是生产加上回放，两环境的
@@ -642,7 +673,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
 
     # 分析瓶颈3 传输窗口瓶颈检测
     bottleneck_analysis_zero_window = alignment_analysis.analyze_zero_window_issues(alignment_csv_file_path,
-                                                                                    output_prefix=f'{outputs_path}/zero_window_analysis')
+                                                                                    output_prefix=f'{outputs_path}/zero_window_analysis_{pcap_index}')
     # 方式1 返回的是txt文本内容
     # bottleneck_analysis_zero_window["env"] = "replay"    #此处应该是生产加上回放，两环境的
     # bottleneck_analysis_zero_window["hostip"] = replay_ip
@@ -718,6 +749,8 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         "solution": "(当前该部分为展示样例)"
     }]
     res['anomaly_detection']['dict'] = anomaly_dict
+    
+    logger.info("Cluster_analysis finished.")
 
     return pcap_index, res
 
@@ -737,7 +770,7 @@ def final_task(results, data, task_id, ip_address):
         # 更新任务状态为 "正在处理"
         redis_client.hset(f"task_status:{task_id}", "status", "正在处理")
         redis_client.hset(f"task_status:{task_id}", "step", "final_task")
-        redis_client.hset(f"task_status:{task_id}", "message", "开始生成最终报告")
+        redis_client.hset(f"task_status:{task_id}", "message", "正在进行第五步：开始生成最终报告，共5步")
 
         pcap_info_list = PcapInfoList.parse_obj(data)
         # Initialize the global response with predefined values
@@ -749,7 +782,7 @@ def final_task(results, data, task_id, ip_address):
             ],
             "overall_analysis_info": {
                 "summary": {
-                    "performance_trends": "整体性能趋势，例如重放环境与生产相比通常表现出更高还是更低的延迟。",
+                    "performance_trends": "整体性能趋势，重放环境与生产相比通常表现出更高还是更低的延迟。",
                     "common_bottlenecks": "识别在多次分析中观察到的任何反复出现的瓶颈（例如网络问题、数据库减速）例如：网络带宽限制和数据库查询性能是多个任务中经常出现的瓶颈。优化这些方面可显著提高性能。",
                     "anomalies": "突出显示在多个单独分析中出现的任何显著异常，并注意它们是孤立的还是更广泛趋势的一部分。讨论这些异常的可能系统性原因。例如：文件上传过程中最常出现异常，表明服务器端处理或网络稳定性存在潜在问题",
                     "recommendations": "根据单独的发现提供综合建议，例如应优先考虑优化工作的领域。例如：建议优先考虑数据库索引和查询优化，并探索升级网络基础设施。"
@@ -782,12 +815,12 @@ def final_task(results, data, task_id, ip_address):
 
         # 更新任务状态为 "完成"
         redis_client.hset(f"task_status:{task_id}", "status", "完成")
-        redis_client.hset(f"task_status:{task_id}", "message", "最终报告生成完成")
+        redis_client.hset(f"task_status:{task_id}", "message", "第五步：最终报告生成完成，共5步")
 
     except Exception as e:
         # 更新任务状态为 "失败"
         redis_client.hset(f"task_status:{task_id}", "status", "失败")
-        redis_client.hset(f"task_status:{task_id}", "message", f"生成最终报告时出错: {str(e)}")
+        redis_client.hset(f"task_status:{task_id}", "message", f"第五步：生成最终报告时出错，共5步，报错如下: {str(e)}")
         logger.error(f"生成最终报告时出错: {str(e)}")
         raise
 

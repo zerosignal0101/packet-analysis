@@ -21,6 +21,8 @@ def classify_path(path):
     else:
         return 'other'
 
+# 请求路径层级分类函数
+# def classify_path_by_tree(path):
 
 # 特征提取与标准化
 def extract_and_standardize_features(df):
@@ -84,7 +86,7 @@ def cluster_data(df):
     
 #     return df, csv_save_path
 
-def detect_anomalies(df, original_df, category, csv_folder_output,threshold_multiplier=2):
+def detect_anomalies(df, original_df, category, csv_folder_output,numbers,env,threshold_multiplier=2):
     """
     检测异常点，标记 Time_since_request 超过 average_delay * threshold_multiplier 的数据。
 
@@ -119,7 +121,7 @@ def detect_anomalies(df, original_df, category, csv_folder_output,threshold_mult
     anomaly_data['Average_Time_since_request'] = anomaly_data['average_delay']
 
     # 保存异常点数据到CSV
-    csv_save_path = os.path.join(csv_folder_output, f'{category}_anomalies.csv')
+    csv_save_path = os.path.join(csv_folder_output, f'{category}_anomalies_{numbers}_{env}.csv')
     anomaly_data.to_csv(csv_save_path, index=False)
     print("异常点数据已保存:", csv_save_path)
 
@@ -185,7 +187,7 @@ def plot_anomalies(df, title, filename, plot_folder_output):
     return plot_save_path
 
 
-def analysis(csv_input, folder_output):
+def analysis(csv_input, folder_output,numbers,env):
     ret_csv_list = []
     ret_plot_list = []
     # 读取CSV文件 当前使用这一版
@@ -204,10 +206,10 @@ def analysis(csv_input, folder_output):
     if not os.path.exists(csv_folder_output):
         os.makedirs(csv_folder_output)
 
-    classified_requests_csv_path = os.path.join(csv_folder_output, 'classified_requests.csv')
+    classified_requests_csv_path = os.path.join(csv_folder_output, f'classified_requests_{numbers}_{env}.csv')
     data.to_csv(classified_requests_csv_path, index=False)
 
-    # 路径返回到ret_csv_list
+    # 路径返回到ret_csv_list 该列表存储所有csv路径
     ret_csv_list.append(classified_requests_csv_path)
 
     # 对每一类请求分别提取特征并标准化
@@ -224,21 +226,21 @@ def analysis(csv_input, folder_output):
     dynamic_resource_data = cluster_data(dynamic_resource_data)
     other_data = cluster_data(other_data)
 
-    # 对每一类请求分别进行异常点检测
+    # 对每一类请求分别进行异常点检测 输出结果为每种类别的异常csv文件
     api_post_data, csv_api_post_path = detect_anomalies(api_post_data,
                                                         data[data['request_type'] == 'api_post'], 'api_post',
-                                                        csv_folder_output)
+                                                        csv_folder_output,numbers,env)
     static_resource_data, csv_static_path = detect_anomalies(static_resource_data,
                                                              data[data['request_type'] == 'static_resource'],
                                                              'static_resource',
-                                                             csv_folder_output)
+                                                             csv_folder_output,numbers,env)
     api_get_data, csv_api_get_path = detect_anomalies(api_get_data, data[data['request_type'] == 'api_get'], 'api_get',
-                                                      csv_folder_output)
+                                                      csv_folder_output,numbers,env)
     dynamic_resource_data, csv_dynamic_path = detect_anomalies(dynamic_resource_data,
                                                                data[data['request_type'] == 'dynamic_resource'],
-                                                               'dynamic_resource', csv_folder_output)
+                                                               'dynamic_resource', csv_folder_output,numbers,env)
     other_data, csv_other_path = detect_anomalies(other_data, data[data['request_type'] == 'other'], 'other',
-                                                  csv_folder_output)
+                                                  csv_folder_output,numbers,env)
 
     # 路径返回到ret_csv_list
     ret_csv_list.append(csv_api_post_path)

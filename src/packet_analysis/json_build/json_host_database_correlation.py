@@ -29,7 +29,7 @@ def convert_dctime(dctime):
     return readable_time.strftime('%Y-%m-%d %H:%M:%S')
 
 
-# 提取数据的函数
+# 提取数据的函数 将日志json格式化成需要的格式
 def extract_data(json_data, kpi_mapping):
     extracted_data = []
     logger.info("0000000")
