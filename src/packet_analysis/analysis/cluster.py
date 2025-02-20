@@ -213,18 +213,25 @@ def analysis(csv_input, folder_output,numbers,env):
     ret_csv_list.append(classified_requests_csv_path)
 
     # 对每一类请求分别提取特征并标准化
-    api_post_data = extract_and_standardize_features(data[data['request_type'] == 'api_post'].copy())
-    static_resource_data = extract_and_standardize_features(data[data['request_type'] == 'static_resource'].copy())
-    api_get_data = extract_and_standardize_features(data[data['request_type'] == 'api_get'].copy())
-    dynamic_resource_data = extract_and_standardize_features(data[data['request_type'] == 'dynamic_resource'].copy())
-    other_data = extract_and_standardize_features(data[data['request_type'] == 'other'].copy())
+    # api_post_data = extract_and_standardize_features(data[data['request_type'] == 'api_post'].copy())
+    # static_resource_data = extract_and_standardize_features(data[data['request_type'] == 'static_resource'].copy())
+    # api_get_data = extract_and_standardize_features(data[data['request_type'] == 'api_get'].copy())
+    # dynamic_resource_data = extract_and_standardize_features(data[data['request_type'] == 'dynamic_resource'].copy())
+    # other_data = extract_and_standardize_features(data[data['request_type'] == 'other'].copy())
 
-    # 对每一类请求分别进行聚类分析
-    api_post_data = cluster_data(api_post_data)
-    static_resource_data = cluster_data(static_resource_data)
-    api_get_data = cluster_data(api_get_data)
-    dynamic_resource_data = cluster_data(dynamic_resource_data)
-    other_data = cluster_data(other_data)
+    # 不 对每一类请求分别提取特征并标准化
+    api_post_data = data[data['request_type'] == 'api_post'].copy()
+    static_resource_data = data[data['request_type'] == 'static_resource'].copy()
+    api_get_data = data[data['request_type'] == 'api_get'].copy()
+    dynamic_resource_data = data[data['request_type'] == 'dynamic_resource'].copy()
+    other_data = data[data['request_type'] == 'other'].copy()
+
+    # 对每一类请求分别进行聚类分析   这一步增加了数据中的一列 cluster列来给后面画图用，先旁路掉
+    # api_post_data = cluster_data(api_post_data)
+    # static_resource_data = cluster_data(static_resource_data)
+    # api_get_data = cluster_data(api_get_data)
+    # dynamic_resource_data = cluster_data(dynamic_resource_data)
+    # other_data = cluster_data(other_data)
 
     # 对每一类请求分别进行异常点检测 输出结果为每种类别的异常csv文件
     api_post_data, csv_api_post_path = detect_anomalies(api_post_data,
@@ -256,31 +263,32 @@ def analysis(csv_input, folder_output,numbers,env):
     if not os.path.exists(plot_folder_output):
         os.makedirs(plot_folder_output)
 
-    ret_plot_list.append(plot_clusters(api_post_data, 'API POST Request Clusters', 'api_post_clusters', plot_folder_output))
-    ret_plot_list.append(
-        plot_anomalies(api_post_data, 'API POST Request Anomalies', 'api_post_anomalies', plot_folder_output))
+    #这一步画完聚类图后没有用到，暂时旁路掉
+    # ret_plot_list.append(plot_clusters(api_post_data, 'API POST Request Clusters', 'api_post_clusters', plot_folder_output))
+    # ret_plot_list.append(
+    #     plot_anomalies(api_post_data, 'API POST Request Anomalies', 'api_post_anomalies', plot_folder_output))
 
-    ret_plot_list.append(
-        plot_clusters(static_resource_data, 'Static Resource Request Clusters', 'static_resource_clusters',
-                      plot_folder_output))
-    ret_plot_list.append(
-        plot_anomalies(static_resource_data, 'Static Resource Request Anomalies', 'static_resource_anomalies',
-                       plot_folder_output))
+    # ret_plot_list.append(
+    #     plot_clusters(static_resource_data, 'Static Resource Request Clusters', 'static_resource_clusters',
+    #                   plot_folder_output))
+    # ret_plot_list.append(
+    #     plot_anomalies(static_resource_data, 'Static Resource Request Anomalies', 'static_resource_anomalies',
+    #                    plot_folder_output))
 
-    ret_plot_list.append(
-        plot_clusters(api_get_data, 'API GET Request Clusters', 'api_get_clusters', plot_folder_output))
-    ret_plot_list.append(
-        plot_anomalies(api_get_data, 'API GET Request Anomalies', 'api_get_anomalies', plot_folder_output))
+    # ret_plot_list.append(
+    #     plot_clusters(api_get_data, 'API GET Request Clusters', 'api_get_clusters', plot_folder_output))
+    # ret_plot_list.append(
+    #     plot_anomalies(api_get_data, 'API GET Request Anomalies', 'api_get_anomalies', plot_folder_output))
 
-    ret_plot_list.append(
-        plot_clusters(dynamic_resource_data, 'Dynamic Resource Request Clusters', 'dynamic_resource_clusters',
-                      plot_folder_output))
-    ret_plot_list.append(
-        plot_anomalies(dynamic_resource_data, 'Dynamic Resource Request Anomalies', 'dynamic_resource_anomalies',
-                       plot_folder_output))
+    # ret_plot_list.append(
+    #     plot_clusters(dynamic_resource_data, 'Dynamic Resource Request Clusters', 'dynamic_resource_clusters',
+    #                   plot_folder_output))
+    # ret_plot_list.append(
+    #     plot_anomalies(dynamic_resource_data, 'Dynamic Resource Request Anomalies', 'dynamic_resource_anomalies',
+    #                    plot_folder_output))
 
-    ret_plot_list.append(plot_clusters(other_data, 'Other Request Clusters', 'other_clusters', plot_folder_output))
-    ret_plot_list.append(plot_anomalies(other_data, 'Other Request Anomalies', 'other_anomalies', plot_folder_output))
+    # ret_plot_list.append(plot_clusters(other_data, 'Other Request Clusters', 'other_clusters', plot_folder_output))
+    # ret_plot_list.append(plot_anomalies(other_data, 'Other Request Anomalies', 'other_anomalies', plot_folder_output))
 
     return ret_csv_list, ret_plot_list
 

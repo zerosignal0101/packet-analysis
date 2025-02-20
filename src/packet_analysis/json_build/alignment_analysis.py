@@ -316,7 +316,7 @@ def analyze_empty_responses(file_path, output_prefix, result_dict=None, result_k
     ]:
 
         dics = {
-            "class_name": f"{env}异常状态码分析",
+            "class_name": f"{env}存在某请求的响应包为空分析",
             "details": [],
         }
 
@@ -419,7 +419,7 @@ def analyze_zero_window_issues(file_path, output_prefix, result_dict=None, resul
         total_requests = int(len(data))
         conclusions.append(f"{env}中共有 {total_zero_window} 次传输窗口已满问题，占总请求数的 {total_zero_window / total_requests:.2%}。")
         dics = {
-            "class_name": f"{env}异常状态码分析",
+            "class_name": f"{env}是否存在TCP传输窗口，导致响应时间变长的分析",
             "details": [],
         }
         detail_entry = {
