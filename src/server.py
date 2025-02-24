@@ -665,12 +665,14 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         production_database_logs,
         db_analysis.load_csv_logs(production_csv_file_path)
     )
+    logger.info(f"Production database logs count: {production_database_logs_count}")
     replay_database_logs, replay_database_logs_count \
         = db_analysis.load_database_logs(replay_json_path, exec_time_threshold)
     replay_bottleneck_analysis_database = db_analysis.match_logs(
         replay_database_logs,
         db_analysis.load_csv_logs(replay_csv_file_path)
     )
+    logger.info(f"Replay database logs count: {replay_database_logs_count}")
     bottleneck_analysis_database = [
         {
             "hostip": production_ip,
