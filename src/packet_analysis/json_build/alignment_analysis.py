@@ -193,7 +193,7 @@ def analyze_status_code(file_path, output_prefix):
                 "cause": description,
                 "count": len(group),
                 "total_count": total_requests,
-                "ratio": round(len(group) / total_requests, 6) if total_requests > 0 else 999999.999999,
+                "ratio": round(len(group) / total_requests, 6) if total_requests > 0 else 0.0,
                 "solution":status_code_solutions.get(code, "未知解决方案"),
                 "request_paths": []
             }
@@ -202,7 +202,7 @@ def analyze_status_code(file_path, output_prefix):
             
             for path, count in request_counts.items():
                 path_total = len(data[data['Path'] == path])
-                proportion = round(count / path_total, 6) if path_total > 0 else 99.999999
+                proportion = round(count / path_total, 6) if path_total > 0 else 0.0
 
                 detail_entry["request_paths"].append({
                     "request_url": path,
@@ -330,7 +330,7 @@ def analyze_empty_responses(file_path, output_prefix, result_dict=None, result_k
             "cause": "服务器内部的错误或配置问题可能导致回包为空。可能由以下情况引发：服务未启动或异常终止，路由配置错误，数据库权限限制" if total_empty > 0 else "服务器的HTTP响应包信息全部完整，不存在信息缺失的情况",
             "count": total_empty,
             "total_count": total_requests,
-            "ratio": float(round(total_empty / total_requests, 6)) if total_requests > 0 else 999999.999999,
+            "ratio": float(round(total_empty / total_requests, 6)) if total_requests > 0 else 0.0,
             "solution":"1. 检查对应路径的服务端日志，确认是否因为程序错误、超时或配置导致返回空响应包。\n2. 对于生产环境，建议重点排查登录和权限问题，有没有和数据库建立连接\n3. 在回放环境中，验证是否有因数据回放设置不完整导致的空响应包情况。" if total_empty > 0 else "HTTP响应数据全部完整，无需特别处理。",
             "request_paths": []
         }
@@ -341,7 +341,7 @@ def analyze_empty_responses(file_path, output_prefix, result_dict=None, result_k
         detailed_summary = []
         for path, count in path_counts.items():
             total_count = total_path_counts.get(path, 0)
-            percentage = round(count / total_count, 6) if total_count > 0 else 99.999999
+            percentage = round(count / total_count, 6) if total_count > 0 else 0.0
             detailed_summary.append(f"请求路径 {path}: {count} 条，占该路径总请求数的 {percentage:.2%}。")
             detail_entry["request_paths"].append({
                 "request_url": path,
@@ -427,7 +427,7 @@ def analyze_zero_window_issues(file_path, output_prefix, result_dict=None, resul
             "cause": "TCP连接中接收方的接收缓冲区已满,无法接收更多数据,导致发送方停止发送数据的情况‌,会造成传输时延增大,服务器响应时间受到影响" if total_zero_window > 0 else "没有出现TCP传输窗口为0的问题",
             "count": total_zero_window,
             "total_count": total_requests,
-            "ratio": float(round(total_zero_window / total_requests, 6)) if total_requests > 0 else 99.999999,
+            "ratio": float(round(total_zero_window / total_requests, 6)) if total_requests > 0 else 0.0,
             "solution":"1. 检查对应路径的网络状况，确认是否因带宽、负载或硬件问题导致传输窗口已满。\n2. 对生产环境，建议优化服务器端响应机制，避免发送过多数据超过接收端处理能力。\n3. 在回放环境中，确认回放机制是否准确模拟生产环境流量，并排查可能的配置问题。" if total_zero_window > 0 else "没有出现TCP传输窗口为0的问题，无需特别处理。",
             "request_paths": []
         }
@@ -438,7 +438,7 @@ def analyze_zero_window_issues(file_path, output_prefix, result_dict=None, resul
         detailed_summary = []
         for path, count in path_counts.items():
             total_count = total_path_counts.get(path, 0)
-            percentage = round(count / total_count, 6) if total_count > 0 else 999999.999999
+            percentage = round(count / total_count, 6) if total_count > 0 else 0.0
             detailed_summary.append(f"请求路径 {path}: {count} 次，占该路径总请求数的 {percentage:.2%}。")
             detail_entry["request_paths"].append({
                 "request_url": path,

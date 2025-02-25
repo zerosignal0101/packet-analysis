@@ -286,7 +286,7 @@ def align_data(results, production_csv_file_path, replay_csv_file_path, alignmen
 def safe_format(value):
     # 如果值是 NaN 或 None，则返回 0 或其他默认值
     if pd.isna(value):
-        return "999999.999999"  # 或者根据需求返回 None
+        return None  # 或者根据需求返回 None
     return "{:.6f}".format(value)
 
 
@@ -295,6 +295,12 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
                           replay_csv_file_path,
                           production_csv_file_path, task_id, production_json_path, replay_json_path,
                           alignment_csv_file_path):
+
+    contrast_delay_conclusion = None
+    res = {
+        "comparison_analysis": {},
+        "anomaly_detection": {},
+    }
     try:
         # 更新任务状态为 "正在处理"
         # redis_client.hset(f"task_status:{task_id}", "status", "正在处理")
@@ -302,18 +308,18 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         # redis_client.hset(f"task_status:{task_id}", "message", "正在进行第三步，聚类分析，共5步")
         set_task_status(task_id, pcap_index, "正在处理", "cluster_analysis_data", f"模块{pcap_index}正在进行第三步，聚类分析，共5步")
 
-        # res variable
-        res = {
-            "comparison_analysis": {},
-            "anomaly_detection": {},
-        }
+        # res variable  我感觉这个res应该放在try except 外面
+        # res = {
+        #     "comparison_analysis": {},
+        #     "anomaly_detection": {},
+        # }
 
         # Process CSV files and get comparison analysis data to build JSON
         # Request_Info_File_Path = f"packet_analysis/json_build/path_function.csv"
         logger.info(f"json started at {datetime.now()}")
         DataBase = DB(csv_back=replay_csv_file_path, csv_production=production_csv_file_path)
         # 添加返回值
-        data_list, path_delay_dict = DataBase.built_all_dict()
+        data_list, path_delay_dict, contrast_delay_conclusion = DataBase.built_all_dict()
 
         outputs_path = f'./results/{task_id}'
 
@@ -430,7 +436,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
                 "hostip": replay_ip,
                 "class_name": "error warning",
                 "cause": "回放环境随机森林模型建立失败，为确保顺利返回，当前为预设值，具体原因请排查",
-                "criteria": "可能是日志文件和数据包文件时间不匹配",
+                "criteria": "可能是回放环境采集时间不足，日志文件和数据包文件时间不匹配",
                 "solution": "具体原因可以结合输出日志分析"
             },
             {
@@ -438,7 +444,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
                 "hostip": production_ip,
                 "class_name": "error warning",
                 "cause": "生产环境随机森林模型建立失败，为确保顺利返回，当前为预设值，具体原因请排查",
-                "criteria": "可能是日志文件和数据包文件时间不匹配",
+                "criteria": "可能是生产环境采集时间不足，日志文件和数据包文件时间不匹配",
                 "solution": "具体原因可以结合输出日志分析"
             }
         ]
@@ -779,7 +785,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
     
     logger.info("Cluster_analysis finished.")
 
-    return pcap_index, res
+    return pcap_index, res, contrast_delay_conclusion
 
 
 def save_response_to_file(response, file_path="response.json"):
@@ -816,7 +822,7 @@ def generate_overview_conclusion(task_id, index):
         # 生成请求数量结论
         count_conclusion = f"生产环境有 {production_count} 个请求，回放环境有 {replay_count} 个请求。"
         if max(production_count, replay_count) / min(production_count, replay_count) >= 1.2:
-            count_conclusion += " 生产环境和回放环境请求数量上存在显著差异。"
+            count_conclusion += " 生产环境和回放环境请求数量上存在显著差异，请检查回放时间是否足够"
         else:
             count_conclusion += " 生产环境和回放环境数量上差异不大。"
 
@@ -882,8 +888,9 @@ def final_task(results, data, task_id, ip_address):
 
         for result in results:
             if result is not None:
-                index, res = result
+                index, res, contrast_delay_conclusion = result
                 response['individual_analysis_info'][index] = res
+                response['overall_analysis_info']['overview'][index]['text'] += contrast_delay_conclusion #这里是额外的内容
 
         save_response_to_file(response, f'./results/{task_id}/response.json')
 

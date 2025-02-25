@@ -200,7 +200,7 @@ class DB:
         if count_pro > 0 and count_replay > 0 and count_pro / count_replay > 2:
             additional_info = " 该请求回放环境的数据量远远不够，请仔细检查相关信息。"
         elif count_pro > 0 and count_replay > 0 and count_pro / count_replay <= 2:
-            additional_info = " 该请求生产环境和回放环境数据率基本正常"
+            additional_info = " 该请求生产环境和回放环境数据量基本正常"
 
         
         # 返回最终信息
@@ -244,7 +244,7 @@ class DB:
         def safe_format(value):
             # 如果值是 NaN 或 None，则返回 0 或其他默认值
             if pd.isna(value):
-                return "999999.999999"  # 或者根据需求返回 None
+                return "0"  # 或者根据需求返回 None
             return "{:.6f}".format(value)
 
         df_dict = {}
@@ -280,6 +280,64 @@ class DB:
 
         return df_dict
 
+    def get_difference_ratio_weighted(self, all_df_list):
+        # 用来统计总请求数、回放时延较低的请求数和生产时延较低的请求数
+        total_requests = 0
+        replay_lower_count = 0
+        production_lower_count = 0
+
+        total_weighted_production_delay = 0
+        total_weighted_replay_delay = 0
+
+
+        # 用来加权计算
+        weighted_replay = 0
+        weighted_production = 0
+
+        for df_dict in all_df_list:
+            # 获取每个 URL 的信息
+            difference_ratio = float(df_dict['mean_difference_ratio'])  # difference_ratio
+            request_count = df_dict['request_count']  # 每种请求的数量
+            production_delay_mean = float(df_dict["production_delay_mean"])
+            replay_delay_mean = float(df_dict["replay_delay_mean"])
+
+            total_requests += request_count  # 累加总请求数
+            
+            #如果该url不存在回放请求，为保证加权平均时延的一致性，生产的也不计算了
+            if replay_delay_mean != 0.0:
+                total_weighted_production_delay += production_delay_mean * request_count
+                total_weighted_replay_delay += replay_delay_mean * request_count
+            else:
+                total_weighted_production_delay += 0
+                total_weighted_replay_delay += 0
+
+
+            if difference_ratio >= 1:                
+                production_lower_count += request_count  # 生产时延较低
+                weighted_production += request_count * difference_ratio  # 加权计算生产时延
+
+            else:                
+                replay_lower_count += request_count  # 回放时延较低
+                if difference_ratio != 0.0:
+                    weighted_replay += request_count * (1 / difference_ratio)  # 加权计算回放时延
+                else:
+                    weighted_replay += 0
+
+        # 计算整体加权
+        weighted_average_production = weighted_production / total_requests
+        weighted_average_replay = weighted_replay / total_requests
+
+        overall_production_delay = total_weighted_production_delay / total_requests
+        overall_replay_delay = total_weighted_replay_delay / total_requests
+
+        # 得出结论
+        if weighted_average_production > weighted_average_replay:
+            contrast_delay_conclusion = f"生产环境整体时延较低,生产环境加权平均时延为{round(overall_production_delay, 6)},回放环境加权平均时延为{round(overall_replay_delay, 6)},生产环境时延低的权重为：{weighted_average_production}, 回放环境时延低的权重为：{weighted_average_replay},生产较快的请求数为{production_lower_count},回放较快的请求数为{replay_lower_count},总请求数为{total_requests}"
+        else:
+            contrast_delay_conclusion = f"回放环境整体时延较低,回放环境加权平均时延为{round(overall_replay_delay, 6)},生产环境加权平均时延为{round(overall_production_delay, 6)},回放环境时延低的权重为：{weighted_average_replay}, 生产环境时延低的权重为：{weighted_average_production},回放较快的请求数为{replay_lower_count},生产较快的请求数为{production_lower_count},总请求数为{total_requests}"
+
+        return contrast_delay_conclusion
+
 
     def built_all_dict(self):
         all_df_list = []
@@ -293,10 +351,11 @@ class DB:
                 "replay_delay_mean": replay_delay_mean,
                 
             }
-        return all_df_list,path_delay_dict
+        contrast_delay_conclusion = self.get_difference_ratio_weighted(all_df_list)
+        return all_df_list,path_delay_dict,contrast_delay_conclusion
 
     def add_delay_to_df(self):
-        _, path_delay_dict = self.built_all_dict()
+        _, path_delay_dict,_ = self.built_all_dict()
 
         # 遍历 path，给 self.df_product 和 self.df_back 添加平均值
         self.df_product['average_delay'] = self.df_product['Path'].map(
@@ -317,12 +376,12 @@ class DB:
         self.df_product.to_csv(self.csv_production, encoding='utf-8-sig', index=False)
         self.df_back.to_csv(self.csv_back, encoding='utf-8-sig', index=False)
 
-        all_dicts, _ = self.built_all_dict()
+        all_dicts, _, _ = self.built_all_dict()
         df_result = pd.DataFrame(all_dicts)
         df_result.to_csv(file_name, encoding='utf-8-sig', index=False)  # 使用'utf-8-sig'编码保证中文不乱码
 
     def plot_mean_difference_ratio(self, file_name):
-        all_dicts, _ = self.built_all_dict()
+        all_dicts, _, _ = self.built_all_dict()
         df_result = pd.DataFrame(all_dicts)
 
         # 将'mean_difference_ratio'转为浮点数
