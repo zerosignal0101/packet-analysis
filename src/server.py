@@ -29,6 +29,7 @@ from src.packet_analysis.json_build import anomaly_detection
 from src.packet_analysis.utils.logger_config import logger
 from datetime import datetime
 from src.packet_analysis.json_build import alignment_analysis, db_analysis
+from collections import defaultdict
 
 app = Flask(__name__)
 # 使用新格式的配置名称
@@ -289,6 +290,42 @@ def safe_format(value):
         return None  # 或者根据需求返回 None
     return "{:.6f}".format(value)
 
+def get_bottleneck_analysis(url):
+    """根据URL特征返回字符串格式的分析"""
+    # 增强版规则库
+    analysis_rules = [
+        {
+            'keywords': ['account', 'act'],
+            'cause': "高频账户操作导致数据库锁竞争",
+            'solution': "优化账户表索引（添加复合索引）；引入Redis缓存账户状态信息；批量处理账户操作"  # 改为字符串
+        },
+        {
+            'keywords': ['cust', 'customer'],
+            'cause': "客户信息关联查询复杂度过高",
+            'solution': "物化视图预计算关联数据；引入Elasticsearch优化查询；业务拆分降低事务粒度"
+        },
+        {
+            'keywords': ['insert', 'create'],
+            'cause': "逐条写入导致IO压力过大",
+            'solution': "批量操作合并数据库事务；采用异步队列缓冲写入；调整存储引擎配置"
+        },
+        {
+            'keywords': ['file', 'upload'],
+            'cause': "大文件传输引发网络瓶颈", 
+            'solution': "实现分块上传/断点续传；使用OSS对象存储分流；启用Brotli压缩传输"
+        }
+    ]
+
+    # 带优先级的匹配逻辑
+    for rule in analysis_rules:
+        if any(kw in url.lower() for kw in rule['keywords']):
+            return rule
+    
+    # 默认返回（也保持字符串格式）
+    return {
+        'cause': "业务逻辑处理耗时过长",
+        'solution': "使用性能剖析工具定位热点；优化算法时间复杂度；考虑JIT编译优化"
+    }
 
 @celery.task(name='server.cluster_analysis_data')
 def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, production_ip, replay_ip,
@@ -301,6 +338,17 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         "comparison_analysis": {},
         "anomaly_detection": {},
     }
+    anomaly_dict = [{
+        "request_url": "/portal_todo/api/getAllUserTodoData",
+        "env": "production",
+        "count": 9999,  # hyf 修改格式
+        "hostip": production_ip,
+        "class_method": "api_get",
+        "bottleneck_cause": "(当前该部分为展示样例)",
+        "solution": "(当前该部分为展示样例)"
+    }]
+    res['anomaly_detection']['dict'] = anomaly_dict
+
     try:
         # 更新任务状态为 "正在处理"
         # redis_client.hset(f"task_status:{task_id}", "status", "正在处理")
@@ -346,9 +394,9 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
 
         # production cluster anomaly and replay cluster anomaly 在这一步，不同组数据发生报错 该步骤输出classifiy文件 分类后每一类的异常数据文件
         folder_output_pro = os.path.join(outputs_path, f"cluster_production_{pcap_index}")
-        pro_anomaly_csv_list, pro_plot_cluster_list = cluster.analysis(production_csv_file_path, folder_output_pro,pcap_index,env='pro')
+        pro_anomaly_csv_list, pro_plot_cluster_list = cluster.analysis(production_csv_file_path, folder_output_pro,pcap_index,data_list,env='pro')
         folder_output_replay = os.path.join(outputs_path, f"cluster_replay_{pcap_index}")
-        replay_anomaly_csv_list, replay_plot_cluster_list = cluster.analysis(replay_csv_file_path, folder_output_replay,pcap_index,env='replay')
+        replay_anomaly_csv_list, replay_plot_cluster_list = cluster.analysis(replay_csv_file_path, folder_output_replay,pcap_index,data_list,env='replay')
 
         # Process anomaly CSV files to build JSON
         all_pro_anomaly_details = anomaly_detection.process_anomalies(pro_anomaly_csv_list, "production",
@@ -356,7 +404,34 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         all_replay_anomaly_details = anomaly_detection.process_anomalies(replay_anomaly_csv_list, "replay",
                                                                          replay_ip)
         combined_anomaly_details = all_pro_anomaly_details + all_replay_anomaly_details
-        res['anomaly_detection']['details'] = combined_anomaly_details
+        # res['anomaly_detection']['details'] = combined_anomaly_details  #既包含生产又包含回放的异常数据0225hyf
+        res['anomaly_detection']['details'] = all_replay_anomaly_details  #只包含回放的异常数据
+
+        request_summary = defaultdict(lambda: {"count": 0, "env": "", "hostip": "", "class_method": ""})
+
+        for entry in all_replay_anomaly_details:
+            request_url = entry["request_url"]
+            request_summary[request_url]["count"] = int(entry["count"])
+            request_summary[request_url]["env"] = entry["env"]
+            request_summary[request_url]["hostip"] = entry["hostip"]
+            request_summary[request_url]["class_method"] = entry["class_method"]
+
+        # 生成目标格式
+        dict_output = [
+            {
+                "request_url": url,
+                "env": details["env"],
+                "count": details["count"],
+                "hostip": details["hostip"],
+                "class_method": details["class_method"],
+                "bottleneck_cause": get_bottleneck_analysis(url)['cause'],
+                "solution": get_bottleneck_analysis(url)['solution']
+            }
+            for url, details in request_summary.items()
+        ]
+        res['anomaly_detection']['dict']=dict_output
+
+
 
         # redis_client.hset(f"task_status:{task_id}", "status", "完成")
         # redis_client.hset(f"task_status:{task_id}", "message", "第三步聚类分析完成，共5步")
@@ -772,16 +847,16 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
     # 方式2 返回json格式的信息
     res['performance_bottleneck_analysis']['database'] = bottleneck_analysis_database
 
-    anomaly_dict = [{
-        "request_url": "/portal_todo/api/getAllUserTodoData",
-        "env": "production",
-        "count": 9999,  # hyf 修改格式
-        "hostip": production_ip,
-        "class_method": "api_get",
-        "bottleneck_cause": "(当前该部分为展示样例)",
-        "solution": "(当前该部分为展示样例)"
-    }]
-    res['anomaly_detection']['dict'] = anomaly_dict
+    # anomaly_dict = [{
+    #     "request_url": "/portal_todo/api/getAllUserTodoData",
+    #     "env": "production",
+    #     "count": 9999,  # hyf 修改格式
+    #     "hostip": production_ip,
+    #     "class_method": "api_get",
+    #     "bottleneck_cause": "(当前该部分为展示样例)",
+    #     "solution": "(当前该部分为展示样例)"
+    # }]
+    # res['anomaly_detection']['dict'] = anomaly_dict
     
     logger.info("Cluster_analysis finished.")
 
@@ -836,9 +911,9 @@ def generate_overview_conclusion(task_id, index):
         # 生成对齐结论
         alignment_conclusion = f"生产环境和回放环境对齐了 {success_count} 个，失败了 {fail_count} 个，对齐成功的比例是 {success_ratio:.2%}。"
         if success_ratio >= 0.9:
-            alignment_conclusion += " 生产环境和回放环境基本对齐。"
+            alignment_conclusion += " 生产环境和回放环境相同请求数据匹配，基本对齐。"
         else:
-            alignment_conclusion += " 生产环境和回放环境数据匹配度不高，建议重新查看该模块的回放数据。"
+            alignment_conclusion += " 生产环境和回放环境相同请求数据匹配度不高，建议重新查看该模块的回放数据。"
 
         # 返回完整结论
         return count_conclusion + " " + alignment_conclusion
@@ -886,11 +961,38 @@ def final_task(results, data, task_id, ip_address):
         # 控制台输出内容
         # logger.info(f"Results: {results}")
 
+        production_faster_count = 0
+        replay_faster_count = 0
+        production_faster_modules = []
+        replay_faster_modules = []
         for result in results:
             if result is not None:
                 index, res, contrast_delay_conclusion = result
                 response['individual_analysis_info'][index] = res
                 response['overall_analysis_info']['overview'][index]['text'] += contrast_delay_conclusion #这里是额外的内容
+
+                # 统计时延情况
+                if "生产环境整体时延较低" in contrast_delay_conclusion:
+                    production_faster_count += 1
+                    production_faster_modules.append(index)
+                elif "回放环境整体时延较低" in contrast_delay_conclusion:
+                    replay_faster_count += 1
+                    replay_faster_modules.append(index)
+        # 生成总结性结论
+        total_modules = len(results)
+        trends_conclusion = f"此次任务共有{total_modules}个模块，"
+        if production_faster_modules:
+            trends_conclusion += f"其中模块{', '.join(map(str, production_faster_modules))}生产环境平均时延较低，"
+        if replay_faster_modules:
+            trends_conclusion += f"模块{', '.join(map(str, replay_faster_modules))}回放环境平均时延较低，"
+        if production_faster_count > replay_faster_count:
+            trends_conclusion += "整体性能对比上，生产环境快的模块较多，回放环境还需优化。"
+        elif production_faster_count < replay_faster_count:
+            trends_conclusion += "整体性能对比上，回放环境快的模块较多。"
+        else:
+            trends_conclusion += "整体性能对比上，生产和回放环境时延相当。"
+        response['overall_analysis_info']['summary']['performance_trends'] = trends_conclusion
+
 
         save_response_to_file(response, f'./results/{task_id}/response.json')
 

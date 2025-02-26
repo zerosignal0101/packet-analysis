@@ -331,10 +331,10 @@ class DB:
         overall_replay_delay = total_weighted_replay_delay / total_requests
 
         # 得出结论
-        if weighted_average_production > weighted_average_replay:
-            contrast_delay_conclusion = f"生产环境整体时延较低,生产环境加权平均时延为{round(overall_production_delay, 6)},回放环境加权平均时延为{round(overall_replay_delay, 6)},生产环境时延低的权重为：{weighted_average_production}, 回放环境时延低的权重为：{weighted_average_replay},生产较快的请求数为{production_lower_count},回放较快的请求数为{replay_lower_count},总请求数为{total_requests}"
+        if overall_replay_delay > overall_production_delay:
+            contrast_delay_conclusion = f"生产环境整体时延较低,生产环境加权平均时延为{round(overall_production_delay, 6)}s,回放环境加权平均时延为{round(overall_replay_delay, 6)}s,生产环境时延低的权重为：{weighted_average_production}, 回放环境时延低的权重为：{weighted_average_replay},生产较快的请求数为{production_lower_count},回放较快的请求数为{replay_lower_count},总请求数为{total_requests}"
         else:
-            contrast_delay_conclusion = f"回放环境整体时延较低,回放环境加权平均时延为{round(overall_replay_delay, 6)},生产环境加权平均时延为{round(overall_production_delay, 6)},回放环境时延低的权重为：{weighted_average_replay}, 生产环境时延低的权重为：{weighted_average_production},回放较快的请求数为{replay_lower_count},生产较快的请求数为{production_lower_count},总请求数为{total_requests}"
+            contrast_delay_conclusion = f"回放环境整体时延较低,回放环境加权平均时延为{round(overall_replay_delay, 6)}s,生产环境加权平均时延为{round(overall_production_delay, 6)}s,回放环境时延低的权重为：{weighted_average_replay}, 生产环境时延低的权重为：{weighted_average_production},回放较快的请求数为{replay_lower_count},生产较快的请求数为{production_lower_count},总请求数为{total_requests}"
 
         return contrast_delay_conclusion
 

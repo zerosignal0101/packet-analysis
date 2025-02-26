@@ -86,7 +86,7 @@ def cluster_data(df):
     
 #     return df, csv_save_path
 
-def detect_anomalies(df, original_df, category, csv_folder_output,numbers,env,threshold_multiplier=2):
+def detect_anomalies(df, original_df, category, csv_folder_output,numbers,env,data_list,threshold_multiplier=2):
     """
     检测异常点，标记 Time_since_request 超过 average_delay * threshold_multiplier 的数据。
 
@@ -109,16 +109,26 @@ def detect_anomalies(df, original_df, category, csv_folder_output,numbers,env,th
     df['Time_since_request'] = pd.to_numeric(df['Time_since_request'], errors='coerce')
     df = df.dropna(subset=['Time_since_request'])
 
+    # 创建URL延迟映射（新增20250225）
+    url_delay_map = {item["url"]: float(item["production_delay_mean"]) for item in data_list}
+    df['reference_delay'] = df['Path'].map(url_delay_map)
+    # 检查未匹配Path（新增20250225）
+    if df['reference_delay'].isnull().any():
+        missing_paths = df[df['reference_delay'].isnull()]['Path'].unique()
+        raise ValueError(f"Data contains unmapped Paths: {missing_paths}")
+
     # 初始化 'anomaly' 列为 1（正常点）
     df['anomaly'] = 1
 
-    # 筛选出大于2倍平均值的异常数据
-    anomaly_indices = df[df['Time_since_request'] > threshold_multiplier * df['average_delay']].index
+    # 筛选出大于2倍平均值的异常数据（修改20250225）
+    anomaly_indices = df[df['Time_since_request'] > threshold_multiplier * df['reference_delay']].index
+    # anomaly_indices = df[df['Time_since_request'] > threshold_multiplier * df['average_delay']].index
     df.loc[anomaly_indices, 'anomaly'] = -1
 
     # 筛选异常点数据
     anomaly_data = df[df['anomaly'] == -1].copy()
-    anomaly_data['Average_Time_since_request'] = anomaly_data['average_delay']
+    # anomaly_data['Average_Time_since_request'] = anomaly_data['average_delay']
+    anomaly_data['Average_Time_since_request'] = anomaly_data['reference_delay']  # 列名可能需要调整20250225
 
     # 保存异常点数据到CSV
     csv_save_path = os.path.join(csv_folder_output, f'{category}_anomalies_{numbers}_{env}.csv')
@@ -187,7 +197,7 @@ def plot_anomalies(df, title, filename, plot_folder_output):
     return plot_save_path
 
 
-def analysis(csv_input, folder_output,numbers,env):
+def analysis(csv_input, folder_output,numbers,data_list,env):
     ret_csv_list = []
     ret_plot_list = []
     # 读取CSV文件 当前使用这一版
@@ -236,18 +246,18 @@ def analysis(csv_input, folder_output,numbers,env):
     # 对每一类请求分别进行异常点检测 输出结果为每种类别的异常csv文件
     api_post_data, csv_api_post_path = detect_anomalies(api_post_data,
                                                         data[data['request_type'] == 'api_post'], 'api_post',
-                                                        csv_folder_output,numbers,env)
+                                                        csv_folder_output,numbers,env,data_list)
     static_resource_data, csv_static_path = detect_anomalies(static_resource_data,
                                                              data[data['request_type'] == 'static_resource'],
                                                              'static_resource',
-                                                             csv_folder_output,numbers,env)
+                                                             csv_folder_output,numbers,env,data_list)
     api_get_data, csv_api_get_path = detect_anomalies(api_get_data, data[data['request_type'] == 'api_get'], 'api_get',
-                                                      csv_folder_output,numbers,env)
+                                                      csv_folder_output,numbers,env,data_list)
     dynamic_resource_data, csv_dynamic_path = detect_anomalies(dynamic_resource_data,
                                                                data[data['request_type'] == 'dynamic_resource'],
-                                                               'dynamic_resource', csv_folder_output,numbers,env)
+                                                               'dynamic_resource', csv_folder_output,numbers,env,data_list)
     other_data, csv_other_path = detect_anomalies(other_data, data[data['request_type'] == 'other'], 'other',
-                                                  csv_folder_output,numbers,env)
+                                                  csv_folder_output,numbers,env,data_list)
 
     # 路径返回到ret_csv_list
     ret_csv_list.append(csv_api_post_path)
