@@ -673,6 +673,10 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         db_analysis.load_csv_logs(replay_csv_file_path)
     )
     logger.info(f"Replay database logs count: {replay_database_logs_count}")
+
+    production_database_logs_ratio = (len(production_bottleneck_analysis_database) / production_database_logs_count) if production_database_logs_count else 0
+    replay_database_logs_ratio = (len(replay_bottleneck_analysis_database) / replay_database_logs_count) if replay_database_logs_count else 0
+
     bottleneck_analysis_database = [
         {
             "hostip": production_ip,
@@ -680,12 +684,12 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
             "class_name": "生产环境数据库日志分析",
             "details": [
                 {
-                    "bottleneck_type": "数据库查询时间异常",
-                    "cause": "异常请求影响",
+                    "bottleneck_type": "数据库查询时间异常" if production_database_logs_ratio > 0.01 else "数据库部分无明显异常",
+                    "cause": "异常请求影响" if production_database_logs_ratio > 0.01 else "-",
                     "count": len(production_bottleneck_analysis_database),
                     "total_count": production_database_logs_count,
-                    "ratio": (len(production_bottleneck_analysis_database) / production_database_logs_count) if production_database_logs_count else 0,
-                    "solution": "排查对应请求的数据库查询性能",
+                    "ratio": production_database_logs_ratio,
+                    "solution": "排查对应请求的数据库查询性能" if production_database_logs_ratio > 0.01 else "-",
                     "request_paths": production_bottleneck_analysis_database
                 }
             ]
@@ -696,12 +700,12 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
             "class_name": "生产环境数据库日志分析",
             "details": [
                 {
-                    "bottleneck_type": "数据库查询时间异常",
-                    "cause": "异常请求影响",
+                    "bottleneck_type": "数据库查询时间异常" if replay_database_logs_ratio > 0.01 else "数据库部分无明显异常",
+                    "cause": "异常请求影响" if replay_database_logs_ratio > 0.01 else "-",
                     "count": len(replay_bottleneck_analysis_database),
                     "total_count": replay_database_logs_count,
-                    "ratio": (len(replay_bottleneck_analysis_database) / replay_database_logs_count) if replay_database_logs_count else 0,
-                    "solution": "排查对应请求的数据库查询性能",
+                    "ratio": replay_database_logs_ratio,
+                    "solution": "排查对应请求的数据库查询性能" if replay_database_logs_ratio > 0.01 else "-",
                     "request_paths": replay_bottleneck_analysis_database
                 }
             ]

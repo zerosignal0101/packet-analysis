@@ -26,7 +26,7 @@ def load_database_logs(json_file, exec_time_threshold):
             entry for entry in database_logs_ori
             if entry["execTime"] > exec_time_threshold
         ]
-    except Exception as e:
+    except AttributeError as e:
         total_count = 0
         long_running_logs = []
     
