@@ -32,20 +32,12 @@ from src.packet_analysis.json_build import alignment_analysis, db_analysis
 from collections import defaultdict
 
 app = Flask(__name__)
-# 使用新格式的配置名称
-app.config.update(
-    include=['src.server'],
-    result_backend='redis://redis:6379/0',  # 'redis://redis:6379/0'
-    broker_url='redis://redis:6379/0',  # 'redis://redis:6379/0'
-    task_serializer='json',
-    accept_content=['json'],
-    result_serializer='json',
-    timezone='Asia/Shanghai',
-    enable_utc=True,
-)
 
-celery = Celery(app.name, broker=app.config['broker_url'])
-celery.conf.update(app.config)
+redis_url = "redis://redis:6379/0"
+celery = Celery(app.name, broker=redis_url, backend=redis_url)
+
+# 配置 Celery 日志
+celery.log.already_setup = True
 
 # Initialize a Redis client for locking and state management
 redis_client = redis.StrictRedis(host='redis', port=6379, db=0)
