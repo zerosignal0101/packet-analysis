@@ -43,11 +43,8 @@ services:
       - ./results/logs_celery:/app/logs
       - ./results:/app/results
       - ./src:/app/src
-      - /app/userdata:/app/userdata
-      - /app/userdata2:/app/userdata2
-      - /home/replay:/home/replay
     environment:
-      - CALLBACK_URL=http://10.180.124.113:18088/api/replay-core/aglAnalysisResult
+      - OPENBLAS_NUM_THREADS=4
     depends_on:
       - redis
     networks:
