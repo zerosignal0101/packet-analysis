@@ -11,17 +11,22 @@ from src.packet_analysis.analysis.cluster import classify_path
 def load_database_logs(json_file, exec_time_threshold):
     with open(json_file, "r", encoding="utf-8") as file:
         data = json.load(file)
-    
-    try:    
+
+    # 获取所有数据库的日志
+    database_logs_ori = []
+    for database_name, logs in data["apm"]["DATABASE_INFO"].items():
+        database_logs_ori.extend(logs)
+
+    try:
         # 总数量
-        total_count = len(data["apm"]["DATABASE_INFO"]["CSchinatower-smc-inner-service"])
+        total_count = len(database_logs_ori)
 
         # 筛选出执行时间超过阈值的日志
         long_running_logs = [
-            entry for entry in data["apm"]["DATABASE_INFO"]["CSchinatower-smc-inner-service"]
+            entry for entry in database_logs_ori
             if entry["execTime"] > exec_time_threshold
         ]
-    except Exception as e:
+    except AttributeError as e:
         total_count = 0
         long_running_logs = []
     
@@ -96,15 +101,18 @@ def match_logs(database_logs, csv_logs):
 # 4. 主函数
 def main():
     # 文件路径
-    json_file = "../../../raw_data/new_replay_20241223_212923_1871183105830920193_694.json"
-    csv_file = "../../../raw_data/回放new1223.csv"
+    json_file = "../../../raw_data/raw_data_1883351909503537154/collect_20250123_205906_1882216342594195457_242.json"
+    csv_file = "/home/zsig/Documents/gits/packet-analysis/results/ae1b1bc1-d784-4007-aba3-d0a0331a264b/extracted_production_data_3.csv"
 
     # 设置执行时间阈值（单位：毫秒）
-    exec_time_threshold = 400
+    exec_time_threshold = 200
 
     # 加载日志
-    database_logs = load_database_logs(json_file, exec_time_threshold)
+    database_logs, total_count = load_database_logs(json_file, exec_time_threshold)
     csv_logs = load_csv_logs(csv_file)
+
+    # Test
+    print("时延较大的数据库处理项目数：", len(database_logs))
 
     # 匹配日志
     matched_results = match_logs(database_logs, csv_logs)
