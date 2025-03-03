@@ -6,7 +6,7 @@ authors = [
     {name = "packetGroup", email = "zerosignal0101@proton.me"},
 ]
 dependencies = [
-    "scikit-learn==1.5.1",
+    "scikit-learn==1.6.1",
     "pandas==2.2.2",
     "pyshark==0.6",
     "urllib3==1.26.18",

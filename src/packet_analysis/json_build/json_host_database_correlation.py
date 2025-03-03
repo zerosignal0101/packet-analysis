@@ -29,7 +29,7 @@ def convert_dctime(dctime):
     return readable_time.strftime('%Y-%m-%d %H:%M:%S')
 
 
-# 提取数据的函数
+# 提取数据的函数 将日志json格式化成需要的格式
 def extract_data(json_data, kpi_mapping):
     extracted_data = []
     logger.info("0000000")
@@ -71,6 +71,7 @@ def extract_data(json_data, kpi_mapping):
                 '原始数据': machines
             })
     return extracted_data
+    #上述代码用于提取信息，就算输入的回放数据为空，extracted_data里面至少也会有一个apm的字典
 
 def safe_format(value):
             # 如果值是 NaN 或 None，则返回 0 或其他默认值
@@ -157,13 +158,13 @@ def compute_correlation(kpi_data, request_data, kpi_name, output_kpi_csv_path, t
 def calc_correlation(json_file_path, request_csv_path, output_csv_path, output_kpi_csv_path,
                      kpi_mapping_file='src/packet_analysis/preprocess/kpi_mapping.txt', time_threshold=10):
     kpi_mapping = load_kpi_mapping(kpi_mapping_file)
-    logger.info(f'{kpi_mapping}')
+    # logger.info(f'{kpi_mapping}')
 
     with open(json_file_path, 'r', encoding='utf-8') as f:
         json_data = json.load(f)
-    extracted_info = extract_data(json_data, kpi_mapping)
-    logger.info("11111111111111111111")
-    logger.info(extracted_info)
+    extracted_info = extract_data(json_data, kpi_mapping)   #返回的格式是一个字典列表
+    logger.info("1111111111此处输出处理后的日志信息，已注释1111111111")
+    # logger.info(extracted_info)
     
     extracted_df = pd.DataFrame(extracted_info)
     # extracted_df = extracted_df.dropna(subset=['KPI_NO', 'IP地址']) #hyf 在分组之前，过滤掉不包含目标字段的数据

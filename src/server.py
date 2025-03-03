@@ -15,6 +15,7 @@ import glob
 from multiprocessing import Process
 import subprocess
 import traceback
+import pandas as pd
 
 from src.packet_analysis.json_build.json_host_database_correlation import calc_correlation
 from src.packet_analysis.json_build.random_forest_model import calc_forest_model
@@ -28,6 +29,7 @@ from src.packet_analysis.json_build import anomaly_detection
 from src.packet_analysis.utils.logger_config import logger
 from datetime import datetime
 from src.packet_analysis.json_build import alignment_analysis, db_analysis
+from collections import defaultdict
 
 app = Flask(__name__)
 # 使用新格式的配置名称
@@ -81,13 +83,26 @@ def mark_task_complete(results, name):
     redis_client.set(f"{name}_completed", b'1')  # Use string '1' instead of True
 
 
+def set_task_status(task_id, index, status, step, message):
+    # 将状态信息存储为一个字典
+    status_info = {
+        "status": status,
+        "step": step,
+        "message": message,
+        "timestamp": datetime.now().isoformat()  # 添加时间戳
+    }
+    # 将状态信息追加到列表中
+    redis_client.rpush(f"task_status_history:{task_id}:{index}", json.dumps(status_info))
+
 @celery.task(name='server.extract_data_coordinator')
-def extract_data_coordinator(pcap_file_path, csv_file_path, anomalies_csv_file_path, task_id):
+def extract_data_coordinator(pcap_file_path, csv_file_path, anomalies_csv_file_path, task_id, pcap_index):
     try:
         # 更新任务状态为 "正在处理"
-        redis_client.hset(f"task_status:{task_id}", "status", "正在处理")
-        redis_client.hset(f"task_status:{task_id}", "step", "extract_data_coordinator")
-        redis_client.hset(f"task_status:{task_id}", "message", "正在对 pcap 文件信息提取处理")
+        # redis_client.hset(f"task_status:{task_id}:{pcap_index}", "status", "正在处理")
+        # redis_client.hset(f"task_status:{task_id}:{pcap_index}", "step", "extract_data_coordinator")
+        # redis_client.hset(f"task_status:{task_id}:{pcap_index}", "message", f"模块{pcap_index}正在进行第一步，对 pcap 文件信息提取处理，共5步")
+        set_task_status(task_id, pcap_index, "正在处理", "extract_data_coordinator", f"模块{pcap_index}正在进行第1步：对 pcap 文件信息提取处理，共5步")
+
 
         # 原有的处理逻辑
         logger.info(f"pcap_file_path {pcap_file_path}")
@@ -169,17 +184,20 @@ def extract_data_coordinator(pcap_file_path, csv_file_path, anomalies_csv_file_p
         df['Relative_time'] = (df['Sniff_time'] - first_sniff_time).dt.total_seconds()
 
         df.to_csv(csv_file_path)
-        # return
+
+        set_task_status(task_id, pcap_index, "完成", "extract_data_coordinator", f"模块{pcap_index}第1步：对 pcap 文件信息提取处理已完成，共5步")
+        return
 
         # 更新任务状态为 "完成"
-        redis_client.hset(f"task_status:{task_id}", "status", "完成")
-        redis_client.hset(f"task_status:{task_id}", "message", "pcap 文件信息提取处理完成")
+        # redis_client.hset(f"task_status:{task_id}:{pcap_index}", "status", "正在处理")
+        # redis_client.hset(f"task_status:{task_id}:{pcap_index}", "message", f"模块{pcap_index}第一步pcap 文件信息提取正在进行，共5步")
 
     except Exception as e:
         # 更新任务状态为 "失败"
-        redis_client.hset(f"task_status:{task_id}", "status", "失败")
-        redis_client.hset(f"task_status:{task_id}", "message", f" pcap 文件信息提取时出错: {str(e)}")
-        logger.error(f"对 pcap 文件信息提取时出错: {str(e)}")
+        set_task_status(task_id, pcap_index, "失败", "extract_data_coordinator", f"模块{pcap_index}第一步pcap 文件信息提取时出错，共5步，错误如下: {str(e)}")
+        # redis_client.hset(f"task_status:{task_id}:{pcap_index}", "status", "失败")
+        # redis_client.hset(f"task_status:{task_id}:{pcap_index}", "message", f"模块{pcap_index}第一步pcap 文件信息提取时出错，共5步，错误如下: {str(e)}")
+        # logger.error(f"对 pcap 文件信息提取时出错: {str(e)}")
         raise
 
 
@@ -241,23 +259,27 @@ def extract_data_executor(pcap_file_path, csv_file_path, csv_headers):
 
 
 @celery.task(name='server.align_data')
-def align_data(results, production_csv_file_path, replay_csv_file_path, alignment_csv_file_path, task_id):
+def align_data(results, production_csv_file_path, replay_csv_file_path, alignment_csv_file_path, task_id, pcap_index):
     try:
         # 更新任务状态为 "正在处理"
-        redis_client.hset(f"task_status:{task_id}", "status", "正在处理")
-        redis_client.hset(f"task_status:{task_id}", "step", "align_data")
-        redis_client.hset(f"task_status:{task_id}", "message", "正在进行生成、回放数据对齐")
+        # redis_client.hset(f"task_status:{task_id}", "status", "正在处理")
+        # redis_client.hset(f"task_status:{task_id}", "step", "align_data")
+        # redis_client.hset(f"task_status:{task_id}", "message", "正在进行第二步：生产、回放数据对齐，共5步")
+
+        set_task_status(task_id, pcap_index, "正在处理", "align_data", f"模块{pcap_index}正在进行第2步：生产、回放数据对齐，共5步")
         alignment.alignment_two_paths(production_csv_file_path, replay_csv_file_path, alignment_csv_file_path)
 
         # 更新任务状态为 "完成"
-        redis_client.hset(f"task_status:{task_id}", "status", "完成")
-        redis_client.hset(f"task_status:{task_id}", "message", "生成、回放数据对齐完成")
+        # redis_client.hset(f"task_status:{task_id}", "status", "完成")
+        # redis_client.hset(f"task_status:{task_id}", "message", "第二步生成、回放数据对齐完成，共5步")
+        set_task_status(task_id, pcap_index, "完成", "align_data", f"模块{pcap_index}第二步生成、回放数据对齐完成，共5步")
 
     except Exception as e:
         # 更新任务状态为 "失败"
-        redis_client.hset(f"task_status:{task_id}", "status", "失败")
-        redis_client.hset(f"task_status:{task_id}", "message", f"生成、回放数据对齐时出错: {str(e)}")
-        redis_client.hset(f"task_status:{task_id}", "error", str(e))
+        # redis_client.hset(f"task_status:{task_id}", "status", "失败")
+        # redis_client.hset(f"task_status:{task_id}", "message", f"第二步生成、回放数据对齐时出错，共5步，报错如下: {str(e)}")
+        # redis_client.hset(f"task_status:{task_id}", "error", str(e))
+        set_task_status(task_id, pcap_index, "失败", "align_data", f"模块{pcap_index}第二步生成、回放数据对齐时出错，共5步，报错如下: {str(e)}")
         logger.error(f"数据对齐时出错: {str(e)}")
         raise
 
@@ -265,33 +287,87 @@ def align_data(results, production_csv_file_path, replay_csv_file_path, alignmen
 def safe_format(value):
     # 如果值是 NaN 或 None，则返回 0 或其他默认值
     if pd.isna(value):
-        return "999999.999999"  # 或者根据需求返回 None
+        return None  # 或者根据需求返回 None
     return "{:.6f}".format(value)
 
+def get_bottleneck_analysis(url):
+    """根据URL特征返回字符串格式的分析"""
+    # 增强版规则库
+    analysis_rules = [
+        {
+            'keywords': ['account', 'act'],
+            'cause': "高频账户操作导致数据库锁竞争",
+            'solution': "优化账户表索引（添加复合索引）；引入Redis缓存账户状态信息；批量处理账户操作"  # 改为字符串
+        },
+        {
+            'keywords': ['cust', 'customer'],
+            'cause': "客户信息关联查询复杂度过高",
+            'solution': "物化视图预计算关联数据；引入Elasticsearch优化查询；业务拆分降低事务粒度"
+        },
+        {
+            'keywords': ['insert', 'create'],
+            'cause': "逐条写入导致IO压力过大",
+            'solution': "批量操作合并数据库事务；采用异步队列缓冲写入；调整存储引擎配置"
+        },
+        {
+            'keywords': ['file', 'upload'],
+            'cause': "大文件传输引发网络瓶颈", 
+            'solution': "实现分块上传/断点续传；使用OSS对象存储分流；启用Brotli压缩传输"
+        }
+    ]
+
+    # 带优先级的匹配逻辑
+    for rule in analysis_rules:
+        if any(kw in url.lower() for kw in rule['keywords']):
+            return rule
+    
+    # 默认返回（也保持字符串格式）
+    return {
+        'cause': "业务逻辑处理耗时过长",
+        'solution': "使用性能剖析工具定位热点；优化算法时间复杂度；考虑JIT编译优化"
+    }
 
 @celery.task(name='server.cluster_analysis_data')
 def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, production_ip, replay_ip,
                           replay_csv_file_path,
                           production_csv_file_path, task_id, production_json_path, replay_json_path,
                           alignment_csv_file_path):
+
+    contrast_delay_conclusion = None
+    res = {
+        "comparison_analysis": {},
+        "anomaly_detection": {},
+    }
+    anomaly_dict = [{
+        "request_url": "/portal_todo/api/getAllUserTodoData",
+        "env": "production",
+        "count": 9999,  # hyf 修改格式
+        "hostip": production_ip,
+        "class_method": "api_get",
+        "bottleneck_cause": "(当前该部分为展示样例)",
+        "solution": "(当前该部分为展示样例)"
+    }]
+    res['anomaly_detection']['dict'] = anomaly_dict
+
     try:
         # 更新任务状态为 "正在处理"
-        redis_client.hset(f"task_status:{task_id}", "status", "正在处理")
-        redis_client.hset(f"task_status:{task_id}", "step", "cluster_analysis_data")
-        redis_client.hset(f"task_status:{task_id}", "message", "开始进行聚类分析")
+        # redis_client.hset(f"task_status:{task_id}", "status", "正在处理")
+        # redis_client.hset(f"task_status:{task_id}", "step", "cluster_analysis_data")
+        # redis_client.hset(f"task_status:{task_id}", "message", "正在进行第三步，聚类分析，共5步")
+        set_task_status(task_id, pcap_index, "正在处理", "cluster_analysis_data", f"模块{pcap_index}正在进行第三步，聚类分析，共5步")
 
-        # res variable
-        res = {
-            "comparison_analysis": {},
-            "anomaly_detection": {},
-        }
+        # res variable  我感觉这个res应该放在try except 外面
+        # res = {
+        #     "comparison_analysis": {},
+        #     "anomaly_detection": {},
+        # }
 
         # Process CSV files and get comparison analysis data to build JSON
         # Request_Info_File_Path = f"packet_analysis/json_build/path_function.csv"
         logger.info(f"json started at {datetime.now()}")
         DataBase = DB(csv_back=replay_csv_file_path, csv_production=production_csv_file_path)
         # 添加返回值
-        data_list, path_delay_dict = DataBase.built_all_dict()
+        data_list, path_delay_dict, contrast_delay_conclusion = DataBase.built_all_dict()
 
         outputs_path = f'./results/{task_id}'
 
@@ -316,11 +392,11 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         res['comparison_analysis']['data'] = data_list
         res['comparison_analysis']['legend'] = data_legend
 
-        # production cluster anomaly and replay cluster anomaly
+        # production cluster anomaly and replay cluster anomaly 在这一步，不同组数据发生报错 该步骤输出classifiy文件 分类后每一类的异常数据文件
         folder_output_pro = os.path.join(outputs_path, f"cluster_production_{pcap_index}")
-        pro_anomaly_csv_list, pro_plot_cluster_list = cluster.analysis(production_csv_file_path, folder_output_pro)
+        pro_anomaly_csv_list, pro_plot_cluster_list = cluster.analysis(production_csv_file_path, folder_output_pro,pcap_index,data_list,env='pro')
         folder_output_replay = os.path.join(outputs_path, f"cluster_replay_{pcap_index}")
-        replay_anomaly_csv_list, replay_plot_cluster_list = cluster.analysis(replay_csv_file_path, folder_output_replay)
+        replay_anomaly_csv_list, replay_plot_cluster_list = cluster.analysis(replay_csv_file_path, folder_output_replay,pcap_index,data_list,env='replay')
 
         # Process anomaly CSV files to build JSON
         all_pro_anomaly_details = anomaly_detection.process_anomalies(pro_anomaly_csv_list, "production",
@@ -328,15 +404,44 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         all_replay_anomaly_details = anomaly_detection.process_anomalies(replay_anomaly_csv_list, "replay",
                                                                          replay_ip)
         combined_anomaly_details = all_pro_anomaly_details + all_replay_anomaly_details
-        res['anomaly_detection']['details'] = combined_anomaly_details
+        # res['anomaly_detection']['details'] = combined_anomaly_details  #既包含生产又包含回放的异常数据0225hyf
+        res['anomaly_detection']['details'] = all_replay_anomaly_details  #只包含回放的异常数据
 
-        redis_client.hset(f"task_status:{task_id}", "status", "完成")
-        redis_client.hset(f"task_status:{task_id}", "message", "聚类分析完成")
+        request_summary = defaultdict(lambda: {"count": 0, "env": "", "hostip": "", "class_method": ""})
+
+        for entry in all_replay_anomaly_details:
+            request_url = entry["request_url"]
+            request_summary[request_url]["count"] = int(entry["count"])
+            request_summary[request_url]["env"] = entry["env"]
+            request_summary[request_url]["hostip"] = entry["hostip"]
+            request_summary[request_url]["class_method"] = entry["class_method"]
+
+        # 生成目标格式
+        dict_output = [
+            {
+                "request_url": url,
+                "env": details["env"],
+                "count": details["count"],
+                "hostip": details["hostip"],
+                "class_method": details["class_method"],
+                "bottleneck_cause": get_bottleneck_analysis(url)['cause'],
+                "solution": get_bottleneck_analysis(url)['solution']
+            }
+            for url, details in request_summary.items()
+        ]
+        res['anomaly_detection']['dict']=dict_output
+
+
+
+        # redis_client.hset(f"task_status:{task_id}", "status", "完成")
+        # redis_client.hset(f"task_status:{task_id}", "message", "第三步聚类分析完成，共5步")
+        set_task_status(task_id, pcap_index, "完成", "cluster_analysis_data", f"模块{pcap_index}第三步聚类分析完成，共5步")
 
     except Exception as e:
         # 更新任务状态为 "失败"
-        redis_client.hset(f"task_status:{task_id}", "status", "失败")
-        redis_client.hset(f"task_status:{task_id}", "message", f"聚类分析时出错: {str(e)}")
+        # redis_client.hset(f"task_status:{task_id}", "status", "失败")
+        # redis_client.hset(f"task_status:{task_id}", "message", f"第三步聚类分析时出错，共5步，报错如下： {str(e)}")
+        set_task_status(task_id, pcap_index, "失败", "cluster_analysis_data", f"模块{pcap_index}第三步聚类分析时出错，共5步，报错如下： {str(e)}")
         logger.error(f"聚类分析时出错: {str(e)}")
         raise
 
@@ -406,7 +511,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
                 "hostip": replay_ip,
                 "class_name": "error warning",
                 "cause": "回放环境随机森林模型建立失败，为确保顺利返回，当前为预设值，具体原因请排查",
-                "criteria": "可能是日志文件和数据包文件时间不匹配",
+                "criteria": "可能是回放环境采集时间不足，日志文件和数据包文件时间不匹配",
                 "solution": "具体原因可以结合输出日志分析"
             },
             {
@@ -414,16 +519,47 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
                 "hostip": production_ip,
                 "class_name": "error warning",
                 "cause": "生产环境随机森林模型建立失败，为确保顺利返回，当前为预设值，具体原因请排查",
-                "criteria": "可能是日志文件和数据包文件时间不匹配",
+                "criteria": "可能是生产环境采集时间不足，日志文件和数据包文件时间不匹配",
                 "solution": "具体原因可以结合输出日志分析"
             }
         ]
     }
+    optimization_suggestions_correlation = {
+        "非root用户进程数": "1. 使用`ulimit`命令限制用户的最大进程数。2. 检查是否有异常进程（如僵尸进程），使用`ps aux`和`kill`命令清理。3. 优化应用程序，减少不必要的进程创建。",
+        "活动进程数": "1. 检查是否有不必要的后台进程，使用`ps aux`和`kill`命令终止。2. 优化应用程序逻辑，减少并发进程数。3. 使用进程池（如Python的`multiprocessing.Pool`）限制并发进程数。",
+        "当前运行队列等待运行的进程数": "1. 增加CPU资源（如升级CPU或增加CPU核心数）。2. 优化任务调度，使用优先级调度（如`nice`命令）确保关键任务优先执行。3. 减少不必要的任务并发，避免任务堆积。",
+        "处在非中断睡眠状态的进程数": "1. 检查是否有进程因I/O操作阻塞，优化I/O性能（如使用SSD、增加磁盘带宽）。2. 优化数据库查询，减少锁等待时间。3. 检查是否有死锁或资源竞争问题，使用工具（如`strace`）分析进程状态。",
+        "CPU利用率": "1. 优化代码逻辑，减少CPU密集型操作（如循环嵌套、复杂计算）。2. 使用多线程或多进程分担CPU负载。3. 升级CPU或增加CPU核心数。",
+        "内存利用率": "1. 优化应用程序，减少内存泄漏（如使用内存分析工具`Valgrind`）。2. 增加物理内存或使用交换区（Swap）。3. 减少不必要的缓存，释放未使用的内存。",
+        "1分钟平均负载": "1. 检查是否有高负载进程，使用`top`或`htop`命令定位并优化。2. 增加服务器资源（如CPU、内存）。3. 优化任务调度，避免短时间内大量任务并发。",
+        "CPU平均等待IO率": "1. 优化磁盘I/O性能（如使用SSD、增加磁盘带宽）。2. 减少不必要的I/O操作（如批量读写数据）。3. 使用缓存（如Redis）减少对磁盘的依赖。",
+        "中央处理器平均系统调用率": "1. 优化应用程序，减少频繁的系统调用（如合并小文件读写操作）。2. 使用更高效的系统调用（如`sendfile`替代`read/write`）。3. 检查是否有异常的系统调用（如频繁的文件打开/关闭），使用`strace`工具分析。",
+        "交换区利用率": "1. 增加物理内存，减少对交换区的依赖。2. 优化应用程序，减少内存使用（如释放未使用的内存）。3. 调整交换区配置（如`swappiness`参数），减少交换区使用频率。",
+        "等待连接数": "1. 优化服务器配置（如增加`backlog`参数）。2. 增加服务器资源（如CPU、内存）以处理更多连接。3. 使用负载均衡（如Nginx）分散连接压力。",
+        "关闭连接数": "1. 检查是否有连接泄漏，使用工具（如`netstat`）分析连接状态。2. 优化应用程序，及时关闭不再使用的连接。3. 调整连接超时时间（如`keepalive_timeout`）。",
+        "文件系统总利用率": "1. 清理不必要的文件（如日志文件、临时文件）。2. 增加磁盘容量或使用分布式文件系统（如HDFS）。3. 优化文件存储（如压缩文件、使用更高效的文件系统）。"
+    }
+    optimization_suggestions_random_forest = {
+        "非root用户进程数": "1. 使用`ulimit`命令限制用户的最大进程数。2. 检查是否有异常进程（如僵尸进程），使用`ps aux`和`kill`命令清理。3. 优化应用程序，减少不必要的进程创建。4. 使用容器化技术（如Docker）限制每个容器的进程数。",
+        "活动进程数": "1. 检查是否有不必要的后台进程，使用`ps aux`和`kill`命令终止。2. 优化应用程序逻辑，减少并发进程数。3. 使用进程池（如Python的`multiprocessing.Pool`）限制并发进程数。4. 使用任务队列（如Celery）管理异步任务。",
+        "当前运行队列等待运行的进程数": "1. 增加CPU资源（如升级CPU或增加CPU核心数）。2. 优化任务调度，使用优先级调度（如`nice`命令）确保关键任务优先执行。3. 减少不必要的任务并发，避免任务堆积。4. 使用分布式任务调度系统（如Kubernetes）分散任务负载。",
+        "处在非中断睡眠状态的进程数": "1. 检查是否有进程因I/O操作阻塞，优化I/O性能（如使用SSD、增加磁盘带宽）。2. 优化数据库查询，减少锁等待时间。3. 检查是否有死锁或资源竞争问题，使用工具（如`strace`）分析进程状态。4. 使用异步I/O（如AIO）减少阻塞。",
+        "CPU利用率": "1. 优化代码逻辑，减少CPU密集型操作（如循环嵌套、复杂计算）。2. 使用多线程或多进程分担CPU负载。3. 升级CPU或增加CPU核心数。4. 使用JIT编译器（如PyPy）优化代码执行效率。",
+        "内存利用率": "1. 优化应用程序，减少内存泄漏（如使用内存分析工具`Valgrind`）。2. 增加物理内存或使用交换区（Swap）。3. 减少不必要的缓存，释放未使用的内存。4. 使用内存池技术（如jemalloc）优化内存分配。",
+        "1分钟平均负载": "1. 检查是否有高负载进程，使用`top`或`htop`命令定位并优化。2. 增加服务器资源（如CPU、内存）。3. 优化任务调度，避免短时间内大量任务并发。4. 使用自动扩展机制（如AWS Auto Scaling）动态调整资源。",
+        "CPU平均等待IO率": "1. 优化磁盘I/O性能（如使用SSD、增加磁盘带宽）。2. 减少不必要的I/O操作（如批量读写数据）。3. 使用缓存（如Redis）减少对磁盘的依赖。4. 使用异步I/O模型（如Node.js）提高I/O效率。",
+        "中央处理器平均系统调用率": "1. 优化应用程序，减少频繁的系统调用（如合并小文件读写操作）。2. 使用更高效的系统调用（如`sendfile`替代`read/write`）。3. 检查是否有异常的系统调用（如频繁的文件打开/关闭），使用`strace`工具分析。4. 使用用户态网络栈（如DPDK）减少内核态系统调用。",
+        "交换区利用率": "1. 增加物理内存，减少对交换区的依赖。2. 优化应用程序，减少内存使用（如释放未使用的内存）。3. 调整交换区配置（如`swappiness`参数），减少交换区使用频率。4. 使用内存压缩技术（如Zswap）减少交换区压力。",
+        "等待连接数": "1. 优化服务器配置（如增加`backlog`参数）。2. 增加服务器资源（如CPU、内存）以处理更多连接。3. 使用负载均衡（如Nginx）分散连接压力。4. 使用连接池技术（如HikariCP）管理数据库连接。",
+        "关闭连接数": "1. 检查是否有连接泄漏，使用工具（如`netstat`）分析连接状态。2. 优化应用程序，及时关闭不再使用的连接。3. 调整连接超时时间（如`keepalive_timeout`）。4. 使用长连接复用技术（如HTTP/2）减少连接开销。",
+        "文件系统总利用率": "1. 清理不必要的文件（如日志文件、临时文件）。2. 增加磁盘容量或使用分布式文件系统（如HDFS）。3. 优化文件存储（如压缩文件、使用更高效的文件系统）。4. 使用对象存储（如S3）替代本地文件系统。"
+    }
     try:
         # 更新任务状态为 "正在处理"
-        redis_client.hset(f"task_status:{task_id}", "status", "正在处理")
-        redis_client.hset(f"task_status:{task_id}", "step", "cluster_analysis_data")
-        redis_client.hset(f"task_status:{task_id}", "message", "开始进行相关系数和随机森林模型分析")
+        # redis_client.hset(f"task_status:{task_id}", "status", "正在处理")
+        # redis_client.hset(f"task_status:{task_id}", "step", "cluster_analysis_data")
+        # redis_client.hset(f"task_status:{task_id}", "message", "开始进行第四步：相关系数和随机森林模型分析，共5步")
+        set_task_status(task_id, pcap_index, "正在处理", "cluster_analysis_data", f"模块{pcap_index}进行第四步：相关系数和随机森林模型分析，共5步")
 
         correlation_analysis_path = os.path.join(outputs_path, f'correlation_analysis_csv_{pcap_index}')
         if not os.path.exists(correlation_analysis_path):
@@ -454,9 +590,8 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
                                 data_correlation[0]['correlation_data'][0]['value'] == 9999:
                             # 如果列表中只有默认值，清空它
                             data_correlation[0]['correlation_data'].clear()
-                            data_correlation[0][
-                                'conclusion'] = f"生产环境中与平均处理时延相关性最强的指标是{row['KPI名称']}"
-                            # data_correlation[0]['solution']=f"生产环境中与平均处理时延相关性最强的指标是{row['KPI名称']}"
+                            data_correlation[0]['conclusion'] = f"生产环境中与平均处理时延相关性最强的指标是{row['KPI名称']}"
+                            data_correlation[0]['solution']=optimization_suggestions_correlation.get(row['KPI名称'],'该项指标暂无更好的优化建议')
 
                         # 将数据添加到 production 和 replay 的 correlation_data 中
                         data_correlation[0]['correlation_data'].append(correlation_data)
@@ -477,8 +612,8 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
                                 data_correlation[1]['correlation_data'][0]['value'] == 9999:
                             # 如果列表中只有默认值，清空它
                             data_correlation[1]['correlation_data'].clear()
-                            data_correlation[1][
-                                'conclusion'] = f"回放环境中与平均处理时延相关性最强的指标是{row['KPI名称']}"
+                            data_correlation[1]['conclusion'] = f"回放环境中与平均处理时延相关性最强的指标是{row['KPI名称']}"
+                            data_correlation[1]['solution'] = optimization_suggestions_correlation.get(row['KPI名称'],'该项指标暂无更好的优化建议')
 
                         # 将数据添加到 production 和 replay 的 correlation_data 中
                         data_correlation[1]['correlation_data'].append(correlation_data)
@@ -518,6 +653,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
                             # 如果列表中只有默认值，清空它
                             data_random_forest[0]['importance_data'].clear()
                             data_random_forest[0]['conclusion'] = f"生产环境中重要性排序最强的指标是{row['KPI']}"
+                            data_random_forest[0]['solution'] = optimization_suggestions_random_forest.get(row['KPI'],'该项指标暂无更好的优化建议')
 
                         # 将数据添加到 production 和 replay 的 correlation_data 中
                         data_random_forest[0]['importance_data'].append(importance_data)
@@ -538,6 +674,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
                             # 如果列表中只有默认值，清空它
                             data_random_forest[1]['importance_data'].clear()
                             data_random_forest[1]['conclusion'] = f"回放环境中重要性排序最强的指标是{row['KPI']}"
+                            data_random_forest[1]['solution'] = optimization_suggestions_random_forest.get(row['KPI'],'该项指标暂无更好的优化建议')
 
                         # 将数据添加到 production 和 replay 的 correlation_data 中
                         data_random_forest[1]['importance_data'].append(importance_data)
@@ -545,8 +682,9 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
                 print("列 'Importance' 或 'KPI' 不存在于 生产 DataFrame 中")
 
         # 更新任务状态为 "完成"
-        redis_client.hset(f"task_status:{task_id}", "status", "完成")
-        redis_client.hset(f"task_status:{task_id}", "message", "相关系数和随机森林模型分析完成")
+        # redis_client.hset(f"task_status:{task_id}", "status", "完成")
+        # redis_client.hset(f"task_status:{task_id}", "message", "第四步：相关系数和随机森林模型分析完成，共5步")
+        set_task_status(task_id, pcap_index, "完成", "cluster_analysis_data", f"模块{pcap_index}第四步：相关系数和随机森林模型分析完成，共5步")
 
         # 检查 replay_importance_df 是否为空
         # if not replay_importance_df.empty:
@@ -578,27 +716,28 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         data_performance_bottleneck_analysis = {
             "bottlenecks": [
                 {
-                    "env": "replay",
+                    "env": "瓶颈发生的环境replay",
                     "hostip": replay_ip,
-                    "class_name": "随机森林模型对回放环境KPI性能数据做重要性排序(从大到小)",
-                    "cause": "replay_cause",
-                    "criteria": "replay_criteria",
-                    "solution": "replay_solution"
+                    "class_name": "该部分为扩展用的备用瓶颈结论接口，暂无输出",
+                    "cause": "扩展用的瓶颈原因",
+                    "criteria": "判断为该瓶颈的标准",
+                    "solution": "该瓶颈的解决方案"
                 },
                 {
-                    "env": "production",
+                    "env": "瓶颈发生的环境production",
                     "hostip": production_ip,
-                    "class_name": "随机森林模型对生产环境KPI性能数据做重要性排序(从大到小)",
-                    "cause": "production_cause",
-                    "criteria": "production_criteria",
-                    "solution": "production_solution"
+                    "class_name": "扩展用的瓶颈结论接口，暂无输出",
+                    "cause": "瓶颈原因的备用接口，可扩展",
+                    "criteria": "判断为该瓶颈的标准，扩展备用",
+                    "solution": "该瓶颈的解决方案，扩展备用"
                 }
             ]
         }
     except Exception as e:
         # 更新任务状态为 "失败"
-        redis_client.hset(f"task_status:{task_id}", "status", "失败")
-        redis_client.hset(f"task_status:{task_id}", "message", f"相关系数和随机森林模型分析时出错: {str(e)}")
+        # redis_client.hset(f"task_status:{task_id}", "status", "失败")
+        # redis_client.hset(f"task_status:{task_id}", "message", f"第四步：相关系数和随机森林模型分析时出错，共5步，报错如下: {str(e)}")
+        set_task_status(task_id, pcap_index, "失败", "cluster_analysis_data", f"模块{pcap_index}第四步：相关系数和随机森林模型分析时出错，共5步，报错如下: {str(e)}")
 
         # print(f"发生 KeyError: {e}")
         logger.info(f"发生 错误: {e}")
@@ -609,7 +748,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
 
     # 分析瓶颈1 状态码
     bottleneck_analysis_response_code = alignment_analysis.analyze_status_code(alignment_csv_file_path,
-                                                                               output_prefix=f'{outputs_path}/test_status_code_analysis')
+                                                                               output_prefix=f'{outputs_path}/test_status_code_analysis_{pcap_index}')
     # 方式1 返回的是txt文本内容
     # bottleneck_analysis_response_code["env"] = "replay"    #此处应该是生产加上回放，两环境的
     # bottleneck_analysis_response_code["hostip"] = replay_ip
@@ -623,7 +762,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
 
     # 分析瓶颈2 响应包是否完整
     bottleneck_analysis_empty_response = alignment_analysis.analyze_empty_responses(alignment_csv_file_path,
-                                                                                    output_prefix=f'{outputs_path}/empty_responses_analysis')
+                                                                                    output_prefix=f'{outputs_path}/empty_responses_analysis_{pcap_index}')
 
     # 方式1 返回的是txt文本内容
     # bottleneck_analysis_empty_response["env"] = "replay"    #此处应该是生产加上回放，两环境的
@@ -642,7 +781,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
 
     # 分析瓶颈3 传输窗口瓶颈检测
     bottleneck_analysis_zero_window = alignment_analysis.analyze_zero_window_issues(alignment_csv_file_path,
-                                                                                    output_prefix=f'{outputs_path}/zero_window_analysis')
+                                                                                    output_prefix=f'{outputs_path}/zero_window_analysis_{pcap_index}')
     # 方式1 返回的是txt文本内容
     # bottleneck_analysis_zero_window["env"] = "replay"    #此处应该是生产加上回放，两环境的
     # bottleneck_analysis_zero_window["hostip"] = replay_ip
@@ -714,18 +853,20 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
     # 方式2 返回json格式的信息
     res['performance_bottleneck_analysis']['database'] = bottleneck_analysis_database
 
-    anomaly_dict = [{
-        "request_url": "/portal_todo/api/getAllUserTodoData",
-        "env": "production",
-        "count": 9999,  # hyf 修改格式
-        "hostip": production_ip,
-        "class_method": "api_get",
-        "bottleneck_cause": "(当前该部分为展示样例)",
-        "solution": "(当前该部分为展示样例)"
-    }]
-    res['anomaly_detection']['dict'] = anomaly_dict
+    # anomaly_dict = [{
+    #     "request_url": "/portal_todo/api/getAllUserTodoData",
+    #     "env": "production",
+    #     "count": 9999,  # hyf 修改格式
+    #     "hostip": production_ip,
+    #     "class_method": "api_get",
+    #     "bottleneck_cause": "(当前该部分为展示样例)",
+    #     "solution": "(当前该部分为展示样例)"
+    # }]
+    # res['anomaly_detection']['dict'] = anomaly_dict
+    
+    logger.info("Cluster_analysis finished.")
 
-    return pcap_index, res
+    return pcap_index, res, contrast_delay_conclusion
 
 
 def save_response_to_file(response, file_path="response.json"):
@@ -736,14 +877,64 @@ def save_response_to_file(response, file_path="response.json"):
     except Exception as e:
         print(f"Failed to save response: {e}")
 
+def generate_overview_conclusion(task_id, index):
+    """
+    生成结论信息。
+    
+    参数:
+        task_id (str): 任务 ID。
+        index (int): 模块索引。
+    
+    返回:
+        str: 生成的结论信息。
+    """
+    # 读取生产环境和回放环境的 CSV 文件
+    production_csv_path = f'results/{task_id}/extracted_production_data_{index}.csv'
+    replay_csv_path = f'results/{task_id}/extracted_replay_data_{index}.csv'
+    aligned_csv_path = f'results/{task_id}/aligned_data_{index}.csv'
+
+    try:
+        # 获取生产环境和回放环境的请求数量
+        production_df = pd.read_csv(production_csv_path)
+        replay_df = pd.read_csv(replay_csv_path)
+        production_count = len(production_df)
+        replay_count = len(replay_df)
+
+        # 生成请求数量结论
+        count_conclusion = f"生产环境有 {production_count} 个请求，回放环境有 {replay_count} 个请求。"
+        if max(production_count, replay_count) / min(production_count, replay_count) >= 1.2:
+            count_conclusion += " 生产环境和回放环境请求数量上存在显著差异，请检查回放时间是否足够"
+        else:
+            count_conclusion += " 生产环境和回放环境数量上差异不大。"
+
+        # 获取对齐结果
+        aligned_df = pd.read_csv(aligned_csv_path)
+        success_count = len(aligned_df[aligned_df['state'].isin(['fail1 no best match but has match', 'success'])])
+        fail_count = len(aligned_df[aligned_df['state'] == 'fail2 no match'])
+        total_count = success_count + fail_count
+        success_ratio = success_count / total_count if total_count > 0 else 0
+
+        # 生成对齐结论
+        alignment_conclusion = f"生产环境和回放环境对齐了 {success_count} 个，失败了 {fail_count} 个，对齐成功的比例是 {success_ratio:.2%}。"
+        if success_ratio >= 0.9:
+            alignment_conclusion += " 生产环境和回放环境相同请求数据匹配，基本对齐。"
+        else:
+            alignment_conclusion += " 生产环境和回放环境相同请求数据匹配度不高，建议重新查看该模块的回放数据。"
+
+        # 返回完整结论
+        return count_conclusion + " " + alignment_conclusion
+
+    except Exception as e:
+        return f"生成结论时出错: {str(e)}"
 
 @celery.task(name='server.final_task')
 def final_task(results, data, task_id, ip_address):
     try:
         # 更新任务状态为 "正在处理"
-        redis_client.hset(f"task_status:{task_id}", "status", "正在处理")
-        redis_client.hset(f"task_status:{task_id}", "step", "final_task")
-        redis_client.hset(f"task_status:{task_id}", "message", "开始生成最终报告")
+        # redis_client.hset(f"task_status:{task_id}", "status", "正在处理")
+        # redis_client.hset(f"task_status:{task_id}", "step", "final_task")
+        # redis_client.hset(f"task_status:{task_id}", "message", "正在进行第五步：开始生成最终报告，共5步")
+        set_task_status(task_id, 200, "正在处理", "final_task", f"正在进行第五步：开始生成最终报告，共5步")
 
         pcap_info_list = PcapInfoList.parse_obj(data)
         # Initialize the global response with predefined values
@@ -755,7 +946,7 @@ def final_task(results, data, task_id, ip_address):
             ],
             "overall_analysis_info": {
                 "summary": {
-                    "performance_trends": "整体性能趋势，例如重放环境与生产相比通常表现出更高还是更低的延迟。",
+                    "performance_trends": "整体性能趋势，重放环境与生产相比通常表现出更高还是更低的延迟。",
                     "common_bottlenecks": "识别在多次分析中观察到的任何反复出现的瓶颈（例如网络问题、数据库减速）例如：网络带宽限制和数据库查询性能是多个任务中经常出现的瓶颈。优化这些方面可显著提高性能。",
                     "anomalies": "突出显示在多个单独分析中出现的任何显著异常，并注意它们是孤立的还是更广泛趋势的一部分。讨论这些异常的可能系统性原因。例如：文件上传过程中最常出现异常，表明服务器端处理或网络稳定性存在潜在问题",
                     "recommendations": "根据单独的发现提供综合建议，例如应优先考虑优化工作的领域。例如：建议优先考虑数据库索引和查询优化，并探索升级网络基础设施。"
@@ -764,10 +955,11 @@ def final_task(results, data, task_id, ip_address):
                     {
                         "replay_task_id": info.replay_task_id,
                         "replay_id": info.replay_id,
-                        "text": "回放存在显著性能差异" if info.replay_task_id % 2 == 0 else "回放正常"
+                        # "text": "回放存在显著性能差异" if info.replay_task_id % 2 == 0 else "回放正常"
+                        "text": generate_overview_conclusion(task_id, index)
                         # TODO: Add logic to determine if replay is normal or not
                     }
-                    for info in pcap_info_list.pcap_info
+                    for index, info in enumerate(pcap_info_list.pcap_info)
                 ]
             }
         }
@@ -775,10 +967,38 @@ def final_task(results, data, task_id, ip_address):
         # 控制台输出内容
         # logger.info(f"Results: {results}")
 
+        production_faster_count = 0
+        replay_faster_count = 0
+        production_faster_modules = []
+        replay_faster_modules = []
         for result in results:
             if result is not None:
-                index, res = result
+                index, res, contrast_delay_conclusion = result
                 response['individual_analysis_info'][index] = res
+                response['overall_analysis_info']['overview'][index]['text'] += contrast_delay_conclusion #这里是额外的内容
+
+                # 统计时延情况
+                if "生产环境整体时延较低" in contrast_delay_conclusion:
+                    production_faster_count += 1
+                    production_faster_modules.append(index)
+                elif "回放环境整体时延较低" in contrast_delay_conclusion:
+                    replay_faster_count += 1
+                    replay_faster_modules.append(index)
+        # 生成总结性结论
+        total_modules = len(results)
+        trends_conclusion = f"此次任务共有{total_modules}个模块，"
+        if production_faster_modules:
+            trends_conclusion += f"其中模块{', '.join(map(str, production_faster_modules))}生产环境平均时延较低，"
+        if replay_faster_modules:
+            trends_conclusion += f"模块{', '.join(map(str, replay_faster_modules))}回放环境平均时延较低，"
+        if production_faster_count > replay_faster_count:
+            trends_conclusion += "整体性能对比上，生产环境快的模块较多，回放环境还需优化。"
+        elif production_faster_count < replay_faster_count:
+            trends_conclusion += "整体性能对比上，回放环境快的模块较多。"
+        else:
+            trends_conclusion += "整体性能对比上，生产和回放环境时延相当。"
+        response['overall_analysis_info']['summary']['performance_trends'] = trends_conclusion
+
 
         save_response_to_file(response, f'./results/{task_id}/response.json')
 
@@ -787,13 +1007,15 @@ def final_task(results, data, task_id, ip_address):
         postapi.post_url(json.dumps(response), callback_url)
 
         # 更新任务状态为 "完成"
-        redis_client.hset(f"task_status:{task_id}", "status", "完成")
-        redis_client.hset(f"task_status:{task_id}", "message", "最终报告生成完成")
+        # redis_client.hset(f"task_status:{task_id}", "status", "完成")
+        # redis_client.hset(f"task_status:{task_id}", "message", "第五步：最终报告生成完成，共5步")
+        set_task_status(task_id, 200, "完成", "final_task", f"第五步：最终报告生成完成，共5步")
 
     except Exception as e:
         # 更新任务状态为 "失败"
-        redis_client.hset(f"task_status:{task_id}", "status", "失败")
-        redis_client.hset(f"task_status:{task_id}", "message", f"生成最终报告时出错: {str(e)}")
+        # redis_client.hset(f"task_status:{task_id}", "status", "失败")
+        # redis_client.hset(f"task_status:{task_id}", "message", f"第五步：生成最终报告时出错，共5步，报错如下: {str(e)}")
+        set_task_status(task_id, 200, "失败", "final_task", f"第五步：生成最终报告时出错，共5步，报错如下: {str(e)}")
         logger.error(f"生成最终报告时出错: {str(e)}")
         raise
 
@@ -834,11 +1056,11 @@ def run_tasks_in_parallel(data, task_id, ip_address):
 
         task_group = group(group(
             extract_data_coordinator.s([os.path.join(collect.collect_path) for collect in pcap_info.collect_pcap],
-                                       production_csv_file_path, production_anomalies_csv_file_path, task_id),
+                                       production_csv_file_path, production_anomalies_csv_file_path, task_id, index),
             extract_data_coordinator.s([os.path.join(pcap_info.replay_pcap.replay_path)],
-                                       replay_csv_file_path, replay_anomalies_csv_file_path, task_id))
+                                       replay_csv_file_path, replay_anomalies_csv_file_path, task_id, index))
                            | align_data.s(production_csv_file_path, replay_csv_file_path, alignment_csv_file_path,
-                                          task_id)
+                                          task_id, index)
                            | cluster_analysis_data.s(index, pcap_info.replay_task_id, pcap_info.replay_id,
                                                      pcap_info.collect_pcap[0].ip, pcap_info.replay_pcap.ip,
                                                      replay_csv_file_path, production_csv_file_path, task_id,
@@ -867,28 +1089,48 @@ def process():
         return jsonify({"error": str(e)}), 400
 
 
-@app.route('/api/algorithm/status/<task_id>', methods=['GET'])
-def get_task_status(task_id):
+@app.route('/api/algorithm/status/<task_id>/<int:index>', methods=['GET'])
+def get_task_status(task_id, index):
     try:
-        # 从 Redis 中获取任务状态
-        status = redis_client.hgetall(f"task_status:{task_id}")
-        if not status:
-            return jsonify({"error": "任务不存在"}), 404
+        # 从 Redis 中获取指定模块的状态历史
+        status_history = redis_client.lrange(f"task_status_history:{task_id}:{index}", 0, -1)
+        if not status_history:
+            return jsonify({"error": f"任务 {task_id} 的模块 {index} 不存在"}), 404
 
-        # 将字节字符串解码为普通字符串
-        decoded_status = {key.decode('utf-8'): value.decode('utf-8') for key, value in status.items()}
+        # 将字节字符串解码为普通字符串，并解析 JSON
+        decoded_history = [json.loads(item.decode('utf-8')) for item in status_history]
 
-        # 返回任务状态信息
+        # 返回任务状态历史信息
         return jsonify({
             "task_id": task_id,
-            "status": decoded_status.get("status", "未知状态"),
-            "step": decoded_status.get("step", "未知步骤"),
-            "message": decoded_status.get("message", "无额外信息"),
-            "error": decoded_status.get("error", "无错误信息")
+            "module_index": index,
+            "status_history": decoded_history
         }), 200
     except Exception as e:
         # 如果发生异常，返回错误信息
         return jsonify({"error": f"查询任务状态时出错: {str(e)}"}), 500
+
+# def get_task_status(task_id,index):
+#     try:
+#         # 从 Redis 中获取指定模块的任务状态
+#         status = redis_client.hgetall(f"task_status:{task_id}:{index}")
+#         if not status:
+#             return jsonify({"error": f"任务id为{task_id}的模块{index}不存在"}), 404
+
+#         # 将字节字符串解码为普通字符串
+#         decoded_status = {key.decode('utf-8'): value.decode('utf-8') for key, value in status.items()}
+
+#         # 返回任务状态信息
+#         return jsonify({
+#             "task_id": task_id,
+#             "status": decoded_status.get("status", "未知状态"),
+#             "step": decoded_status.get("step", "未知步骤"),
+#             "message": decoded_status.get("message", "无额外信息"),
+#             "error": decoded_status.get("error", "无错误信息")
+#         }), 200
+#     except Exception as e:
+#         # 如果发生异常，返回错误信息
+#         return jsonify({"error": f"查询任务状态时出错: {str(e)}"}), 500
 
 
 if __name__ == '__main__':
