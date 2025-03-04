@@ -1083,24 +1083,63 @@ def process():
 
 @app.route('/api/algorithm/status/<task_id>/<int:index>', methods=['GET'])
 def get_task_status(task_id, index):
+    base_response = {  # 基础响应结构
+        "task_id": task_id,
+        "module_index": index,
+        "status_history": []
+    }
+    
     try:
-        # 从 Redis 中获取指定模块的状态历史
         status_history = redis_client.lrange(f"task_status_history:{task_id}:{index}", 0, -1)
+        
         if not status_history:
-            return jsonify({"error": f"任务 {task_id} 的模块 {index} 不存在"}), 404
+            # 构造标准化的错误状态条目
+            error_status = {
+                "message": f"任务 {task_id} 的模块 {index} 不存在",
+                "status": "模块ID错误，模块ID从0开始，len(模块)-1结束，模块ID为200时为该任务所有模块最终状态查询",
+                "step": "状态查询",
+                "timestamp": datetime.now().isoformat()
+            }
+            base_response["status_history"].append(error_status)
+            return jsonify(base_response), 404
 
-        # 将字节字符串解码为普通字符串，并解析 JSON
+        # 正常数据处理
         decoded_history = [json.loads(item.decode('utf-8')) for item in status_history]
-
-        # 返回任务状态历史信息
-        return jsonify({
-            "task_id": task_id,
-            "module_index": index,
-            "status_history": decoded_history
-        }), 200
+        base_response["status_history"] = decoded_history
+        return jsonify(base_response), 200
+        
     except Exception as e:
-        # 如果发生异常，返回错误信息
-        return jsonify({"error": f"查询任务状态时出错: {str(e)}"}), 500
+        # 异常状态条目构建
+        error_status = {
+            "message": f"系统错误: {str(e)}",
+            "status": "异常",
+            "step": "状态查询",
+            "timestamp": datetime.datetime.now().isoformat()
+        }
+        base_response["status_history"].append(error_status)
+        return jsonify(base_response), 500
+
+
+# @app.route('/api/algorithm/status/<task_id>/<int:index>', methods=['GET'])
+# def get_task_status(task_id, index):
+#     try:
+#         # 从 Redis 中获取指定模块的状态历史
+#         status_history = redis_client.lrange(f"task_status_history:{task_id}:{index}", 0, -1)
+#         if not status_history:
+#             return jsonify({"error": f"任务 {task_id} 的模块 {index} 不存在"}), 404
+
+#         # 将字节字符串解码为普通字符串，并解析 JSON
+#         decoded_history = [json.loads(item.decode('utf-8')) for item in status_history]
+
+#         # 返回任务状态历史信息
+#         return jsonify({
+#             "task_id": task_id,
+#             "module_index": index,
+#             "status_history": decoded_history
+#         }), 200
+#     except Exception as e:
+#         # 如果发生异常，返回错误信息
+#         return jsonify({"error": f"查询任务状态时出错: {str(e)}"}), 500
 
 # def get_task_status(task_id,index):
 #     try:
