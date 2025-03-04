@@ -15,7 +15,10 @@ def load_database_logs(json_file, exec_time_threshold):
     # 获取所有数据库的日志
     database_logs_ori = []
     for database_name, logs in data["apm"]["DATABASE_INFO"].items():
-        database_logs_ori.extend(logs)
+        if logs is not None:
+            database_logs_ori.extend(logs)
+        else:
+            logger.warning(f"Database logs of \"{database_name}\" is Null")
 
     try:
         # 总数量
