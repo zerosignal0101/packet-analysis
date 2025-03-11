@@ -1,7 +1,11 @@
+import os.path
 import pandas as pd
-from datetime import datetime, timedelta
-from src.packet_analysis.utils.logger_config import logger
+import heapq
 from datetime import datetime
+from collections import defaultdict
+
+# Project imports
+from src.packet_analysis.utils.logger_config import logger
 
 
 def parse_time(sniff_time):
@@ -32,242 +36,218 @@ def classify_path(path):
 
 
 def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_file_path):
-    # 读取CSV文件
-    now = datetime.now().time()
-    logger.info(f'alignment start {alignment_csv_file_path}')
-    logger.info(f"当前开始时间: {now}")
+    # 计时
+    start = datetime.now()
+    logger.info("开始对齐")
+
+    # Debug
+    logger.info(f"csv_production_output: {csv_production_output}")
+    logger.info(f"csv_back_output: {csv_back_output}")
+    logger.info(f"alignment_csv_file_path: {alignment_csv_file_path}")
+
+    # Step 1: 读取数据
     production_df = pd.read_csv(csv_production_output)
     back_df = pd.read_csv(csv_back_output)
-    # 创建新的DataFrame用于存储对齐后的数据
+
+    # Step 2: 将回放数据加载到最小堆中
+    # 堆中存储 (Sniff_time, index, row) 三元组
+    back_heap = []
+    for production_index, row in back_df.iterrows():
+        sniff_time = parse_time(row['Sniff_time'])
+        heapq.heappush(back_heap, (sniff_time, production_index, row.to_dict()))
+
+    # Step 3: 初始化对齐数据结构
     aligned_data = {
+        'No': [],
         'Path': [],
         'Query': [],
         'Src_Port': [],
         'Request_Method': [],
         # 生产环境
         'Production_Sniff_time': [],
-        'Production_Relative_time': [],  #hyf
+        'Production_Relative_time': [],
         'Production_Time_since_request': [],
-        'Production_Processing_delay': [],  #hyf
-        'Production_Transmission_delay': [],  #hyf
+        'Production_Processing_delay': [],
+        'Production_Transmission_delay': [],
         'Production_Request_Packet_Length': [],
         'Production_Response_Packet_Length': [],
         'Production_Response_Total_Length': [],
-        'Production_Is_zero_window': [],  #hyf
-        'Production_Is_tcp_reset': [],  #hyf
+        'Production_Is_zero_window': [],
+        'Production_Is_tcp_reset': [],
         'Production_Response_Code': [],
-        'Production_Src_Ip': [], #hyf
-        'Production_Dst_Ip': [], #hyf
-
+        'Production_Src_Ip': [],
+        'Production_Dst_Ip': [],
+        # 回放环境
         'Back_Sniff_time': [],
-        'Back_Relative_time': [],  #hyf
+        'Back_Relative_time': [],
         'Back_Time_since_request': [],
-        'Back_Processing_delay': [],  #hyf
-        'Back_Transmission_delay': [],  #hyf
+        'Back_Processing_delay': [],
+        'Back_Transmission_delay': [],
         'Back_Request_Packet_Length': [],
         'Back_Response_Packet_Length': [],
         'Back_Response_Total_Length': [],
-        'Back_Is_zero_window': [],  #hyf
-        'Back_Is_tcp_reset': [],  #hyf
+        'Back_Is_zero_window': [],
+        'Back_Is_tcp_reset': [],
         'Back_Response_Code': [],
-        'Back_Src_Ip': [], #hyf
-        'Back_Dst_Ip': [], #hyf
-
-
-        'Request_type':[],
+        'Back_Src_Ip': [],
+        'Back_Dst_Ip': [],
+        'Request_type': [],
         'Time_since_request_ratio': [],
+        'Index_diff': [],
         'state': []
     }
 
-    # 用于存储每次成功匹配的回放请求时间
-    back_match_times = []
-    fail1_no_best_match_requests = []
-    fail2_no_match_requests = []
+    # Step 4: 对齐数据
+    # 遍历生产环境数据
+    for production_index, production_row in production_df.iterrows():
+        # Debug
+        if production_index % 1000 == 0:
+            logger.info(f"Processing index: {production_index}")
 
-    # 遍历 production_df 的每一对相邻请求
-    for index in range(len(production_df) - 1):
-        path1 = production_df.iloc[index]['Path']
-        query1 = production_df.iloc[index]['Query']
-        src_port1 = production_df.iloc[index]['Src_Port']
-        request_method1 = production_df.iloc[index]['Request_Method']
-        sniff_time1 = production_df.iloc[index]['Sniff_time']
-        time_since_request1 = production_df.iloc[index]['Time_since_request']
+        # 获取时间，路径，查询参数用于对齐
+        production_sniff_time = parse_time(production_row['Sniff_time'])
+        production_path = production_row['Path'] if not pd.isna(production_row['Path']) else ''
+        production_query = production_row['Query'] if not pd.isna(production_row['Query']) else ''
 
-        path2 = production_df.iloc[index + 1]['Path']
-        query2 = production_df.iloc[index + 1]['Query']
-        src_port2 = production_df.iloc[index + 1]['Src_Port']
-        request_method2 = production_df.iloc[index + 1]['Request_Method']
-        sniff_time2 = production_df.iloc[index + 1]['Sniff_time']
-        time_since_request2 = production_df.iloc[index + 1]['Time_since_request']
+        # 从堆中查找匹配的回放数据
+        matched = False
+        temp_heap = []  # 临时存储未匹配的回放数据
+        while back_heap:
+            back_sniff_time, back_index, back_row = heapq.heappop(back_heap)
+            back_path = back_row['Path'] if not pd.isna(back_row['Path']) else ''
+            back_query = back_row['Query'] if not pd.isna(back_row['Query']) else ''
 
-        # 计算生产请求1和请求2之间的时间差，并取绝对值
-        time_diff_production = abs(parse_time(sniff_time2) - parse_time(sniff_time1))
-        time_threshold = min(time_diff_production * 1000000, timedelta(seconds=5))
+            # 检查 index 差值是否超过阈值
+            if production_index - back_index > 1000:
+                continue
 
-        aligned_data['Path'].append(path2)
-        aligned_data['Query'].append(query2)
-        aligned_data['Src_Port'].append(src_port2)
-        aligned_data['Request_Method'].append(request_method2)
-
-        aligned_data['Production_Sniff_time'].append(sniff_time2)
-        aligned_data['Production_Relative_time'].append(
-            production_df.iloc[index + 1]['Relative_time'])  #hyf
-        aligned_data['Production_Time_since_request'].append(time_since_request2)
-        aligned_data['Production_Processing_delay'].append(
-            production_df.iloc[index + 1]['Processing_delay'])  #hyf
-        aligned_data['Production_Transmission_delay'].append(
-            production_df.iloc[index + 1]['Transmission_delay'])  #hyf
-        aligned_data['Production_Request_Packet_Length'].append(
-            production_df.iloc[index + 1]['Request_Packet_Length'])
-        aligned_data['Production_Response_Packet_Length'].append(
-            production_df.iloc[index + 1]['Response_Packet_Length'])
-        aligned_data['Production_Response_Total_Length'].append(
-            production_df.iloc[index + 1]['Response_Total_Length'])
-        aligned_data['Production_Is_zero_window'].append(
-            production_df.iloc[index + 1]['Is_zero_window'])  #hyf
-        aligned_data['Production_Is_tcp_reset'].append(
-            production_df.iloc[index + 1]['Is_tcp_reset'])  #hyf
-        aligned_data['Production_Response_Code'].append(production_df.iloc[index + 1]['Response_code'])
-        aligned_data['Request_type'].append(classify_path(path2)) #添加分类列
-        aligned_data['Production_Src_Ip'].append(production_df.iloc[index + 1]['Ip_src'])
-        aligned_data['Production_Dst_Ip'].append(production_df.iloc[index + 1]['Ip_dst'])
-
-
-
-       #随着包数量的增减，回放环境中未配对的请求累计会越来越多，需要调整读取的数量
-       #方法一 if判断条件 由包的数量决定读取的数量
-        # if index < 100000:
-        #     subset_back_df = back_df.iloc[:5000]
-        # elif index < 200000:
-        #     subset_back_df = back_df.iloc[:10000]
-        # elif index < 300000:
-        #     subset_back_df = back_df.iloc[:12000]
-        # elif index < 400000:
-        #     subset_back_df = back_df.iloc[:16000]
-        # else:
-        #     subset_back_df = back_df.iloc[:20000]  # 只取前20000行 结果ok、前5000测试
-
-        #方法二 匹配失败的数量+固定5000个
-        rows_to_select = len(fail1_no_best_match_requests) + len(fail2_no_match_requests) + 500
-        subset_back_df = back_df.iloc[:rows_to_select]
-        
-
-        #场景一 生产和回放的源端口号一致，可以作为精准对齐的条件
-        # if pd.isna(query2):
-        #     back_match = subset_back_df[(subset_back_df['Path'] == path2) & (subset_back_df['Src_Port'] == src_port2)]
-        # else:
-        #     back_match = subset_back_df[(subset_back_df['Path'] == path2) & (subset_back_df['Query'] == query2) & (
-        #             subset_back_df['Src_Port'] == src_port2)]
-
-        #场景二 生产和回放的源端口号不一致，无法精准对齐，只能基于path+query粗略对齐
-        if pd.isna(query2):
-            back_match = subset_back_df[subset_back_df['Path'] == path2]
-        else:
-            back_match = subset_back_df[(subset_back_df['Path'] == path2) & (subset_back_df['Query'] == query2)]
-
-        # 如果生产回放对齐有匹配，先初始化没有最佳匹配，时间间隔为最大
-        if not back_match.empty:
-            best_match = None
-            no_best_match = None #hyf
-            smallest_time_diff = timedelta.max
-
-            if not back_match_times:  # 如果 back_match_times 为空，直接将 back_match 数据集的第一行作为最佳匹配（因为没有其他记录可以比较）
-                best_match = back_match.iloc[0]
+            # 判断是否为同一路径
+            if production_path == back_path and production_query == back_query:
+                # 记录成功匹配
+                aligned_data['No'].append(production_row['No'])
+                aligned_data['Path'].append(production_path)
+                aligned_data['Query'].append(production_query)
+                aligned_data['Src_Port'].append(production_row['Src_Port'])
+                aligned_data['Request_Method'].append(production_row['Request_Method'])
+                # 生产环境
+                aligned_data['Production_Sniff_time'].append(production_sniff_time)
+                aligned_data['Production_Relative_time'].append(production_row['Relative_time'])
+                aligned_data['Production_Time_since_request'].append(production_row['Time_since_request'])
+                aligned_data['Production_Processing_delay'].append(production_row['Processing_delay'])
+                aligned_data['Production_Transmission_delay'].append(production_row['Transmission_delay'])
+                aligned_data['Production_Request_Packet_Length'].append(production_row['Request_Packet_Length'])
+                aligned_data['Production_Response_Packet_Length'].append(production_row['Response_Packet_Length'])
+                aligned_data['Production_Response_Total_Length'].append(production_row['Response_Total_Length'])
+                aligned_data['Production_Is_zero_window'].append(production_row['Is_zero_window'])
+                aligned_data['Production_Is_tcp_reset'].append(production_row['Is_tcp_reset'])
+                aligned_data['Production_Response_Code'].append(production_row['Response_code'])
+                aligned_data['Production_Src_Ip'].append(production_row['Ip_src'])
+                aligned_data['Production_Dst_Ip'].append(production_row['Ip_dst'])
+                # 回放环境
+                aligned_data['Back_Sniff_time'].append(back_sniff_time)
+                aligned_data['Back_Relative_time'].append(back_row['Relative_time'])
+                aligned_data['Back_Time_since_request'].append(back_row['Time_since_request'])
+                aligned_data['Back_Processing_delay'].append(back_row['Processing_delay'])
+                aligned_data['Back_Transmission_delay'].append(back_row['Transmission_delay'])
+                aligned_data['Back_Request_Packet_Length'].append(back_row['Request_Packet_Length'])
+                aligned_data['Back_Response_Packet_Length'].append(back_row['Response_Packet_Length'])
+                aligned_data['Back_Response_Total_Length'].append(back_row['Response_Total_Length'])
+                aligned_data['Back_Is_zero_window'].append(back_row['Is_zero_window'])
+                aligned_data['Back_Is_tcp_reset'].append(back_row['Is_tcp_reset'])
+                aligned_data['Back_Response_Code'].append(back_row['Response_code'])
+                aligned_data['Back_Src_Ip'].append(back_row['Ip_src'])
+                aligned_data['Back_Dst_Ip'].append(back_row['Ip_dst'])
+                # 请求类型
+                aligned_data['Request_type'].append(classify_path(production_path))
+                # 生产、回放 Time_since_request 时间差比率
+                production_time_since_request = production_row['Time_since_request']
+                back_time_since_request = back_row['Time_since_request']
+                if production_time_since_request != 0 and back_time_since_request != 0:
+                    time_since_request_ratio = back_time_since_request / production_time_since_request
+                elif production_time_since_request == 0:
+                    time_since_request_ratio = 'Infinity'
+                elif back_time_since_request == 0:
+                    time_since_request_ratio = 0
+                else:
+                    time_since_request_ratio = 'NaN'
+                aligned_data['Time_since_request_ratio'].append(time_since_request_ratio)
+                # 状态
+                aligned_data['state'].append('success')
+                # 记录 index 差值
+                aligned_data['Index_diff'].append(production_index - back_index)
+                matched = True
+                break
             else:
-                recent_back_match_times = back_match_times[-10:]
-                for back_index, back_row in back_match.iterrows():
-                    back_sniff_time = back_row['Sniff_time']
-                    back_sniff_time_parsed = parse_time(back_sniff_time)
+                # 未匹配的回放数据暂存到临时堆
+                heapq.heappush(temp_heap, (back_sniff_time, back_index, back_row))
+                if len(temp_heap) > 1000:
+                    break
 
-                    for previous_back_sniff_time in reversed(recent_back_match_times):
-                        # 计算时间差，并取绝对值
-                        time_diff_to_last = abs(back_sniff_time_parsed - previous_back_sniff_time)
+        # 将未匹配的回放数据重新放回堆中
+        while temp_heap:
+            heapq.heappush(back_heap, heapq.heappop(temp_heap))
 
-                        if time_diff_to_last <= time_threshold and time_diff_to_last < smallest_time_diff:
-                            smallest_time_diff = time_diff_to_last
-                            best_match = back_row
-                        elif time_diff_to_last < smallest_time_diff: #hyf elif
-                            smallest_time_diff = time_diff_to_last
-                            no_best_match = back_row
-
-                    if best_match is not None:
-                        break
-           
-            #情况1 生产请求有匹配，且在时间范围内，是最佳匹配
-            if best_match is not None:
-                back_sniff_time2 = best_match['Sniff_time']
-                back_time_since_request2 = best_match['Time_since_request']
-                ratio = back_time_since_request2 / time_since_request2 if time_since_request2 != 0 else 'Infinity'
-
-                aligned_data['Back_Sniff_time'].append(back_sniff_time2)
-                aligned_data['Back_Relative_time'].append(best_match['Relative_time']) #hyf
-                aligned_data['Back_Time_since_request'].append(back_time_since_request2)
-                aligned_data['Back_Processing_delay'].append(best_match['Processing_delay']) #hyf
-                aligned_data['Back_Transmission_delay'].append(best_match['Transmission_delay']) #hyf
-                aligned_data['Back_Request_Packet_Length'].append(best_match['Request_Packet_Length'])
-                aligned_data['Back_Response_Packet_Length'].append(best_match['Response_Packet_Length'])
-                aligned_data['Back_Response_Total_Length'].append(best_match['Response_Total_Length'])
-                aligned_data['Back_Is_zero_window'].append(best_match['Is_zero_window']) #hyf
-                aligned_data['Back_Is_tcp_reset'].append(best_match['Is_tcp_reset']) #hyf
-                aligned_data['Back_Response_Code'].append(best_match['Response_code'])
-                aligned_data['Back_Src_Ip'].append(best_match['Ip_src']) #hyf
-                aligned_data['Back_Dst_Ip'].append(best_match['Ip_dst'])
-
-                aligned_data['Time_since_request_ratio'].append(ratio)
-                aligned_data['state'].append("success")
-
-                back_match_times.append(parse_time(back_sniff_time2))
-                back_df = back_df.drop(best_match.name)
-            else:
-                # 情况2：回放环境有匹配，但没有在时间范围内的最佳匹配
-                back_time_since_request2 = no_best_match['Time_since_request']
-                ratio = back_time_since_request2 / time_since_request2 if time_since_request2 != 0 else 'Infinity'
-
-                aligned_data['Back_Sniff_time'].append(no_best_match['Sniff_time'])
-                aligned_data['Back_Relative_time'].append(no_best_match['Relative_time']) #hyf
-                aligned_data['Back_Time_since_request'].append(no_best_match['Time_since_request'])
-                aligned_data['Back_Processing_delay'].append(no_best_match['Processing_delay']) #hyf
-                aligned_data['Back_Transmission_delay'].append(no_best_match['Transmission_delay']) #hyf
-                aligned_data['Back_Request_Packet_Length'].append(no_best_match['Request_Packet_Length'])
-                aligned_data['Back_Response_Packet_Length'].append(no_best_match['Response_Packet_Length'])
-                aligned_data['Back_Response_Total_Length'].append(no_best_match['Response_Total_Length'])
-                aligned_data['Back_Is_zero_window'].append(no_best_match['Is_zero_window']) #hyf
-                aligned_data['Back_Is_tcp_reset'].append(no_best_match['Is_tcp_reset']) #hyf
-                aligned_data['Back_Response_Code'].append(no_best_match['Response_code'])
-                aligned_data['Back_Src_Ip'].append(no_best_match['Ip_src']) #hyf
-                aligned_data['Back_Dst_Ip'].append(no_best_match['Ip_dst'])
-
-                aligned_data['Time_since_request_ratio'].append(ratio)
-                aligned_data['state'].append("fail1 no best match but has match")
-                fail1_no_best_match_requests.append(path2)  #hyf
-
-        else:
-            #情况3：回放环境没有匹配 未对齐的选项列为空 hyf
+        # 如果没有找到匹配的回放数据，记录失败
+        if not matched:
+            aligned_data['No'].append(production_row['No'])
+            aligned_data['Path'].append(production_path)
+            aligned_data['Query'].append(production_query)
+            aligned_data['Src_Port'].append(production_row['Src_Port'])
+            aligned_data['Request_Method'].append(production_row['Request_Method'])
+            # 生产环境
+            aligned_data['Production_Sniff_time'].append(production_sniff_time)
+            aligned_data['Production_Relative_time'].append(production_row['Relative_time'])
+            aligned_data['Production_Time_since_request'].append(production_row['Time_since_request'])
+            aligned_data['Production_Processing_delay'].append(production_row['Processing_delay'])
+            aligned_data['Production_Transmission_delay'].append(production_row['Transmission_delay'])
+            aligned_data['Production_Request_Packet_Length'].append(production_row['Request_Packet_Length'])
+            aligned_data['Production_Response_Packet_Length'].append(production_row['Response_Packet_Length'])
+            aligned_data['Production_Response_Total_Length'].append(production_row['Response_Total_Length'])
+            aligned_data['Production_Is_zero_window'].append(production_row['Is_zero_window'])
+            aligned_data['Production_Is_tcp_reset'].append(production_row['Is_tcp_reset'])
+            aligned_data['Production_Response_Code'].append(production_row['Response_code'])
+            aligned_data['Production_Src_Ip'].append(production_row['Ip_src'])
+            aligned_data['Production_Dst_Ip'].append(production_row['Ip_dst'])
+            # 回放环境
             aligned_data['Back_Sniff_time'].append('')
-            aligned_data['Back_Relative_time'].append('') #hyf
+            aligned_data['Back_Relative_time'].append('')
             aligned_data['Back_Time_since_request'].append('')
-            aligned_data['Back_Processing_delay'].append('') #hyf
-            aligned_data['Back_Transmission_delay'].append('') #hyf
+            aligned_data['Back_Processing_delay'].append('')
+            aligned_data['Back_Transmission_delay'].append('')
             aligned_data['Back_Request_Packet_Length'].append('')
             aligned_data['Back_Response_Packet_Length'].append('')
             aligned_data['Back_Response_Total_Length'].append('')
-            aligned_data['Back_Is_zero_window'].append('') #hyf
-            aligned_data['Back_Is_tcp_reset'].append('') #hyf
+            aligned_data['Back_Is_zero_window'].append('')
+            aligned_data['Back_Is_tcp_reset'].append('')
             aligned_data['Back_Response_Code'].append('')
-            aligned_data['Back_Src_Ip'].append('') #hyf
+            aligned_data['Back_Src_Ip'].append('')
             aligned_data['Back_Dst_Ip'].append('')
-
+            # 请求类型
+            aligned_data['Request_type'].append(classify_path(production_path))
+            # 生产、回放 Time_since_request 时间差比率
             aligned_data['Time_since_request_ratio'].append('')
-            aligned_data['state'].append("fail2 no match")
-            fail2_no_match_requests.append(path2) #hyf
+            # 状态
+            aligned_data['state'].append('failed')
+            # 记录 index 差值
+            aligned_data['Index_diff'].append('')
 
+    # Debug 输出对齐数据的 state 状况计数
+    state_counter = defaultdict(int)
+    for state in aligned_data['state']:
+        state_counter[state] += 1
+    logger.info("对齐数据的 state 状况计数: ")
+    for state, count in state_counter.items():
+        logger.info(f"{state}: {count}")
+
+    # Step 5: 保存对齐数据
     aligned_df = pd.DataFrame(aligned_data)
     aligned_df.to_csv(alignment_csv_file_path, index=False)
-    logger.info(f'File saved to {alignment_csv_file_path}')
+    logger.info(f"对齐 {os.path.basename(csv_production_output)}, {os.path.basename(csv_back_output)} 数据完成")
+    logger.info(f"对齐数据保存至: {alignment_csv_file_path}")
 
-    now = datetime.now().time()
-    logger.info(f"当前结束时间: {now}")
-    return alignment_csv_file_path
+    # 计时
+    end = datetime.now()
+    logger.info(f"对齐模块总耗时: {end - start}")
 
 
 # Main
