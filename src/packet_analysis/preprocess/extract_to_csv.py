@@ -164,7 +164,8 @@ def preprocess_data(file_paths):
                         # logger.info(packet['request_full_uri'])
                         request_full_uri = packet['request_full_uri']
                     else:
-                        logger.warning("No request_full_uri field")
+                        # logger.warning("No request_full_uri field")
+                        pass
                     # 储存HTTP请求方式
                     request_method = packet['request_http_method']
                     request_packet_length = packet['packet_length']

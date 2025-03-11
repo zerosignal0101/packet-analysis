@@ -2,6 +2,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.stats import pearsonr
 
+# Project imports
+from src.packet_analysis.utils.logger_config import logger
+
 
 def analyze_ratio_top_percentage(file_path, save_path,top_percent=0.1, time_column='Time_since_request_ratio', back_time_column='Back_Sniff_time', path_column='Path'):
     """
@@ -40,11 +43,11 @@ def analyze_ratio_top_percentage(file_path, save_path,top_percent=0.1, time_colu
     }).sort_values(by='ratio', ascending=False)
     # 控制台显示前 10 个结果
     top_n_display = 10  # 设置显示的条目数
-    print("\n每种 Path 中前 {0:.0%} {1} 数据的数量和占比（前 {2} 项）：".format(top_percent, time_column, top_n_display))
-    print(top_path_ratio_with_count.head(top_n_display))
+    logger.info("每种 Path 中前 {0:.0%} {1} 数据的数量和占比（前 {2} 项）：".format(top_percent, time_column, top_n_display))
+    logger.info(top_path_ratio_with_count.head(top_n_display))
     # 将完整数据保存到 CSV 文件
     top_path_ratio_with_count.to_csv(f'{save_path}top_path_ratio_with_count.csv', header=True)
-    print("\n完整数量和占比数据已保存到 'src/test_result/top_path_ratio_with_count.csv'")
+    logger.info(f"完整数量和占比数据已保存到 {f'{save_path}top_path_ratio_with_count.csv'}")
   
     # 第七步：绘制时间分布图
     top_data[back_time_column] = pd.to_datetime(top_data[back_time_column], errors='coerce')
@@ -282,9 +285,10 @@ def analyze_status_code(file_path, output_prefix):
         "criteria": back_summary,
         "solution": both_summary_text
     }
-    print(f"文字总结已保存至 {output_prefix}_summary.txt，异常路径分析已保存至文件。")
-    print(type(res))
-    print(res)
+    logger.info(f"文字总结已保存至 {output_prefix}_summary.txt，异常路径分析已保存至文件。")
+    # # Debug
+    # print(type(res))
+    # print(res)
     # return res #hyf
     return response_code
 
@@ -373,12 +377,12 @@ def analyze_empty_responses(file_path, output_prefix, result_dict=None, result_k
     summary_path = f"{output_prefix}_empty_response_summary.txt"
     with open(summary_path, "w", encoding="utf-8") as f:
         f.write("\n".join(conclusions))
-    print(f"文字总结已保存至 {summary_path}。")
+    logger.info(f"文字总结已保存至 {summary_path}。")
 
     # 如果指定了结果字典和键，更新字典
     if result_dict is not None and result_key is not None:
         result_dict[result_key] = "\n".join(conclusions)
-        print(f"分析结果已填充到字典键 {result_key} 中。")
+        logger.info(f"分析结果已填充到字典键 {result_key} 中。")
 
     res = {
         "class_name": "响应包为空",
@@ -471,12 +475,12 @@ def analyze_zero_window_issues(file_path, output_prefix, result_dict=None, resul
     summary_path = f"{output_prefix}_zero_window_summary.txt"
     with open(summary_path, "w", encoding="utf-8") as f:
         f.write("\n".join(conclusions))
-    print(f"文字总结已保存至 {summary_path}。")
+    logger.info(f"文字总结已保存至 {summary_path}。")
 
     # 如果指定了结果字典和键，更新字典
     if result_dict is not None and result_key is not None:
         result_dict[result_key] = "\n".join(conclusions)
-        print(f"分析结果已填充到字典键 {result_key} 中。")
+        logger.info(f"分析结果已填充到字典键 {result_key} 中。")
 
     res = {
         "class_name": "网络传输瓶颈",

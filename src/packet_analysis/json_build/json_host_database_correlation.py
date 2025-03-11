@@ -4,6 +4,7 @@ import json
 from scipy.stats import pearsonr
 import numpy as np
 
+# Project imports
 from src.packet_analysis.utils.logger_config import logger
 
 
@@ -88,7 +89,8 @@ def compute_correlation(kpi_data, request_data, kpi_name, output_kpi_csv_path, t
     for interval in kpi_data:
         start_time = interval['DCTIME'] - datetime.timedelta(seconds=time_threshold)
         end_time = interval['DCTIME'] + datetime.timedelta(seconds=time_threshold)
-        logger.info(f"时间范围: {start_time} - {end_time}")
+        # # Debug
+        # logger.info(f"时间范围: {start_time} - {end_time}")
         if monitor_type == 'server' and ip_address:
             filtered_requests = request_data[
                 (request_data['Sniff_time'] >= start_time) &
@@ -108,14 +110,17 @@ def compute_correlation(kpi_data, request_data, kpi_name, output_kpi_csv_path, t
                 (request_data['Sniff_time'] >= start_time) &
                 (request_data['Sniff_time'] <= end_time)
                 ]
-        logger.info(f"这段时间内有 {len(filtered_requests)}个数据包")
+        # # Debug
+        # logger.info(f"这段时间内有 {len(filtered_requests)}个数据包")
 
         if not filtered_requests.empty:
             mean_delay = filtered_requests['Time_since_request'].mean()
             mean_delays.append(mean_delay)
             kpi_values.append(interval['VALUE'])
         else:
-            logger.info("No requests found in this time window.")
+            # # Debug
+            # logger.info("No requests found in this time window.")
+            pass
 
     kpi_values = pd.to_numeric(kpi_values, errors='coerce')
     valid_indices = (~np.isnan(mean_delays)) & (~np.isnan(kpi_values))
@@ -123,8 +128,9 @@ def compute_correlation(kpi_data, request_data, kpi_name, output_kpi_csv_path, t
     kpi_values = np.array(kpi_values)[valid_indices]
 
     if len(mean_delays) > 1 and len(kpi_values) > 1:
-        logger.info(f'{mean_delays}')
-        logger.info(f'{kpi_values}')
+        # # Debug
+        # logger.info(f'{mean_delays}')
+        # logger.info(f'{kpi_values}')
 
         # 创建要写入的数据列，KPI列名和时延列名
         columns = {kpi_name: kpi_values, f'平均时延_{kpi_name}': mean_delays}
@@ -150,7 +156,7 @@ def compute_correlation(kpi_data, request_data, kpi_name, output_kpi_csv_path, t
             # '相关系数': "{:.6f}".format(correlation)  #hyf
         }
     else:
-        logger.warning("数据不足以进行相关性计算")
+        logger.warning(f"{kpi_name} 数据不足以进行相关性计算")
         return None
 
 
@@ -198,9 +204,9 @@ def calc_correlation(json_file_path, request_csv_path, output_csv_path, output_k
     if all_correlations:  # 检查是否有有效的相关性数据
         correlation_df = pd.DataFrame(all_correlations).sort_values(by='相关系数', ascending=False)
         correlation_df.to_csv(output_csv_path, index=False, encoding='utf-8-sig')
-        logger.info("结果已保存到CSV文件")
+        logger.info(f"结果已保存到CSV文件 {output_csv_path}")
     else:
-        logger.warning("没有计算出有效的相关性数据，输出文件将为空")
+        logger.warning(f"没有计算出有效的相关性数据，输出文件 {output_csv_path} 将为空")
         # 创建一个空的 DataFrame，并添加相关列，写入文件
         empty_df = pd.DataFrame(columns=['监控类型', 'KPI名称', '相关系数'])
         empty_df.to_csv(output_csv_path, index=False, encoding='utf-8-sig')
