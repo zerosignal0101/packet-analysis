@@ -902,7 +902,8 @@ def generate_overview_conclusion(task_id, index):
         # 获取对齐结果
         aligned_df = pd.read_csv(aligned_csv_path)
         success_count = len(aligned_df[aligned_df['state'].isin(['fail1 no best match but has match', 'success'])])
-        fail_count = len(aligned_df[aligned_df['state'] == 'fail2 no match'])
+        # fail_count = len(aligned_df[aligned_df['state'] == 'fail2 no match'])
+        fail_count = len(aligned_df[aligned_df['state'] == 'failed'])
         total_count = success_count + fail_count
         success_ratio = success_count / total_count if total_count > 0 else 0
 
