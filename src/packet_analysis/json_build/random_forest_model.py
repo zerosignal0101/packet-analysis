@@ -7,6 +7,9 @@ from sklearn.metrics import mean_squared_error
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 
+# Project imports
+from src.packet_analysis.utils.logger_config import logger
+
 
 def calc_forest_model(file_path, results_path='results/', csv_prefix=''):
     # Step 1: 加载数据并处理特征和目标变量
@@ -38,12 +41,14 @@ def calc_forest_model(file_path, results_path='results/', csv_prefix=''):
     importances_df = importances_df.sort_values(by='Importance', ascending=False)
 
     # 打印特征重要性
-    print(importances_df)
+    logger.info("KPI 随机森林模型计算结果：")
+    for index, row in importances_df:
+        logger.info(f"KPI: {row['KPI']}, Importance: {row['Importance']}")
 
     # Step 6: 评估模型性能
     y_pred_rf = rf_model.predict(X_test)
     mse_rf = mean_squared_error(y_test, y_pred_rf)
-    print("随机森林的均方误差(MSE):", mse_rf)
+    logger.info(f"随机森林的均方误差(MSE): {mse_rf}")
 
     # Step 7: 保存特征重要性和MSE到CSV文件
     importances_df.to_csv(os.path.join(results_path, f'{csv_prefix}_kpi_feature_importances.csv'), index=False, float_format='%.6f',
@@ -54,21 +59,22 @@ def calc_forest_model(file_path, results_path='results/', csv_prefix=''):
     mse_df.to_csv(os.path.join(results_path, f'{csv_prefix}_kpi_forest_mse_df.csv'), index=False, float_format='%.6f',
                   encoding='utf-8-sig')
 
-    # Step 8: 可视化特征重要性并保存图表
-    # 设置字体以防止中文乱码
-    plt.rcParams['font.sans-serif'] = ['SimHei']  # 使用黑体
-    plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
-
-    # 绘制特征重要性的柱状图
-    plt.figure(figsize=(10, 6))
-    plt.barh(importances_df['KPI'], importances_df['Importance'])
-    plt.xlabel('Importance')
-    plt.ylabel('KPI')
-    plt.title('随机森林特征重要性')
-    plt.gca().invert_yaxis()  # 使重要性高的特征排在最上面
-
-    # 保存图表
-    plt.savefig(os.path.join(results_path, f'{csv_prefix}_kpi_feature_importances.png'), format='png', dpi=300)
-    # plt.show()
+    # # Step 8: 可视化特征重要性并保存图表
+    # # 设置字体以防止中文乱码
+    # plt.rcParams['font.sans-serif'] = ['SimHei']  # 使用黑体
+    # plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
+    #
+    # # 绘制特征重要性的柱状图
+    # plt.figure(figsize=(10, 6))
+    # plt.barh(importances_df['KPI'], importances_df['Importance'])
+    # plt.xlabel('Importance')
+    # plt.ylabel('KPI')
+    # plt.title('随机森林特征重要性')
+    # plt.gca().invert_yaxis()  # 使重要性高的特征排在最上面
+    #
+    # # 保存图表
+    # plt.savefig(os.path.join(results_path, f'{csv_prefix}_kpi_feature_importances.png'), format='png', dpi=300)
+    # # plt.show()
+    logger.info("随机森林模块已跳过 Plot 过程")
 
     return mse_rf, importances_df

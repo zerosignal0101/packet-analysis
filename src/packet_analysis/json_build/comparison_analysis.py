@@ -1,6 +1,9 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
+# Project imports
+from src.packet_analysis.utils.logger_config import logger
+
 
 class df:
     def __init__(self, url, request_method, back_dataframe, production_dataframe):
@@ -8,7 +11,6 @@ class df:
         self.request_method = request_method
         self.data_back = back_dataframe
         self.data_production = production_dataframe
-
 
     def get_production_delay_mean(self):
         return round(self.data_production['Time_since_request'].mean(), 6)
@@ -43,6 +45,7 @@ class df:
     def get_difference_ratio(self):
         return round(self.get_replay_delay_mean() / self.get_production_delay_mean(), 6)
 
+
 def load_kpi_mapping(file_path):
     kpi_mapping = {}
     with open(file_path, 'r', encoding='utf-8') as file:
@@ -56,6 +59,7 @@ def load_kpi_mapping(file_path):
             kpi_mapping[kpi_no] = description
     return kpi_mapping
 
+
 class DB:
     def __init__(self, csv_production, csv_back):
         pd.options.display.float_format = '{:.6f}'.format  # 保证数值不使用科学计数法
@@ -64,7 +68,12 @@ class DB:
         self.df_product = pd.read_csv(csv_production, encoding='utf-8')
         self.df_back = pd.read_csv(csv_back, encoding='utf-8')
         self.request_info_dict = load_kpi_mapping('src/packet_analysis/preprocess/api_config.txt')
-        print(self.request_info_dict)
+
+        # # Debug
+        # logger.info("默认请求 KPI 信息字典如下：")
+        # for key, value in self.request_info_dict.items():
+        #     logger.info(f"{key}: {value}")
+
         # self.request_info_dict = {
         #     "/portal_todo/api/getAllUserTodoData": "接口说明：获取当前用户待办数据，需要调用OA公文查询OA公文待办，并调用待办系统获取其他系统待办",
         #     "/portal_todo/api/login/apmConfig": "获取APM监控配置数据(环境不同配置不同)",
@@ -166,7 +175,7 @@ class DB:
 
         replay_delay_mean = dataframe.get_replay_delay_mean()
 
-        return dataframe,production_delay_mean, replay_delay_mean
+        return dataframe, production_delay_mean, replay_delay_mean
 
     # def get_function_description(self, url, count_pro, count_replay):
     #     """
@@ -176,7 +185,7 @@ class DB:
     #         return {"function_description": self.request_info_dict[url]}
     #     else:
     #         return {"function_description": "未查询到功能介绍"}
-    
+
     def get_function_description(self, url, count_pro, count_replay):
         """
         查询路径的功能描述信息，返回对应的详细说明。
@@ -189,7 +198,7 @@ class DB:
         """
         # 基础信息
         base_info = f"生产环境请求了 {count_pro} 次，回放环境请求了 {count_replay} 次。"
-        
+
         # 判断是否存在功能描述
         if url in self.request_info_dict:
             description = f"该请求的功能介绍：{self.request_info_dict[url]}"
@@ -202,7 +211,6 @@ class DB:
         elif count_pro > 0 and count_replay > 0 and count_pro / count_replay <= 2:
             additional_info = " 该请求生产环境和回放环境数据量基本正常"
 
-        
         # 返回最终信息
         return {
             "function_description": base_info + description + additional_info
@@ -239,7 +247,7 @@ class DB:
     #     df_dict.update(description_info)
 
     #     return df_dict
-    
+
     def built_single_dict(self, df: df):
         def safe_format(value):
             # 如果值是 NaN 或 None，则返回 0 或其他默认值
@@ -262,7 +270,7 @@ class DB:
         request_count_replay = df.get_request_count_replay()
 
         # Get additional information from the function description file
-        description_info = self.get_function_description(df.url,request_count,request_count_replay)
+        description_info = self.get_function_description(df.url, request_count, request_count_replay)
 
         df_dict['url'] = df.url
         df_dict['request_method'] = df.request_method
@@ -289,7 +297,6 @@ class DB:
         total_weighted_production_delay = 0
         total_weighted_replay_delay = 0
 
-
         # 用来加权计算
         weighted_replay = 0
         weighted_production = 0
@@ -302,8 +309,8 @@ class DB:
             replay_delay_mean = float(df_dict["replay_delay_mean"])
 
             total_requests += request_count  # 累加总请求数
-            
-            #如果该url不存在回放请求，为保证加权平均时延的一致性，生产的也不计算了
+
+            # 如果该url不存在回放请求，为保证加权平均时延的一致性，生产的也不计算了
             if replay_delay_mean != 0.0:
                 total_weighted_production_delay += production_delay_mean * request_count
                 total_weighted_replay_delay += replay_delay_mean * request_count
@@ -311,12 +318,11 @@ class DB:
                 total_weighted_production_delay += 0
                 total_weighted_replay_delay += 0
 
-
-            if difference_ratio >= 1:                
+            if difference_ratio >= 1:
                 production_lower_count += request_count  # 生产时延较低
                 weighted_production += request_count * difference_ratio  # 加权计算生产时延
 
-            else:                
+            else:
                 replay_lower_count += request_count  # 回放时延较低
                 if difference_ratio != 0.0:
                     weighted_replay += request_count * (1 / difference_ratio)  # 加权计算回放时延
@@ -338,38 +344,32 @@ class DB:
 
         return contrast_delay_conclusion
 
-
     def built_all_dict(self):
         all_df_list = []
         path_delay_dict = {}
         for url in self.get_all_path():
-            df, production_delay_mean, replay_delay_mean= self.built_df(url)  #先构建了一个df结构
+            df, production_delay_mean, replay_delay_mean = self.built_df(url)  # 先构建了一个df结构
             all_df_list.append(self.built_single_dict(df))
             path_delay_dict[url] = {
                 "production_delay_mean": production_delay_mean,
-                
+
                 "replay_delay_mean": replay_delay_mean,
-                
+
             }
         contrast_delay_conclusion = self.get_difference_ratio_weighted(all_df_list)
-        return all_df_list,path_delay_dict,contrast_delay_conclusion
+        return all_df_list, path_delay_dict, contrast_delay_conclusion
 
     def add_delay_to_df(self):
-        _, path_delay_dict,_ = self.built_all_dict()
+        _, path_delay_dict, _ = self.built_all_dict()
 
         # 遍历 path，给 self.df_product 和 self.df_back 添加平均值
         self.df_product['average_delay'] = self.df_product['Path'].map(
             lambda path: path_delay_dict.get(path, {}).get("production_delay_mean", None)
         )
 
-
         self.df_back['average_delay'] = self.df_back['Path'].map(
             lambda path: path_delay_dict.get(path, {}).get("replay_delay_mean", None)
         )
-
-        
-
-
 
     def save_to_csv(self, file_name):
         self.add_delay_to_df()

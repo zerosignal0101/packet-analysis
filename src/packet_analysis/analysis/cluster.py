@@ -5,6 +5,8 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from sklearn.ensemble import IsolationForest
 import matplotlib.pyplot as plt
+
+# Project imports
 from src.packet_analysis.utils.logger_config import logger
 
 
@@ -133,7 +135,7 @@ def detect_anomalies(df, original_df, category, csv_folder_output,numbers,env,da
     # 保存异常点数据到CSV
     csv_save_path = os.path.join(csv_folder_output, f'{category}_anomalies_{numbers}_{env}.csv')
     anomaly_data.to_csv(csv_save_path, index=False)
-    print("异常点数据已保存:", csv_save_path)
+    logger.info(f"异常点数据已保存至: {csv_save_path}")
 
     return df, csv_save_path
 
