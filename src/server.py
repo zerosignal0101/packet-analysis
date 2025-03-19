@@ -848,14 +848,14 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
 
     # Exception 分析
     production_exception_logs, production_exception_logs_count \
-        = exception_analysis.load_database_logs(production_json_path, exec_time_threshold)
+        = exception_analysis.load_exception_logs(production_json_path)
     production_bottleneck_analysis_exception = exception_analysis.match_logs(
         production_exception_logs,
         df_list_production
     )
     logger.info(f"Production exception logs count: {production_exception_logs_count}")
     replay_exception_logs, replay_exception_logs_count \
-        = exception_analysis.load_database_logs(replay_json_path, exec_time_threshold)
+        = exception_analysis.load_exception_logs(replay_json_path)
     replay_bottleneck_analysis_exception = exception_analysis.match_logs(
         replay_exception_logs,
         df_list_replay
