@@ -46,100 +46,103 @@ def cluster_data(df):
     return df
 
 
-# 异常点检测并保存异常点信息
-# def detect_anomalies(df, original_df, category, csv_folder_output):
-#     if df.empty:
-#         return df, None
-#     features = ['Time_since_request', 'Response_Total_Length']
-#     isolation_forest = IsolationForest(contamination=0.05, random_state=42)
-#     df['anomaly'] = isolation_forest.fit_predict(df[features])
-#     anomaly_data = original_df.loc[df[df['anomaly'] == -1].index]
-#     csv_save_path = os.path.join(csv_folder_output, f'{category}_anomalies.csv')
-#     anomaly_data.to_csv(csv_save_path, index=False)
-#     return df, csv_save_path
 
 
-# 异常点检测并保存异常点信息  （有平均值为负数的问题）
-# def detect_anomalies(df, original_df, category, csv_folder_output):
+
+# def detect_anomalies(df, original_df, category, csv_folder_output,numbers,env,data_list,threshold_multiplier=2):
+#     """
+#     检测异常点，标记 Time_since_request 超过 average_delay * threshold_multiplier 的数据。
+
+#     参数:
+#         df (DataFrame): 输入数据，包含 'Time_since_request' 和 'average_delay' 列。
+#         original_df (DataFrame): 原始数据（未使用，但保留参数结构）。
+#         category (str): 分类名称，用于保存文件时命名。
+#         csv_folder_output (str): 保存异常数据CSV文件的路径。
+#         threshold_multiplier (float): 异常点的阈值系数（默认2倍 average_delay）。
+
+#     返回:
+#         df (DataFrame): 带有 'anomaly' 列的数据。
+#         csv_save_path (str): 异常点数据保存的文件路径。
+#     """
+
 #     if df.empty:
 #         return df, None
-    
-#     # 计算每种Path的'Time_since_request'平均值
-#     path_avg = df.groupby('Path')['Time_since_request'].mean().to_dict()
-    
+#     # 数据预处理
+#     df = df[df['Time_since_request'] >= 0]  # 非负数
+#     df['Time_since_request'] = pd.to_numeric(df['Time_since_request'], errors='coerce')
+#     df = df.dropna(subset=['Time_since_request'])
+
+#     # 创建URL延迟映射（新增20250225）
+#     url_delay_map = {item["url"]: float(item["production_delay_mean"]) for item in data_list}
+#     df['reference_delay'] = df['Path'].map(url_delay_map)
+#     # 检查未匹配Path（新增20250225）
+#     if df['reference_delay'].isnull().any():
+#         missing_paths = df[df['reference_delay'].isnull()]['Path'].unique()
+#         raise ValueError(f"Data contains unmapped Paths: {missing_paths}")
+
 #     # 初始化 'anomaly' 列为 1（正常点）
 #     df['anomaly'] = 1
-    
-#     # 筛选出大于2倍平均值的异常数据
-#     for path, avg_value in path_avg.items():
-#         threshold = 2 * avg_value  # 2倍平均值作为阈值
-#         anomaly_indices = df[(df['Path'] == path) & (df['Time_since_request'] > threshold)].index
-#         df.loc[anomaly_indices, 'anomaly'] = -1  # 标记异常点为 -1
-    
+
+#     # 筛选出大于2倍平均值的异常数据（修改20250225）
+#     anomaly_indices = df[df['Time_since_request'] > threshold_multiplier * df['reference_delay']].index
+#     # anomaly_indices = df[df['Time_since_request'] > threshold_multiplier * df['average_delay']].index
+#     df.loc[anomaly_indices, 'anomaly'] = -1
+
 #     # 筛选异常点数据
-#     anomaly_data = original_df.loc[df[df['anomaly'] == -1].index].copy()
-    
-#     # 添加一列：average_time_since_request
-#     anomaly_data['Average_Time_since_request'] = anomaly_data['Path'].map(path_avg)
-    
-#     # 保存异常数据到CSV
-#     csv_save_path = os.path.join(csv_folder_output, f'{category}_anomalies.csv')
+#     anomaly_data = df[df['anomaly'] == -1].copy()
+#     # anomaly_data['Average_Time_since_request'] = anomaly_data['average_delay']
+#     anomaly_data['Average_Time_since_request'] = anomaly_data['reference_delay']  # 列名可能需要调整20250225
+
+#     # 保存异常点数据到CSV
+#     csv_save_path = os.path.join(csv_folder_output, f'{category}_anomalies_{numbers}_{env}.csv')
 #     anomaly_data.to_csv(csv_save_path, index=False)
-    
+#     logger.info(f"异常点数据已保存至: {csv_save_path}")
+
 #     return df, csv_save_path
 
-def detect_anomalies(df, original_df, category, csv_folder_output,numbers,env,data_list,threshold_multiplier=2):
-    """
-    检测异常点，标记 Time_since_request 超过 average_delay * threshold_multiplier 的数据。
-
-    参数:
-        df (DataFrame): 输入数据，包含 'Time_since_request' 和 'average_delay' 列。
-        original_df (DataFrame): 原始数据（未使用，但保留参数结构）。
-        category (str): 分类名称，用于保存文件时命名。
-        csv_folder_output (str): 保存异常数据CSV文件的路径。
-        threshold_multiplier (float): 异常点的阈值系数（默认2倍 average_delay）。
-
-    返回:
-        df (DataFrame): 带有 'anomaly' 列的数据。
-        csv_save_path (str): 异常点数据保存的文件路径。
-    """
-
+#20250313 改动之处在于回放环境出现了生产中不存在的请求，查询url时候没有对应的映射
+def detect_anomalies(df, original_df, category, csv_folder_output, numbers, env, data_list, threshold_multiplier=2):
     if df.empty:
         return df, None
+
     # 数据预处理
     df = df[df['Time_since_request'] >= 0]  # 非负数
     df['Time_since_request'] = pd.to_numeric(df['Time_since_request'], errors='coerce')
     df = df.dropna(subset=['Time_since_request'])
 
-    # 创建URL延迟映射（新增20250225）
+    # 创建URL延迟映射
     url_delay_map = {item["url"]: float(item["production_delay_mean"]) for item in data_list}
+    
+    # 过滤掉未映射的Path（核心修改点）
+    valid_paths = url_delay_map.keys()
+    df = df[df['Path'].isin(valid_paths)].copy()  # 只保留有映射的Path
+    
+    # 如果过滤后无数据，直接返回
+    if df.empty:
+        logger.info(f"分类 {category} 无有效映射路径数据，跳过处理")
+        return df, None
+
+    # 映射参考延迟
     df['reference_delay'] = df['Path'].map(url_delay_map)
-    # 检查未匹配Path（新增20250225）
-    if df['reference_delay'].isnull().any():
-        missing_paths = df[df['reference_delay'].isnull()]['Path'].unique()
-        raise ValueError(f"Data contains unmapped Paths: {missing_paths}")
 
     # 初始化 'anomaly' 列为 1（正常点）
     df['anomaly'] = 1
 
-    # 筛选出大于2倍平均值的异常数据（修改20250225）
+    # 筛选异常数据
     anomaly_indices = df[df['Time_since_request'] > threshold_multiplier * df['reference_delay']].index
-    # anomaly_indices = df[df['Time_since_request'] > threshold_multiplier * df['average_delay']].index
     df.loc[anomaly_indices, 'anomaly'] = -1
-
-    # 筛选异常点数据
-    anomaly_data = df[df['anomaly'] == -1].copy()
-    # anomaly_data['Average_Time_since_request'] = anomaly_data['average_delay']
-    anomaly_data['Average_Time_since_request'] = anomaly_data['reference_delay']  # 列名可能需要调整20250225
 
     # 保存异常点数据到CSV
     csv_save_path = os.path.join(csv_folder_output, f'{category}_anomalies_{numbers}_{env}.csv')
-    anomaly_data.to_csv(csv_save_path, index=False)
-    logger.info(f"异常点数据已保存至: {csv_save_path}")
+    anomaly_data = df[df['anomaly'] == -1].copy()
+    if not anomaly_data.empty:
+        anomaly_data['Average_Time_since_request'] = anomaly_data['reference_delay']
+        anomaly_data.to_csv(csv_save_path, index=False)
+        logger.info(f"异常点数据已保存至: {csv_save_path}")
+    else:
+        csv_save_path = None  # 无异常时不生成文件
 
     return df, csv_save_path
-
-
 
 
 
