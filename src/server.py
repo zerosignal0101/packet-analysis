@@ -12,24 +12,23 @@ from celery import Celery, group, chain, chord
 import redis
 from contextlib import contextmanager
 import glob
-from multiprocessing import Process
 import subprocess
 import traceback
 import pandas as pd
+from datetime import datetime
+from collections import defaultdict
 
+# Project imports
 from src.packet_analysis.json_build.json_host_database_correlation import calc_correlation
 from src.packet_analysis.json_build.random_forest_model import calc_forest_model
-# Import the new function
 from src.packet_analysis.preprocess import extract_to_csv, alignment
 from src.packet_analysis.utils import postapi
-
 from src.packet_analysis.json_build.comparison_analysis import *
 from src.packet_analysis.analysis import cluster
 from src.packet_analysis.json_build import anomaly_detection
 from src.packet_analysis.utils.logger_config import logger
-from datetime import datetime
-from src.packet_analysis.json_build import alignment_analysis, db_analysis
-from collections import defaultdict
+from src.packet_analysis.json_build import alignment_analysis, db_analysis, exception_analysis
+
 
 app = Flask(__name__)
 
@@ -303,7 +302,7 @@ def get_bottleneck_analysis(url):
         },
         {
             'keywords': ['file', 'upload'],
-            'cause': "大文件传输引发网络瓶颈", 
+            'cause': "大文件传输引发网络瓶颈",
             'solution': "实现分块上传/断点续传；使用OSS对象存储分流；启用Brotli压缩传输"
         }
     ]
@@ -312,7 +311,7 @@ def get_bottleneck_analysis(url):
     for rule in analysis_rules:
         if any(kw in url.lower() for kw in rule['keywords']):
             return rule
-    
+
     # 默认返回（也保持字符串格式）
     return {
         'cause': "业务逻辑处理耗时过长",
@@ -437,7 +436,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         logger.error(f"聚类分析时出错: {str(e)}")
         raise
 
-        # 先预设的'anomaly_detection'中的correlation, bottleneck部分
+    # 先预设的'anomaly_detection'中的correlation, bottleneck部分
     data_correlation = [
         {
             "env": "production",
@@ -788,20 +787,22 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
     res['performance_bottleneck_analysis']['transmission_window'] = bottleneck_analysis_zero_window
 
     # 分析瓶颈4 数据库查询瓶颈检测
+    df_list_production = db_analysis.load_csv_logs(production_csv_file_path)
+    df_list_replay = db_analysis.load_csv_logs(replay_csv_file_path)
     # 设置执行时间阈值（单位：毫秒）
     exec_time_threshold = 400
     production_database_logs, production_database_logs_count \
         = db_analysis.load_database_logs(production_json_path, exec_time_threshold)
     production_bottleneck_analysis_database = db_analysis.match_logs(
         production_database_logs,
-        db_analysis.load_csv_logs(production_csv_file_path)
+        df_list_production
     )
     logger.info(f"Production database logs count: {production_database_logs_count}")
     replay_database_logs, replay_database_logs_count \
         = db_analysis.load_database_logs(replay_json_path, exec_time_threshold)
     replay_bottleneck_analysis_database = db_analysis.match_logs(
         replay_database_logs,
-        db_analysis.load_csv_logs(replay_csv_file_path)
+        df_list_replay
     )
     logger.info(f"Replay database logs count: {replay_database_logs_count}")
 
@@ -845,6 +846,55 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
     # 方式2 返回json格式的信息
     res['performance_bottleneck_analysis']['database'] = bottleneck_analysis_database
 
+    # Exception 分析
+    production_exception_logs, production_exception_logs_count \
+        = exception_analysis.load_exception_logs(production_json_path)
+    production_bottleneck_analysis_exception = exception_analysis.match_logs(
+        production_exception_logs,
+        df_list_production
+    )
+    logger.info(f"Production exception logs count: {production_exception_logs_count}")
+    replay_exception_logs, replay_exception_logs_count \
+        = exception_analysis.load_exception_logs(replay_json_path)
+    replay_bottleneck_analysis_exception = exception_analysis.match_logs(
+        replay_exception_logs,
+        df_list_replay
+    )
+    logger.info(f"Replay database logs count: {replay_exception_logs_count}")
+
+    bottleneck_analysis_database = [
+        {
+            "hostip": production_ip,
+            "env": "production",
+            "class_name": "生产环境数据库日志分析",
+            "details": [
+                {
+                    "bottleneck_type": "数据库或模块报错",
+                    "cause": "异常请求影响",
+                    "total_count": production_exception_logs_count,
+                    "solution": "排查对应程序模块功能",
+                    "request_paths": production_bottleneck_analysis_exception
+                }
+            ]
+        },
+        {
+            "hostip": replay_ip,
+            "env": "replay",
+            "class_name": "生产环境数据库日志分析",
+            "details": [
+                {
+                    "bottleneck_type": "数据库或模块报错",
+                    "cause": "异常请求影响",
+                    "total_count": replay_exception_logs_count,
+                    "solution": "排查对应程序模块功能",
+                    "request_paths": replay_bottleneck_analysis_exception
+                }
+            ]
+        }
+    ]
+    # 方式2 返回json格式的信息
+    res['performance_bottleneck_analysis']['database'] = bottleneck_analysis_database
+
     # anomaly_dict = [{
     #     "request_url": "/portal_todo/api/getAllUserTodoData",
     #     "env": "production",
@@ -855,7 +905,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
     #     "solution": "(当前该部分为展示样例)"
     # }]
     # res['anomaly_detection']['dict'] = anomaly_dict
-    
+
     logger.info("Cluster_analysis finished.")
 
     return pcap_index, res, contrast_delay_conclusion
@@ -1088,10 +1138,10 @@ def get_task_status(task_id, index):
         "module_index": index,
         "status_history": []
     }
-    
+
     try:
         status_history = redis_client.lrange(f"task_status_history:{task_id}:{index}", 0, -1)
-        
+
         if not status_history:
             # 构造标准化的错误状态条目
             error_status = {
@@ -1107,7 +1157,7 @@ def get_task_status(task_id, index):
         decoded_history = [json.loads(item.decode('utf-8')) for item in status_history]
         base_response["status_history"] = decoded_history
         return jsonify(base_response), 200
-        
+
     except Exception as e:
         # 异常状态条目构建
         error_status = {
