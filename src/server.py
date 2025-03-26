@@ -829,7 +829,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         {
             "hostip": replay_ip,
             "env": "replay",
-            "class_name": "生产环境数据库日志分析",
+            "class_name": "回放环境数据库日志分析",
             "details": [
                 {
                     "bottleneck_type": "数据库查询时间异常" if replay_database_logs_ratio > 0.01 else "数据库部分无明显异常",
@@ -860,13 +860,13 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         replay_exception_logs,
         df_list_replay
     )
-    logger.info(f"Replay database logs count: {replay_exception_logs_count}")
+    logger.info(f"Replay exception logs count: {replay_exception_logs_count}")
 
-    bottleneck_analysis_database = [
+    bottleneck_exception_database = [
         {
             "hostip": production_ip,
             "env": "production",
-            "class_name": "生产环境数据库日志分析",
+            "class_name": "生产环境异常日志分析",
             "details": [
                 {
                     "bottleneck_type": "数据库或模块报错",
@@ -880,7 +880,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         {
             "hostip": replay_ip,
             "env": "replay",
-            "class_name": "生产环境数据库日志分析",
+            "class_name": "回放环境异常日志分析",
             "details": [
                 {
                     "bottleneck_type": "数据库或模块报错",
@@ -893,7 +893,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         }
     ]
     # 方式2 返回json格式的信息
-    res['performance_bottleneck_analysis']['database'] = bottleneck_analysis_database
+    res['performance_bottleneck_analysis']['exception'] = bottleneck_exception_database
 
     # anomaly_dict = [{
     #     "request_url": "/portal_todo/api/getAllUserTodoData",
