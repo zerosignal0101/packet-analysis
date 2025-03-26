@@ -12,13 +12,23 @@ def load_database_logs(json_file, exec_time_threshold):
     with open(json_file, "r", encoding="utf-8") as file:
         data = json.load(file)
 
-    # 获取所有数据库的日志
     database_logs_ori = []
-    for database_name, logs in data["apm"]["DATABASE_INFO"].items():
-        if logs is not None:
-            database_logs_ori.extend(logs)
+
+    # 检查是否存在 "apm" 键
+    if "apm" in data:
+        apm_data = data["apm"]
+
+        # 检查是否存在 "DATABASE_INFO" 键
+        if "DATABASE_INFO" in apm_data:
+            for database_name, logs in apm_data["DATABASE_INFO"].items():
+                if logs is not None:
+                    database_logs_ori.extend(logs)
+                else:
+                    logger.warning(f"Database logs of \"{database_name}\" is Null")
         else:
-            logger.warning(f"Database logs of \"{database_name}\" is Null")
+            logger.warning("Key \"DATABASE_INFO\" not found in apm data")
+    else:
+        logger.warning("Key \"apm\" not found in data")
 
     try:
         # 总数量

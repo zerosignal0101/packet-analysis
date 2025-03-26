@@ -587,7 +587,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
                         # 将数据添加到 production 和 replay 的 correlation_data 中
                         data_correlation[0]['correlation_data'].append(correlation_data)
             else:
-                print("列 '相关系数' 或 'KPI名称' 不存在于 生产 DataFrame 中")
+                logger.warning("列 '相关系数' 或 'KPI名称' 不存在于 生产 DataFrame 中")
         # 将 corr_df 中的 KPI名称 和 相关系数 对应到 index_id 和 value
         if not replay_correlation_df.empty:
             if '相关系数' in replay_correlation_df.columns and 'KPI名称' in replay_correlation_df.columns:
@@ -609,7 +609,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
                         # 将数据添加到 production 和 replay 的 correlation_data 中
                         data_correlation[1]['correlation_data'].append(correlation_data)
             else:
-                print("列 '相关系数' 或 'KPI名称' 不存在于 回放 DataFrame 中")
+                logger.warning("列 '相关系数' 或 'KPI名称' 不存在于 回放 DataFrame 中")
 
         # 随机森林计算
         try:
@@ -649,7 +649,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
                         # 将数据添加到 production 和 replay 的 correlation_data 中
                         data_random_forest[0]['importance_data'].append(importance_data)
             else:
-                print("列 'Importance' 或 'KPI' 不存在于 生产 DataFrame 中")
+                logger.warning("列 'Importance' 或 'KPI' 不存在于 生产 DataFrame 中")
         # 将 corr_df 中的 KPI名称 和 相关系数 对应到 index_id 和 value
         if not replay_importance_df.empty:
             if 'Importance' in replay_importance_df.columns and 'KPI' in replay_importance_df.columns:
@@ -670,7 +670,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
                         # 将数据添加到 production 和 replay 的 correlation_data 中
                         data_random_forest[1]['importance_data'].append(importance_data)
             else:
-                print("列 'Importance' 或 'KPI' 不存在于 生产 DataFrame 中")
+                logger.warning("列 'Importance' 或 'KPI' 不存在于 生产 DataFrame 中")
 
         # 更新任务状态为 "完成"
         # redis_client.hset(f"task_status:{task_id}", "status", "完成")
@@ -730,7 +730,7 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         # redis_client.hset(f"task_status:{task_id}", "message", f"第四步：相关系数和随机森林模型分析时出错，共5步，报错如下: {str(e)}")
         set_task_status(task_id, pcap_index, "失败", "cluster_analysis_data", f"模块{pcap_index}第四步：相关系数和随机森林模型分析时出错，共5步，报错如下: {str(e)}")
 
-        # print(f"发生 KeyError: {e}")
+        # logger.warning(f"发生 KeyError: {e}")
         logger.info(f"发生 错误: {e}")
         pass
     res['anomaly_detection']['correlation'] = data_correlation
@@ -767,8 +767,8 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
     bottleneck_analysis_empty_response[0]["env"] = "production"
     bottleneck_analysis_empty_response[1]["env"] = "replay"
     res['performance_bottleneck_analysis']['empty_response'] = bottleneck_analysis_empty_response
-    # print("222222222222")
-    # print(bottleneck_analysis_empty_response)
+    # logger.warning("222222222222")
+    # logger.warning(bottleneck_analysis_empty_response)
 
     # 分析瓶颈3 传输窗口瓶颈检测
     bottleneck_analysis_zero_window = alignment_analysis.analyze_zero_window_issues(alignment_csv_file_path,
@@ -915,9 +915,10 @@ def save_response_to_file(response, file_path="response.json"):
     try:
         with open(file_path, "w", encoding="utf-8") as file:
             json.dump(response, file, ensure_ascii=False, indent=4)
-        print(f"Response successfully saved to {file_path}")
+        logger.info(f"Response successfully saved to {file_path}")
     except Exception as e:
-        print(f"Failed to save response: {e}")
+        logger.warning(f"Failed to save response: {e}")
+
 
 def generate_overview_conclusion(task_id, index):
     """

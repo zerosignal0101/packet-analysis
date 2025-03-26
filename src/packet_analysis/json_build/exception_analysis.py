@@ -11,13 +11,23 @@ def load_exception_logs(json_file):
     with open(json_file, "r", encoding="utf-8") as file:
         data = json.load(file)
 
-    # 获取所有数据库的日志
     exception_logs_ori = []
-    for type_name, logs in data["apm"]["EXCEPTION_INFO"].items():
-        if logs is not None:
-            exception_logs_ori.extend(logs)
+
+    # 检查是否存在 "apm" 键
+    if "apm" in data:
+        apm_data = data["apm"]
+
+        # 检查是否存在 "EXCEPTION_INFO" 键
+        if "EXCEPTION_INFO" in apm_data:
+            for type_name, logs in apm_data["EXCEPTION_INFO"].items():
+                if logs is not None:
+                    exception_logs_ori.extend(logs)
+                else:
+                    logger.warning(f"Exception logs of \"{type_name}\" is Null")
         else:
-            logger.warning(f"Database logs of \"{type_name}\" is Null")
+            logger.warning("Key \"EXCEPTION_INFO\" not found in apm data")
+    else:
+        logger.warning("Key \"apm\" not found in data")
 
     total_count = len(exception_logs_ori)
 
