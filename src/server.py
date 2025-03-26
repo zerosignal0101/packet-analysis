@@ -1124,6 +1124,9 @@ def process():
         # 生成唯一的 task_id
         task_id = str(uuid.uuid4())
 
+        # 保存 request 到本地
+        save_response_to_file(data, f'./results/{task_id}/request.json')
+
         # 异步执行任务
         run_tasks_in_parallel(data, task_id, ip_address)
 
