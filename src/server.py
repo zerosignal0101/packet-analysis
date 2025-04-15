@@ -116,6 +116,8 @@ def extract_data_coordinator(pcap_file_path, csv_file_path, anomalies_csv_file_p
         for file_path in pcap_file_path:
 
             base_filename = os.path.basename(file_path)  # Extract the base filename from the file path
+            base_filename = f"{pcap_index}_{base_filename}"
+
             split_prefix = os.path.join(output_dir, base_filename)  # Prefix includes the target directory
 
             # Run the editcap command to split the pcap file and save the splits in the specified directory
@@ -168,13 +170,17 @@ def extract_data_coordinator(pcap_file_path, csv_file_path, anomalies_csv_file_p
         # 添加 'No' 列，从 1 开始的序号
         df.insert(0, 'No', range(1, len(df) + 1))
 
-        # 获取第一个Sniff_time的时间戳
-        first_sniff_time = df['Sniff_time'].iloc[0]
+        # 若为空表跳过处理
+        if len(df) == 0:
+            pass
+        else:
+            # 获取第一个Sniff_time的时间戳
+            first_sniff_time = df['Sniff_time'].iloc[0]
 
-        # 计算每个Sniff_time相对于第一个Sniff_time的相对时间（以秒为单位）
-        df['Relative_time'] = (df['Sniff_time'] - first_sniff_time).dt.total_seconds()
+            # 计算每个Sniff_time相对于第一个Sniff_time的相对时间（以秒为单位）
+            df['Relative_time'] = (df['Sniff_time'] - first_sniff_time).dt.total_seconds()
 
-        df.to_csv(csv_file_path)
+            df.to_csv(csv_file_path)
 
         set_task_status(task_id, pcap_index, "完成", "extract_data_coordinator", f"模块{pcap_index}第1步：对 pcap 文件信息提取处理已完成，共5步")
         return
@@ -1075,6 +1081,9 @@ def run_tasks_in_parallel(data, task_id, ip_address):
         logger.info(f"Mkdir: results/{task_id}")
         os.makedirs(f'results/{task_id}')
 
+    # 保存 request 到本地
+    save_response_to_file(data, f'./results/{task_id}/request.json')
+
     pcap_info_list = PcapInfoList.parse_obj(data)
 
     # high_cost_tasks
@@ -1124,9 +1133,6 @@ def process():
 
         # 生成唯一的 task_id
         task_id = str(uuid.uuid4())
-
-        # 保存 request 到本地
-        save_response_to_file(data, f'./results/{task_id}/request.json')
 
         # 异步执行任务
         run_tasks_in_parallel(data, task_id, ip_address)
