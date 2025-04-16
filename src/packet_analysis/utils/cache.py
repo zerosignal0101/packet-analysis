@@ -9,6 +9,12 @@ from src.packet_analysis.config import Config
 redis_client = redis.Redis.from_url(Config.CACHE_RESULT_BACKEND)
 
 
+def check_cache(key):
+    """从缓存获取数据"""
+    flag = redis_client.exists(key)
+    return flag
+
+
 def get_cache_key(key_type, identifier):
     """生成标准化的缓存键"""
     return f"{key_type}:{identifier}"

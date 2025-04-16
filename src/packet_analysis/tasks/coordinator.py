@@ -74,7 +74,7 @@ def create_analysis_chain(side, pair_id, pcap_file, options):
         # 第一步: 分割 PCAP
         split_pcap.s(
             pcap_file=pcap_file,
-            max_size=options.get('max_chunk_size', 100 * 1024 * 1024)  # 默认100MB
+            max_size=options.get('max_chunk_size', 100000)
         ),
 
         # 第二步: 从分割后的 PCAP 提取信息（并使用缓存）
