@@ -1,6 +1,13 @@
 from scapy.utils import PcapReader, PcapWriter
 import os
 from pathlib import Path
+import rootutils
+import tempfile
+
+# 查找项目根目录
+path = rootutils.find_root(search_from=__file__, indicator=".project-root")
+
+temp_dir = os.path.join(tempfile.gettempdir(), "pcap_splitter")
 
 
 def split_pcap_file(pcap_file, max_size):
@@ -15,7 +22,7 @@ def split_pcap_file(pcap_file, max_size):
     """
     chunk_files = []
     base_name = Path(pcap_file).stem
-    output_dir = Path(pcap_file).parent
+    output_dir = temp_dir
 
     with PcapReader(pcap_file) as pcap_reader:
         packet_count = 0
@@ -29,7 +36,7 @@ def split_pcap_file(pcap_file, max_size):
                     current_writer.close()
 
                 chunk_filename = f"{base_name}_part{chunk_count}.pcap"
-                chunk_path = output_dir / chunk_filename
+                chunk_path = os.path.join(output_dir, chunk_filename)
                 current_writer = PcapWriter(str(chunk_path))
                 chunk_files.append(str(chunk_path))
                 chunk_count += 1

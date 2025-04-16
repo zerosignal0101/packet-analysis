@@ -4,11 +4,10 @@ import json
 
 # Project imports
 from src.packet_analysis.celery_app.celery import celery_app
-from src.packet_analysis.tasks.pcap_processor import split_pcap, extract_pcap_info
+from src.packet_analysis.tasks.pcap_processor import extract_pcap_info
 from src.packet_analysis.tasks.analyzer import analyze_producer, analyze_playback, compare_results
 from src.packet_analysis.tasks.result_handler import merge_results, send_callback
 from src.packet_analysis.config import Config
-from src.packet_analysis.utils.cache import get_cache_key
 
 # Redis 连接
 redis_client = redis.Redis.from_url(Config.CELERY_RESULT_BACKEND)
@@ -67,24 +66,21 @@ def process_pair(pair_id, producer_pcap, playback_pcap, options):
     }
 
 
-def create_analysis_chain(side, pair_id, pcap_file, options):
+def create_analysis_chain(side, pair_id, pcap_files, options):
     """创建单侧分析任务链"""
     # 定义任务链: 分割 -> 提取信息 -> 分析
-    task_chain = chain(
-        # 第一步: 分割 PCAP
-        split_pcap.s(
+    task_group = []
+    for pcap_file in pcap_files:
+        task_group.append(extract_pcap_info.s(
             pcap_file=pcap_file,
-            max_size=options.get('max_chunk_size', 100000)
-        ),
-
-        # 第二步: 从分割后的 PCAP 提取信息（并使用缓存）
-        extract_pcap_info.s(
             pair_id=pair_id,
             side=side,
-            use_cache=options.get('use_cache', True)
-        ),
+            options=options
+        ))
 
-        # 第三步: 分析提取的信息
+    # 分析提取的信息
+    task_chain = chain(
+        group(task_group),
         analyze_producer.s(options=options) if side == "producer" else
         analyze_playback.s(options=options)
     )

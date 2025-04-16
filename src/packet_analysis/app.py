@@ -3,9 +3,9 @@
 from flask import Flask
 
 # Project imports
-from src.packet_analysis.celery_app import celery_app
 from src.packet_analysis.api.routes import api_bp
 from src.packet_analysis.config import Config
+from src.packet_analysis.utils.logger_config import flask_logger
 
 
 def create_app():
@@ -20,7 +20,12 @@ def create_app():
         CELERY_RESULT_BACKEND=Config.CELERY_RESULT_BACKEND
     )
 
+    # 替换Flask的核心日志记录器
+    app.logger.handlers = flask_logger.handlers
+    app.logger.setLevel(flask_logger.level)
+    app.logger.propagate = flask_logger.propagate
+
     # 注册蓝图
     app.register_blueprint(api_bp, url_prefix='/api')
 
-    return app, celery_app
+    return app

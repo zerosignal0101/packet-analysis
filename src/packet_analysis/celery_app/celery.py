@@ -44,3 +44,6 @@ celery_app.conf.beat_schedule = {
         'schedule': 3600.0,  # 每小时执行一次
     },
 }
+
+# 配置 Celery 日志
+celery_app.log.already_setup = True
