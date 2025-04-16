@@ -258,4 +258,5 @@ results/*
 raw_data/*
 !raw_data/.gitignore
 
+test_field
 test_field/*
