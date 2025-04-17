@@ -5,7 +5,7 @@ description = "An anomaly analysis backend based on packets captured in producti
 authors = [
     {name = "zerosignal", email = "zerosignal0101@proton.me"},
 ]
-dependencies = ["celery[redis]==5.5.1", "pandas==2.2.3", "pyshark==0.6", "flask==3.0.3", "scikit-learn==1.6.1", "urllib3==1.26.18", "rootutils>=1.0.7", "pydantic==2.10.6", "scapy==2.6.1"]
+dependencies = ["celery[redis]==5.5.1", "pandas==2.2.3", "pyshark==0.6", "flask==3.0.3", "scikit-learn==1.6.1", "urllib3==1.26.18", "rootutils>=1.0.7", "pydantic==2.10.6", "scapy==2.6.1", "requests==2.32.3"]
 requires-python = "==3.11.*"
 readme = "README.md"
 license = {text = "MIT"}

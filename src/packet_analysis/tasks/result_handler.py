@@ -1,7 +1,10 @@
+import json
+import time
+
+# Project imports
 from src.packet_analysis.celery_app.celery import celery_app
 from src.packet_analysis.services.result_manager import merge_analysis_results
 from src.packet_analysis.utils.callback import send_callback_request
-import json
 
 
 @celery_app.task

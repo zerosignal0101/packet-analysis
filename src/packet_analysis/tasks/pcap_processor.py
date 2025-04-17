@@ -4,7 +4,7 @@ from celery import group, chain, chord
 # Project imports
 from src.packet_analysis.celery_app.celery import celery_app
 from src.packet_analysis.services.pcap_splitter import split_pcap_file
-from src.packet_analysis.services.pcap_extractor import extract_info_from_pcap
+# from src.packet_analysis.services.pcap_extractor import extract_info_from_pcap
 from src.packet_analysis.utils.cache import RedisClient, with_file_lock, get_file_hash
 
 cache_redis = RedisClient()

@@ -5,7 +5,7 @@ from flask import Flask
 # Project imports
 from src.packet_analysis.api.routes import api_bp
 from src.packet_analysis.config import Config
-from src.packet_analysis.utils.logger_config import flask_logger
+from src.packet_analysis.utils.logger_config import setup_flask_logging
 
 
 def create_app():
@@ -20,12 +20,18 @@ def create_app():
         CELERY_RESULT_BACKEND=Config.CELERY_RESULT_BACKEND
     )
 
-    # 替换Flask的核心日志记录器
-    app.logger.handlers = flask_logger.handlers
-    app.logger.setLevel(flask_logger.level)
-    app.logger.propagate = flask_logger.propagate
+    # --- Setup Logging ---
+    # Configure logging *after* config is loaded but *before* blueprints/routes
+    # that might log during setup.
+    # Only configure logging if not in testing mode or if specifically desired
+    if not app.testing:
+        setup_flask_logging(app)
+    # --- End Setup Logging ---
 
     # 注册蓝图
-    app.register_blueprint(api_bp, url_prefix='/api')
+    app.register_blueprint(api_bp, url_prefix='/api/algorithm')
+
+    # Example log message after setup
+    app.logger.debug("create_app function finished.")
 
     return app
