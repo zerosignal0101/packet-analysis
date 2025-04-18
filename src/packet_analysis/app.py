@@ -15,7 +15,7 @@ def create_app():
     # 从 Config 类加载配置
     app.config.update(
         SECRET_KEY=Config.SECRET_KEY,
-        DEBUG=Config.DEBUG,
+        # DEBUG=Config.DEBUG,
         CELERY_BROKER_URL=Config.CELERY_BROKER_URL,
         CELERY_RESULT_BACKEND=Config.CELERY_RESULT_BACKEND
     )

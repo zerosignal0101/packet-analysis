@@ -9,7 +9,7 @@ class Config:
     FLASK_HOST: str = '0.0.0.0'
     FLASK_PORT: int = 5000
     SECRET_KEY: Optional[str] = None
-    DEBUG: bool = False
+    DEBUG: bool = True
     MAX_CONTENT_LENGTH: int = 16 * 1024 * 1024  # 16MB 文件上传限制
 
     # Celery 基础配置
@@ -25,6 +25,9 @@ class Config:
 
     # 日志配置
     LOG_LEVEL: str = 'INFO'
+
+    # 回调 URL 配置
+    CALLBACK_URL: Optional[str] = None
 
     @classmethod
     def load_config(cls):
@@ -76,6 +79,8 @@ class Config:
 
         # 日志配置
         cls.LOG_LEVEL = cls._get_setting('LOG_LEVEL', default='INFO')
+
+        cls.CALLBACK_URL = cls._get_setting('CALLBACK_URL', default=None)
 
     @staticmethod
     def _get_setting(name: str, default=None, convert_type=str):

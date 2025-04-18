@@ -22,15 +22,16 @@ def submit_analysis():
         # Convert Pydantic model to dict for Celery
         data_dict = request_data.dict()
 
+        # Options
+        keys = ['replay_id', 'replay_speed', 'replay_multiplier']
+        options = {key: data_dict[key] for key in keys}
+
         # Start async processing task
         process_analysis_request.delay(
             task_id=task_id,
-            pcap_info=data_dict['pcap_info'],
-            collect_log=data_dict['collect_log'],
-            replay_log=data_dict['replay_log'],
-            replay_id=data_dict['replay_id'],
-            replay_speed=data_dict['replay_speed'],
-            replay_multiplier=data_dict['replay_multiplier']
+            pcap_info_list=data_dict['pcap_info'],
+            remote_addr=request.remote_addr,
+            options=options
         )
 
         return jsonify({

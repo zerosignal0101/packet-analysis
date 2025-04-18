@@ -46,7 +46,7 @@ CELERY_LOGGING = {
     },
     'handlers': {
         'celery_file': {
-            'level': 'INFO',  # Log level for this handler
+            'level': LOG_LEVEL,  # Log level for this handler
             'class': 'logging.handlers.RotatingFileHandler',  # Use rotating file handler
             'filename': CELERY_LOG_FILE,
             'maxBytes': 1024 * 1024 * 100,  # 100 MB log file size
@@ -56,7 +56,7 @@ CELERY_LOGGING = {
         },
         'celery_task_file': {  # You could use the same handler as above if format is the same
             # Or define a separate one if needed (e.g., different file/format)
-            'level': 'INFO',
+            'level': LOG_LEVEL,
             'class': 'logging.handlers.RotatingFileHandler',
             'filename': CELERY_LOG_FILE,  # Log tasks to the SAME file
             'maxBytes': 1024 * 1024 * 100,
@@ -65,7 +65,7 @@ CELERY_LOGGING = {
             'encoding': 'utf-8',
         },
         'console': {  # Optional: Keep logging to console as well
-            'level': 'INFO',
+            'level': LOG_LEVEL,
             'class': 'logging.StreamHandler',
             'formatter': 'console_formatter',
         },
@@ -73,32 +73,32 @@ CELERY_LOGGING = {
     'loggers': {
         'celery': {  # Logger for base Celery messages
             'handlers': ['celery_file', 'console'],  # Send to file and console
-            'level': 'INFO',
+            'level': LOG_LEVEL,
             'propagate': False,  # Do not pass messages up to the root logger
         },
         'celery.task': {  # Logger for task-related messages
             'handlers': ['celery_task_file', 'console'],  # Use the task handler/formatter
-            'level': 'INFO',
+            'level': LOG_LEVEL,
             'propagate': False,
         },
         'celery.beat': {  # Logger for Celery Beat
             'handlers': ['celery_file', 'console'],  # Use the default file handler
-            'level': 'INFO',
+            'level': LOG_LEVEL,
             'propagate': False,
         },
         'celery.worker': {  # Logger for Worker specific messages
             'handlers': ['celery_file', 'console'],
-            'level': 'INFO',
+            'level': LOG_LEVEL,
             'propagate': False,
         },
         # You might want to configure the root logger or your app's loggers too
         'root': {
             'handlers': ['celery_file', 'console'],
-            'level': 'WARNING',
+            'level': LOG_LEVEL,
         },
         '__main__': {  # Logger for the main module running tasks
             'handlers': ['celery_file', 'console'],
-            'level': 'INFO',
+            'level': LOG_LEVEL,
             'propagate': False,
         }
     },

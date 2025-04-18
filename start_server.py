@@ -45,11 +45,11 @@ def run():
     celery_worker_process.start()
     processes.append(celery_worker_process)
 
-    # 启动Celery Beat (如果需要定时任务)
-    if Config.ENABLE_CELERY_BEAT:
-        celery_beat_process = Process(target=start_celery_beat)
-        celery_beat_process.start()
-        processes.append(celery_beat_process)
+    # # 启动Celery Beat (如果需要定时任务)
+    # if Config.ENABLE_CELERY_BEAT:
+    #     celery_beat_process = Process(target=start_celery_beat)
+    #     celery_beat_process.start()
+    #     processes.append(celery_beat_process)
 
     # 注册信号处理
     def signal_handler(sig, frame):

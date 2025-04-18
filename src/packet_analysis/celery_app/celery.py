@@ -39,8 +39,8 @@ celery_app.conf.update(
     # 缓存配置
     task_ignore_result=False,
     worker_redirect_stdouts=False,  # Recommended: False
-    # worker_loglevel='INFO', # Controls Celery's internal level threshold
-    # beat_loglevel='INFO',   # Controls Beat's internal level threshold
+    worker_loglevel=Config.LOG_LEVEL,  # Controls Celery's internal level threshold
+    beat_loglevel=Config.LOG_LEVEL,  # Controls Beat's internal level threshold
 )
 
 # 启动 Celery Beat 进行任务调度
@@ -50,6 +50,7 @@ celery_app.conf.beat_schedule = {
         'schedule': 3600.0,  # 每小时执行一次
     },
 }
+
 
 # # 配置 Celery 日志
 # celery_app.log.already_setup = True

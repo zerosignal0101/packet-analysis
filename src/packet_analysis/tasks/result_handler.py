@@ -28,19 +28,33 @@ def merge_results(task_id, pair_results):
 
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
 def send_callback(self, callback_url, result):
-    """向请求方发送回调通知"""
+    """
+    Sends the final result back to the requesting service via callback URL.
+    Retries on failure.
+    """
+    print(
+        f"[send_callback] Task ID (from result): {result.get('task_id', 'N/A')}: Attempting callback to {callback_url}")
     try:
-        # 发送回调请求
-        response = send_callback_request(callback_url, result)
-
+        # Make the actual HTTP request
+        response = send_callback_request(callback_url, result)  # Pass the full result dictionary
         if response.status_code not in (200, 201, 202):
-            raise Exception(f"Callback failed with status code: {response.status_code}")
-
+            # Log specific error before raising for retry
+            error_msg = f"Callback failed for task {result.get('task_id', 'N/A')} to {callback_url}. Status code: {response.status_code}"
+            print(error_msg)
+            # Raise an exception to trigger Celery's retry mechanism
+            raise Exception(error_msg)
+        print(
+            f"[send_callback] Task ID {result.get('task_id', 'N/A')}: Callback successful (Status: {response.status_code}).")
+        # Optional: Update Redis status to 'callback_sent' or 'finished' here if needed,
+        # but be aware this task might run on a different worker without direct redis_client access
+        # unless configured globally or passed explicitly.
         return {
+            "task_id": result.get('task_id'),
             "status": "callback_sent",
             "response_code": response.status_code
         }
-
     except Exception as exc:
-        # 失败后重试
+        print(
+            f"[send_callback] Task ID {result.get('task_id', 'N/A')}: Callback attempt {self.request.retries + 1} failed: {exc}. Retrying...")
+        # Celery's retry mechanism
         raise self.retry(exc=exc)
