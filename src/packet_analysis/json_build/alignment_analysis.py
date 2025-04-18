@@ -201,7 +201,7 @@ def analyze_status_code(file_path, output_prefix):
                 "request_paths": []
             }
                    
-            summary.append(f"\n环境：{env_name}\n状态码 {code} ({description})：\n共有 {len(group)} 条异常请求，占总异常数的比例为 {len(group) / total_requests:.2%}。\n")
+            summary.append(f"\n环境：{env_name}\n状态码 {code} ({description})：\n共有 {len(group)} 条异常请求，占总异常数的比例为 {detail_entry['ratio']}。\n")
             
             for path, count in request_counts.items():
                 path_total = len(data[data['Path'] == path])
@@ -238,58 +238,58 @@ def analyze_status_code(file_path, output_prefix):
     response_code.append(back_json)
 
 
-    # 两环境均异常请求统计
-    both_summary_text = []
-    for (prod_code, back_code), group in both_abnormal.groupby(['Production_Response_Code', 'Back_Response_Code']):
-        prod_description = status_code_descriptions.get(prod_code, "未知状态码")
-        back_description = status_code_descriptions.get(back_code, "未知状态码")
-        paths = group['Path'].value_counts()
-        both_summary_text.append(f"生产环境状态码 {prod_code}  和回放环境状态码 {back_code}  同时异常，共有 {len(group)} 条请求。\n")
-        both_summary_text.append("具体请求路径及异常次数：\n")
-        for path, count in paths.items():
-            both_summary_text.append(f"  请求路径：{path}，异常次数：{count}\n")
-
-    both_summary_text = "".join(both_summary_text)
-    with open(f"{output_prefix}_summary.txt", "w", encoding="utf-8") as f:
-        f.write(prod_summary + "\n" + back_summary + "\n两环境均异常的请求总结：\n" + both_summary_text)
-
-    # 检查异常状态码与请求比例综合评估
-    path_summary = []
-    for path in data['Path'].unique():
-        total_requests = len(data[data['Path'] == path])
-        prod_issues = len(prod_abnormal[prod_abnormal['Path'] == path])
-        back_issues = len(back_abnormal[back_abnormal['Path'] == path])
-        both_issues = len(both_abnormal[both_abnormal['Path'] == path])
-
-        path_summary.append({
-            "请求": path,
-            "总请求数": total_requests,
-            "生产环境异常数": prod_issues,
-            "回放环境异常数": back_issues,
-            "两环境均异常数": both_issues,
-            "生产异常比例": prod_issues / total_requests if total_requests > 0 else 0,
-            "回放异常比例": back_issues / total_requests if total_requests > 0 else 0
-        })
-
-    path_summary_df = pd.DataFrame(path_summary)
-    path_summary_df['异常综合指数'] = (
-        path_summary_df['生产环境异常数'] + path_summary_df['回放环境异常数']
-    ) * (
-        path_summary_df['生产异常比例'] + path_summary_df['回放异常比例']
-    )
-    path_summary_df.sort_values(by='异常综合指数', ascending=False, inplace=True)
-    path_summary_df.to_csv(f"{output_prefix}_path_summary.csv", index=False)
-    res = {
-        "class_name": "response_code",
-        "cause": prod_summary,
-        "criteria": back_summary,
-        "solution": both_summary_text
-    }
-    logger.info(f"文字总结已保存至 {output_prefix}_summary.txt，异常路径分析已保存至文件。")
-    # # Debug
-    # print(type(res))
-    # print(res)
-    # return res #hyf
+    # # 两环境均异常请求统计
+    # both_summary_text = []
+    # for (prod_code, back_code), group in both_abnormal.groupby(['Production_Response_Code', 'Back_Response_Code']):
+    #     prod_description = status_code_descriptions.get(prod_code, "未知状态码")
+    #     back_description = status_code_descriptions.get(back_code, "未知状态码")
+    #     paths = group['Path'].value_counts()
+    #     both_summary_text.append(f"生产环境状态码 {prod_code}  和回放环境状态码 {back_code}  同时异常，共有 {len(group)} 条请求。\n")
+    #     both_summary_text.append("具体请求路径及异常次数：\n")
+    #     for path, count in paths.items():
+    #         both_summary_text.append(f"  请求路径：{path}，异常次数：{count}\n")
+    #
+    # both_summary_text = "".join(both_summary_text)
+    # with open(f"{output_prefix}_summary.txt", "w", encoding="utf-8") as f:
+    #     f.write(prod_summary + "\n" + back_summary + "\n两环境均异常的请求总结：\n" + both_summary_text)
+    #
+    # # 检查异常状态码与请求比例综合评估
+    # path_summary = []
+    # for path in data['Path'].unique():
+    #     total_requests = len(data[data['Path'] == path])
+    #     prod_issues = len(prod_abnormal[prod_abnormal['Path'] == path])
+    #     back_issues = len(back_abnormal[back_abnormal['Path'] == path])
+    #     both_issues = len(both_abnormal[both_abnormal['Path'] == path])
+    #
+    #     path_summary.append({
+    #         "请求": path,
+    #         "总请求数": total_requests,
+    #         "生产环境异常数": prod_issues,
+    #         "回放环境异常数": back_issues,
+    #         "两环境均异常数": both_issues,
+    #         "生产异常比例": prod_issues / total_requests if total_requests > 0 else 0,
+    #         "回放异常比例": back_issues / total_requests if total_requests > 0 else 0
+    #     })
+    #
+    # path_summary_df = pd.DataFrame(path_summary)
+    # path_summary_df['异常综合指数'] = (
+    #     path_summary_df['生产环境异常数'] + path_summary_df['回放环境异常数']
+    # ) * (
+    #     path_summary_df['生产异常比例'] + path_summary_df['回放异常比例']
+    # )
+    # path_summary_df.sort_values(by='异常综合指数', ascending=False, inplace=True)
+    # path_summary_df.to_csv(f"{output_prefix}_path_summary.csv", index=False)
+    # res = {
+    #     "class_name": "response_code",
+    #     "cause": prod_summary,
+    #     "criteria": back_summary,
+    #     "solution": both_summary_text
+    # }
+    # logger.info(f"文字总结已保存至 {output_prefix}_summary.txt，异常路径分析已保存至文件。")
+    # # # Debug
+    # # print(type(res))
+    # # print(res)
+    # # return res #hyf
     return response_code
 
 
@@ -327,14 +327,15 @@ def analyze_empty_responses(file_path, output_prefix, result_dict=None, result_k
         # 总结总数
         total_empty = int(len(empty_data))
         total_requests = int(len(data))
-        conclusions.append(f"{env}中共有 {total_empty} 条请求响应包为空，占总请求数的 {total_empty / total_requests:.2%}。")
+        empty_ratio = float(round(total_empty / total_requests, 6)) if total_requests > 0 else 0.0
+        conclusions.append(f"{env}中共有 {total_empty} 条请求响应包为空，占总请求数的 {empty_ratio}。")
         
         detail_entry = {
             "bottleneck_type": "服务器HTTP响应包异常，返回内容为空",
             "cause": "服务器内部的错误或配置问题可能导致回包为空。可能由以下情况引发：服务未启动或异常终止，路由配置错误，数据库权限限制" if total_empty > 0 else "服务器的HTTP响应包信息全部完整，不存在信息缺失的情况",
             "count": total_empty,
             "total_count": total_requests,
-            "ratio": float(round(total_empty / total_requests, 6)) if total_requests > 0 else 0.0,
+            "ratio": empty_ratio,
             "solution":"1. 检查对应路径的服务端日志，确认是否因为程序错误、超时或配置导致返回空响应包。\n2. 对于生产环境，建议重点排查登录和权限问题，有没有和数据库建立连接\n3. 在回放环境中，验证是否有因数据回放设置不完整导致的空响应包情况。" if total_empty > 0 else "HTTP响应数据全部完整，无需特别处理。",
             "request_paths": []
         }
@@ -421,7 +422,8 @@ def analyze_zero_window_issues(file_path, output_prefix, result_dict=None, resul
         # 总结总数
         total_zero_window = int(len(zero_window_data))
         total_requests = int(len(data))
-        conclusions.append(f"{env}中共有 {total_zero_window} 次传输窗口已满问题，占总请求数的 {total_zero_window / total_requests:.2%}。")
+        zero_window_ratio = float(round(total_zero_window / total_requests, 6)) if total_requests > 0 else 0.0
+        conclusions.append(f"{env}中共有 {total_zero_window} 次传输窗口已满问题，占总请求数的 {zero_window_ratio}。")
         dics = {
             "class_name": f"{env}是否存在TCP传输窗口，导致响应时间变长的分析",
             "details": [],
@@ -431,7 +433,7 @@ def analyze_zero_window_issues(file_path, output_prefix, result_dict=None, resul
             "cause": "TCP连接中接收方的接收缓冲区已满,无法接收更多数据,导致发送方停止发送数据的情况‌,会造成传输时延增大,服务器响应时间受到影响" if total_zero_window > 0 else "没有出现TCP传输窗口为0的问题",
             "count": total_zero_window,
             "total_count": total_requests,
-            "ratio": float(round(total_zero_window / total_requests, 6)) if total_requests > 0 else 0.0,
+            "ratio": zero_window_ratio,
             "solution":"1. 检查对应路径的网络状况，确认是否因带宽、负载或硬件问题导致传输窗口已满。\n2. 对生产环境，建议优化服务器端响应机制，避免发送过多数据超过接收端处理能力。\n3. 在回放环境中，确认回放机制是否准确模拟生产环境流量，并排查可能的配置问题。" if total_zero_window > 0 else "没有出现TCP传输窗口为0的问题，无需特别处理。",
             "request_paths": []
         }

@@ -371,8 +371,8 @@ def cluster_analysis_data(results, pcap_index, replay_task_id, replay_id, produc
         # # 保存两环境对比数据csv、对比图到本地
         comparison_csv_path = os.path.join(outputs_path, f"comparison_analysis_data_{pcap_index}.csv")
         DataBase.save_to_csv(comparison_csv_path)
-        comparison_png_path = os.path.join(outputs_path, f"comparison_analysis_data_{pcap_index}.png")
-        DataBase.plot_mean_difference_ratio(comparison_png_path)
+        # comparison_png_path = os.path.join(outputs_path, f"comparison_analysis_data_{pcap_index}.png")
+        # DataBase.plot_mean_difference_ratio(comparison_png_path)
 
         # Update response with the data_list for the current analysis
         data_legend = {
