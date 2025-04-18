@@ -1,6 +1,7 @@
 from celery import group, chain, chord
 import redis
 import logging
+from celery.canvas import Signature
 
 # Project imports
 from src.packet_analysis.celery_app.celery import celery_app
@@ -51,19 +52,19 @@ def process_analysis_request(task_id, pcap_info_list, remote_addr, options):
             playback_pcap=[pcap_info['replay_pcap']],
             options=pair_options
         )
-        # if isinstance(pair_task, dict):
-        #     logger.debug(f"pair_task failure: {pair_task}")
-        #     send_callback.delay(
-        #         callback_url=callback_url,
-        #         # Pass the final result structure expected by the callback
-        #         result={
-        #             "task_id": task_id,
-        #             "status": "Failed to generate workflow",  # Overall status for the callback receiver
-        #             **pair_task  # Unpack results and summary from merge_results
-        #         }
-        #     )
-        #     logger.info(f"Failure: {pair_task}")
-        #     return {"task_id": task_id, "status": "Failed to generate workflow", "ok": False}
+        if not isinstance(pair_task, Signature):
+            logger.debug(f"pair_task failure: {pair_task}")
+            send_callback.delay(
+                callback_url=callback_url,
+                # Pass the final result structure expected by the callback
+                result={
+                    "task_id": task_id,
+                    "status": "Failed to generate workflow",  # Overall status for the callback receiver
+                    **pair_task  # Unpack results and summary from merge_results
+                }
+            )
+            logger.info(f"Failure: {pair_task}")
+            return {"task_id": task_id, "status": "Failed to generate workflow", "ok": False}
         pair_tasks.append(pair_task)
 
     # 使用 chord 等待所有对分析完成后合并结果
@@ -77,15 +78,15 @@ def process_pair_with_chord(pair_id, producer_pcap, playback_pcap, options):
     """处理单对生产/回放分析 (使用 Chord)"""
     producer_chain = create_analysis_chord("producer", pair_id, producer_pcap, options)
     playback_chain = create_analysis_chord("playback", pair_id, playback_pcap, options)
-    # # 检查数据是否为报错数据
-    # if isinstance(producer_chain, dict):
-    #     logger.debug(f"Type of producer_chain is {type(producer_chain)}")
-    #     logger.debug(f"producer chain failure: {producer_chain}")
-    #     return producer_chain
-    # if isinstance(playback_chain, dict):
-    #     logger.debug(f"Type of playback chain is {type(playback_chain)}")
-    #     logger.debug(f"playback chain failure: {playback_chain}")
-    #     return playback_chain
+    # 检查数据是否为报错数据
+    if not isinstance(producer_chain, Signature):
+        logger.debug(f"Type of producer_chain is {type(producer_chain)}")
+        logger.debug(f"producer chain failure: {producer_chain}")
+        return producer_chain
+    if not isinstance(playback_chain, Signature):
+        logger.debug(f"Type of playback chain is {type(playback_chain)}")
+        logger.debug(f"playback chain failure: {playback_chain}")
+        return playback_chain
     # Chord 的 header 是并行执行的任务组 (这里是两个 chain)
     header = group(producer_chain, playback_chain)
     # Chord 的 body 是回调任务的签名，它会自动接收 header 中所有任务的结果列表
@@ -129,9 +130,9 @@ def create_analysis_chord(side, pair_id, pcap_list, options):
             options=extraction_options,
             use_cache=False
         )
-        # # 若遍历到有问题的数据，返回报错信息到上一级任务链生成函数 process_pair_with_chord
-        # if isinstance(extract_pcap_info_signature, dict):
-        #     return extract_pcap_info_signature
+        # 若遍历到有问题的数据，返回报错信息到上一级任务链生成函数 process_pair_with_chord
+        if not isinstance(extract_pcap_info_signature, Signature):
+            return extract_pcap_info_signature
         task_signatures.append(extract_pcap_info_signature)
 
     # 创建提取任务的 group 签名
