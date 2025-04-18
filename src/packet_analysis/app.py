@@ -20,6 +20,9 @@ def create_app():
         CELERY_RESULT_BACKEND=Config.CELERY_RESULT_BACKEND
     )
 
+    # 注册蓝图
+    app.register_blueprint(api_bp, url_prefix='/api/algorithm')
+
     # --- Setup Logging ---
     # Configure logging *after* config is loaded but *before* blueprints/routes
     # that might log during setup.
@@ -27,9 +30,6 @@ def create_app():
     if not app.testing:
         setup_flask_logging(app)
     # --- End Setup Logging ---
-
-    # 注册蓝图
-    app.register_blueprint(api_bp, url_prefix='/api/algorithm')
 
     # Example log message after setup
     app.logger.debug("create_app function finished.")

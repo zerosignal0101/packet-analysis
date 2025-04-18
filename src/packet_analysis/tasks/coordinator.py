@@ -1,6 +1,7 @@
 from celery import group, chain, chord
 import redis
 import json
+import logging
 
 # Project imports
 from src.packet_analysis.celery_app.celery import celery_app
@@ -15,6 +16,8 @@ redis_client = redis.Redis.from_url(Config.CELERY_RESULT_BACKEND)
 
 @celery_app.task
 def process_analysis_request(task_id, pcap_files, pairs, callback_url, options):
+    logger = logging.getLogger(__name__)
+    logger.info(f'Task {task_id} started')
     """协调整个分析流程的主任务"""
     # 创建任务状态跟踪
     redis_client.hset(f"task:{task_id}", "status", "processing")

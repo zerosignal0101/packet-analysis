@@ -32,6 +32,10 @@ CELERY_LOGGING = {
             'format': '[%(asctime)s: %(levelname)s/%(processName)s][%(task_name)s(%(task_id)s)] %(message)s',
             'datefmt': '%Y-%m-%d %H:%M:%S',
         },
+        'console_formatter': {
+            'format': CONSOLE_LOG_FORMAT,
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        }
     },
     'handlers': {
         'celery_file': {
@@ -56,7 +60,7 @@ CELERY_LOGGING = {
         'console': {  # Optional: Keep logging to console as well
             'level': 'INFO',
             'class': 'logging.StreamHandler',
-            'formatter': 'default',
+            'formatter': 'console_formatter',
         },
     },
     'loggers': {
@@ -95,46 +99,42 @@ CELERY_LOGGING = {
 
 
 def setup_flask_logging(app):
-    """Configures logging for the Flask app."""
-    # Remove default handlers if they exist, to avoid duplicate logs if running non-debug
-    # Be cautious if other parts of your setup rely on the default handler.
-    # for handler in app.logger.handlers[:]:
-    #    app.logger.removeHandler(handler)
-    # Determine log level from Flask config or default to INFO
+    """Configures logging for the Flask app (File and Console)."""
     log_level = logging.DEBUG if app.config.get('DEBUG') else logging.INFO
-    app.logger.setLevel(log_level)
-    # Create file handler
-    # Use RotatingFileHandler for production environments to prevent huge log files
-    # maxBytes=1024*1024*5 means rotate after 5MB
-    # backupCount=5 means keep the last 5 rotated files
+    # --- File Handler Setup ---
     file_handler = RotatingFileHandler(
         FLASK_LOG_FILE,
         maxBytes=1024 * 1024 * 5,  # 5 MB
         backupCount=5,
-        encoding='utf-8'  # Explicitly set encoding
+        encoding='utf-8'
     )
-    # Alternatively, for a simple, non-rotating file:
-    # file_handler = logging.FileHandler(FLASK_LOG_FILE, encoding='utf-8')
-    # Set the level for the handler
-    file_handler.setLevel(log_level)
-    # Create formatter and set it for the handler
-    formatter = logging.Formatter(
+    file_handler.setLevel(log_level)  # File logs at the configured level
+    file_formatter = logging.Formatter(
         '%(asctime)s %(levelname)s: %(message)s '
         '[in %(pathname)s:%(lineno)d]'
     )
-    file_handler.setFormatter(formatter)
-    # Add the handler to the app's logger
-    if not app.logger.handlers:  # Add handler only if no handlers are configured yet
+    file_handler.setFormatter(file_formatter)
+    # --- Console Handler Setup ---
+    console_handler = logging.StreamHandler()  # Writes to stderr by default
+    # Set console level - maybe INFO even if DEBUG is on for file? Adjust as needed.
+    # For simplicity, let's use the same log_level for now.
+    console_handler.setLevel(log_level)
+    # Use a simpler format for the console
+    console_formatter = logging.Formatter(CONSOLE_LOG_FORMAT)
+    console_handler.setFormatter(console_formatter)
+    # Add handlers if they aren't already present
+    # Check specifically for our file handler
+    if not any(isinstance(h, logging.FileHandler) and getattr(h, 'baseFilename', None) == FLASK_LOG_FILE for h in
+               app.logger.handlers):
         app.logger.addHandler(file_handler)
-    elif not any(isinstance(h, logging.FileHandler) and h.baseFilename == FLASK_LOG_FILE for h in app.logger.handlers):
-        # Or add if our specific file handler isn't already present
-        app.logger.addHandler(file_handler)
-    # Also configure Werkzeug logger (handles request logs) if desired
+        app.logger.info(f"Added FileHandler logging to {FLASK_LOG_FILE}")
+    # --- Configure Werkzeug Logger (for request logs) ---
     werkzeug_logger = logging.getLogger('werkzeug')
-    werkzeug_logger.setLevel(log_level)  # Match app level or set differently
-    # Add the same handler or a different one if needed
-    if not any(
-            isinstance(h, logging.FileHandler) and h.baseFilename == FLASK_LOG_FILE for h in werkzeug_logger.handlers):
+    # werkzeug_logger.setLevel(log_level)  # Set level for Werkzeug
+    # Add file handler to Werkzeug logger (checking for duplicates)
+    if not any(isinstance(h, logging.FileHandler) and getattr(h, 'baseFilename', None) == FLASK_LOG_FILE for h in
+               werkzeug_logger.handlers):
         werkzeug_logger.addHandler(file_handler)
+        werkzeug_logger.addHandler(console_handler)
     app.logger.info('Flask application logging configured.')
-    app.logger.info(f'Logging to file: {FLASK_LOG_FILE}')
+    # This message will now go to both file and console (if levels permit)
