@@ -33,6 +33,7 @@ def extract_pcap_info_with_chord(pcap_file, pair_id, side, options, use_cache=Tr
                 # Use get_cache which should handle deserialization if implemented
                 cached_result = redis_client.get_cache(cache_key)
                 if cached_result is not None:  # Ensure cache didn't return None unexpectedly
+                    # TODO: Fix cache reader
                     return cached_result
                 else:
                     logger.warning(f"Cache key {cache_key} exists but returned None. Proceeding with processing.")
@@ -57,7 +58,7 @@ def extract_pcap_info_with_chord(pcap_file, pair_id, side, options, use_cache=Tr
         pcap_chunks = split_pcap_file(pcap_file, 100000)  # Example chunk size
         if not pcap_chunks:
             logger.warning(f"Splitting {pcap_file} resulted in no chunks.")
-            return {"info": "No chunks generated", "file": pcap_file}
+            return {"error": "No chunks generated", "file": pcap_file}
         logger.info(f"Split {pcap_file} into {len(pcap_chunks)} chunks.")
         # 2. Create signatures for the parallel chunk processing tasks (Chord Header)
         # Ensure extract_pcap_info_executor is defined as a Celery task
@@ -84,10 +85,10 @@ def extract_pcap_info_with_chord(pcap_file, pair_id, side, options, use_cache=Tr
         )
         # 4. Execute the chord and wait for the result
         logger.info(f"Executing chord for {pcap_file}. Header: {len(executor_signatures)} tasks.")
-        executor_chord = chord(header)(callback)
+        executor_chord = chord(header, callback)
         return executor_chord
-    except FileNotFoundError:
-        logger.error(f"File {pcap_file} disappeared before processing.")
+    except FileNotFoundError as e:
+        logger.error(f"File {pcap_file} disappeared before processing. {e}")
         return {"error": f"File {pcap_file} disappeared during processing"}
     except IOError as e:
         logger.error(f"IOError during processing of {pcap_file}: {e}")

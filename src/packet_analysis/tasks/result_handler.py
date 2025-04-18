@@ -8,7 +8,7 @@ from src.packet_analysis.utils.callback import send_callback_request
 
 
 @celery_app.task
-def merge_results(task_id, pair_results):
+def merge_results(pair_results, task_id):
     """合并所有分析对的结果"""
     # 调用合并服务
     merged_data = merge_analysis_results(pair_results)
@@ -27,7 +27,7 @@ def merge_results(task_id, pair_results):
 
 
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
-def send_callback(self, callback_url, result):
+def send_callback(self, result, callback_url):
     """
     Sends the final result back to the requesting service via callback URL.
     Retries on failure.
