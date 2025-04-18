@@ -25,7 +25,6 @@ class Config:
 
     # 日志配置
     LOG_LEVEL: str = 'INFO'
-    LOG_FILE: Optional[str] = None  # 如 '/var/log/app.log'
 
     @classmethod
     def load_config(cls):
@@ -77,7 +76,6 @@ class Config:
 
         # 日志配置
         cls.LOG_LEVEL = cls._get_setting('LOG_LEVEL', default='INFO')
-        cls.LOG_FILE = cls._get_setting('LOG_FILE')
 
     @staticmethod
     def _get_setting(name: str, default=None, convert_type=str):

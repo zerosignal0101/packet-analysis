@@ -3,6 +3,10 @@ import os
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 import rootutils
 
+# Project imports
+from src.packet_analysis.config import Config
+
+
 # 查找项目根目录
 path = rootutils.find_root(search_from=__file__, indicator=".project-root")
 
@@ -18,6 +22,9 @@ FLASK_LOG_FILE = os.path.join(LOG_FOLDER, "flask.log")
 # 定义日志格式
 FILE_LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s - %(name)s - [%(filename)s:%(lineno)d/%(processName)s]"
 CONSOLE_LOG_FORMAT = "[%(asctime)s: %(levelname)s/%(processName)s] %(message)s"
+
+# 日志记录等级
+LOG_LEVEL = 'DEBUG' if Config.DEBUG else Config.LOG_LEVEL
 
 # --- Define Logging Configuration Dictionary ---
 CELERY_LOGGING = {
