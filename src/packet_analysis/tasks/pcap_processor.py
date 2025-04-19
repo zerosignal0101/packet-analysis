@@ -1,9 +1,12 @@
 import os
 from celery import group, chain, chord
+from celery import states  # Import states for custom failure state
+from celery.exceptions import Ignore, Retry  # Import Retry exception
 import logging
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+from redis.exceptions import RedisError
 
 # Project imports
 from src.packet_analysis.celery_app.celery import celery_app
@@ -45,18 +48,26 @@ def extract_pcap_info_with_chord(pcap_file, pair_id, side, options):
             file_hash=file_hash,
             cache_key=cache_key,
             pcap_chunks=pcap_chunks,  # Pass list of chunks for cleanup
-            original_pcap_file=pcap_file  # Pass original filename for logging
+            original_pcap_file=pcap_file,  # Pass original filename for logging
+            is_cached=True
         )
+
+        # Options 返回在异常时需要清理的对象
+        info_options = {
+            "file_hash": file_hash,
+            "cache_key": cache_key,
+            "pcap_chunks": pcap_chunks
+        }
 
         cache_status = redis_client.get_cache_status(cache_key)
         if cache_status == CacheStatus.CACHE_PENDING:
             logger.info(f"Cache already pending. No need to repeat the task scheduling for extraction.")
-            return callback_cached, {}
+            return callback_cached, info_options
         elif (cache_status == CacheStatus.CACHE_READY or
               cache_status == CacheStatus.READ_LOCKED or
               cache_status == CacheStatus.WRITE_LOCKED):
             logger.warning(f"Cache already in procession. Please check the status of {pcap_file}.")
-            return callback_cached, {}
+            return callback_cached, info_options
         elif cache_status == CacheStatus.CACHE_MISSING:
             logger.info(f"Cache missing. Create extraction workflow for {pcap_file} (hash: {file_hash}")
             redis_client.set_cache_status(cache_key, CacheStatus.CACHE_PENDING)
@@ -148,8 +159,29 @@ def extract_pcap_info_executor(chunk_file):
     return result
 
 
-@celery_app.task(bind=True)  # bind=True allows access to self for retries etc.
-def finalize_pcap_extraction(self, results, file_hash, cache_key, pcap_chunks, original_pcap_file):
+# Define constants for retry logic
+CACHE_WAIT_RETRY_DELAY_SECONDS = 60  # Wait 60 seconds between retries
+CACHE_WAIT_MAX_RETRIES = 180  # Max retries (180 * 60s = 10800s = 180 minutes timeout)
+
+
+class CacheWaitTimeoutError(Exception):
+    """Custom exception for cache wait timeout."""
+    pass
+
+
+class CacheStateError(Exception):
+    """Custom exception for unexpected cache state."""
+    pass
+
+
+@celery_app.task(bind=True,
+                 # Automatically retry for these exceptions
+                 autoretry_for=(RedisError, Retry, CacheWaitTimeoutError, CacheStateError),
+                 retry_kwargs={'max_retries': CACHE_WAIT_MAX_RETRIES + 5},  # Add a buffer
+                 retry_backoff=True,  # Exponential backoff
+                 retry_backoff_max=60,  # Max backoff delay (seconds)
+                 retry_jitter=True)  # Add randomness to backoff
+def finalize_pcap_extraction(self, results, file_hash, cache_key, pcap_chunks, original_pcap_file, is_cached=False):
     """
     Callback task for the chord. Aggregates results, caches, and cleans up chunks.
     Receives the list of results from the executor tasks.
@@ -161,68 +193,165 @@ def finalize_pcap_extraction(self, results, file_hash, cache_key, pcap_chunks, o
         logger.error("Redis client is not available. Cannot proceed with caching.")
         return None
 
-    # 1. Aggregate results
-    # (1). Initialize an empty list to store individual DataFrames
-    dfs_to_concat = []
-    # (2). Iterate through results, read Parquet files, and append to the list
-    for entry in results:
-        # chunk = entry["chunk"] # Use if needed for logging/context
-        cache_key = entry["cache_key"]
-        if redis_client.check_cache_exist(cache_key):
-            chunk_parquet_file_path = redis_client.get_cache(cache_key)
-            if chunk_parquet_file_path:
-                try:
-                    # Read the individual Parquet file into a temporary DataFrame
-                    temp_df = pd.read_parquet(chunk_parquet_file_path, columns=PARQUET_COLUMNS)
-                    # Append the temporary DataFrame to the list
-                    dfs_to_concat.append(temp_df)
-                    print(f"Successfully read and added: {chunk_parquet_file_path}")  # Optional logging
-                except Exception as e:
-                    # Handle potential errors during file reading (e.g., file not found, corrupted)
-                    print(f"Error reading Parquet file {chunk_parquet_file_path} for key {cache_key}: {e}")
-            else:
-                print(f"Cache key {cache_key} exists but returned an empty path.")  # Optional logging
-        else:
-            print(f"Cache key {cache_key} not found in Redis.")  # Optional logging
-    # (3). Concatenate all DataFrames in the list into the final result_df
-    if dfs_to_concat:
-        # Concatenate the list of DataFrames along rows (axis=0)
-        # ignore_index=True creates a new continuous index for the resulting DataFrame
-        result_df = pd.concat(dfs_to_concat, ignore_index=True, sort=False)
-        print(f"Concatenated {len(dfs_to_concat)} DataFrames.")
-    else:
-        # If no valid Parquet files were found/read, create an empty DataFrame with the correct columns
-        print("No Parquet files found or read. Creating an empty DataFrame.")
-        result_df = pd.DataFrame(columns=PARQUET_COLUMNS)
-
-    # Write parquet to file
-    parquet_filename_base = file_hash if file_hash else os.path.splitext(os.path.basename(original_pcap_file))[0]
-    result_parquet_file_path = os.path.join(Config.PARQUET_STORAGE_DIR, f"{parquet_filename_base}.parquet")
-    os.makedirs(os.path.dirname(result_parquet_file_path), exist_ok=True)
-    table = pa.Table.from_pandas(result_df, preserve_index=False)
-    pq.write_table(table, result_parquet_file_path, compression='snappy')
-
-    # 2. Cache the final result
-    redis_client = get_redis_client()
-    if redis_client and redis_client._initialized and file_hash and cache_key:
+    if is_cached:
         try:
-            # Potentially serialize 'final_aggregated_result' before storing
-            logger.info(f"Storing aggregated result in cache key: {cache_key}")
-            redis_client.set_cache(cache_key, result_parquet_file_path)
-            redis_client.set_cache_status(cache_key, CacheStatus.CACHE_READY)
+            # --- Check Cache Status ---
+            current_status = redis_client.get_cache_status(cache_key)
+            logger.debug(f"[Task ID: {self.request.id}] Current status for {cache_key}: {current_status}")
+            if current_status == CacheStatus.CACHE_READY:
+                logger.info(
+                    f"[Task ID: {self.request.id}] Cache status for {cache_key} is READY. Proceeding to get data.")
+                # --- Cache is Ready: Get Path and Verify ---
+                parquet_file_path = redis_client.get_cache(cache_key)
+                if not parquet_file_path:
+                    logger.error(
+                        f"[Task ID: {self.request.id}] Cache status is READY for {cache_key}, but cache data is missing.")
+                    # This is an inconsistent state, potentially raise an error or handle as failure
+                    self.update_state(state=states.FAILURE,
+                                      meta={'exc_type': 'CacheStateError',
+                                            'exc_message': 'Cache READY but data missing'})
+                    raise CacheStateError(f"Cache READY for {cache_key} but data is missing.")  # Trigger retry/failure
+                if os.path.exists(parquet_file_path):
+                    logger.info(
+                        f"[Task ID: {self.request.id}] Successfully retrieved and verified parquet file path: {parquet_file_path} for key {cache_key}")
+                    return parquet_file_path  # Success!
+                else:
+                    logger.error(
+                        f"[Task ID: {self.request.id}] Cache status is READY for {cache_key}, data exists ({parquet_file_path}), but file not found on disk.")
+                    # File system inconsistency. Maybe the file was deleted prematurely.
+                    self.update_state(state=states.FAILURE, meta={'exc_type': 'FileNotFoundError',
+                                                                  'exc_message': f'Cached file {parquet_file_path} not found.'})
+                    # This is likely a permanent failure for this run, maybe don't retry indefinitely?
+                    # For now, let autoretry handle it, but consider raising Ignore() after some retries if this persists.
+                    raise FileNotFoundError(f"Cached file {parquet_file_path} not found on disk.")
+            elif current_status == CacheStatus.CACHE_PENDING:
+                # --- Cache is Pending: Wait and Retry ---
+                logger.info(
+                    f"[Task ID: {self.request.id}] Cache status for {cache_key} is PENDING. Retrying in {CACHE_WAIT_RETRY_DELAY_SECONDS}s (Attempt {self.request.retries + 1}/{CACHE_WAIT_MAX_RETRIES})")
+                # Check if max retries for *waiting* specifically have been exceeded
+                if self.request.retries >= CACHE_WAIT_MAX_RETRIES:
+                    logger.error(
+                        f"[Task ID: {self.request.id}] Max retries ({CACHE_WAIT_MAX_RETRIES}) exceeded waiting for cache key {cache_key} to become READY.")
+                    self.update_state(state=states.FAILURE, meta={'exc_type': 'CacheWaitTimeoutError',
+                                                                  'exc_message': f'Timeout waiting for cache {cache_key}'})
+                    # Raise a specific error NOT covered by autoretry infinite loop, or raise Ignore()
+                    raise CacheWaitTimeoutError(f"Timeout waiting for cache key {cache_key}")
+                # Use Celery's retry mechanism
+                # Note: We use retry_backoff in the task decorator now, so explicit countdown isn't strictly needed,
+                # but can be used to override the backoff for specific cases if desired.
+                # Let's rely on the decorator's backoff. We just need to raise Retry.
+                raise Retry(f"Cache pending for {cache_key}")
+            elif current_status == CacheStatus.CACHE_MISSING or current_status is None:
+                # --- Cache is Missing: Error ---
+                logger.error(
+                    f"[Task ID: {self.request.id}] Cache status for {cache_key} is '{current_status}'. Expected PENDING or READY. This indicates a potential issue in the preceding tasks.")
+                # This might mean the task setting the status failed or never ran.
+                self.update_state(state=states.FAILURE, meta={'exc_type': 'CacheStateError',
+                                                              'exc_message': f'Unexpected cache status {current_status} for {cache_key}'})
+                # Decide whether to retry or fail permanently. Let's let autoretry try a few times.
+                raise CacheStateError(f"Unexpected cache status '{current_status}' for key {cache_key}.")
+            else:
+                # --- Unexpected Status: Error ---
+                logger.error(
+                    f"[Task ID: {self.request.id}] Encountered unexpected cache status '{current_status}' for {cache_key}.")
+                self.update_state(state=states.FAILURE, meta={'exc_type': 'CacheStateError',
+                                                              'exc_message': f'Unexpected cache status {current_status} for {cache_key}'})
+                raise CacheStateError(f"Unexpected cache status '{current_status}' for key {cache_key}.")
+        except RedisError as e:
+            logger.error(f"[Task ID: {self.request.id}] Redis error interacting with key {cache_key}: {e}. Retrying...")
+            # Update state and let autoretry handle it
+            self.update_state(state=states.RETRY, meta={'exc_type': 'RedisError', 'exc_message': str(e)})
+            raise  # Re-raise the caught RedisError to trigger autoretry
+        except Retry as e:
+            # This block is only entered if self.retry() was called *without* raising the Retry exception
+            # (which we aren't doing here, we raise directly).
+            # If we used self.retry(exc=..., throw=False), we might land here.
+            # Since we raise Retry directly, Celery handles it before this block.
+            # If using autoretry_for, raising the exception type is sufficient.
+            logger.info(f"[Task ID: {self.request.id}] Explicit retry requested: {e}")
+            raise  # Re-raise to let Celery handle the retry
+        except (CacheWaitTimeoutError, CacheStateError, FileNotFoundError) as e:
+            # These are potentially terminal errors for this specific task execution,
+            # although autoretry might still attempt them based on the decorator config.
+            # If we want to ensure they stop retrying after the CacheWaitTimeoutError,
+            # we might need more complex logic or remove them from autoretry_for.
+            # For now, log and re-raise for autoretry handling.
+            logger.error(f"[Task ID: {self.request.id}] Encountered error: {type(e).__name__} - {e}")
+            self.update_state(state=states.FAILURE, meta={'exc_type': type(e).__name__, 'exc_message': str(e)})
+            raise  # Re-raise to let Celery handle retries/failure
         except Exception as e:
-            logger.exception(f"Failed to cache result for hash {file_hash} (key: {cache_key}): {e}")
-            # Decide if failure to cache is critical. Maybe retry?
-            # self.retry(exc=e, countdown=30, max_retries=2)
-    # 3. Clean up chunk files (Important: Do this *after* processing/caching)
-    #    Alternative: Chunks could be cleaned by the executor task itself right after processing.
-    #    Cleaning here ensures all are attempted even if some executors failed, but might leave orphans if this task fails.
-    for entry in results:
-        cache_key = entry["cache_key"]
-        if redis_client.check_cache_exist(cache_key):
-            chunk_parquet_file_path = redis_client.get_cache(cache_key)
-            if chunk_parquet_file_path:
-                try_remove_chunk(chunk_parquet_file_path)
-            redis_client.delete_cache(cache_key)
-    logger.info(f"Finalization complete for original file (hash: {file_hash}).")
-    return result_parquet_file_path  # This is the result the original caller will get
+            # Catch any other unexpected exceptions
+            logger.exception(
+                f"[Task ID: {self.request.id}] An unexpected error occurred in finalize_pcap_extraction for key {cache_key}: {e}")
+            # Update state to FAILURE
+            self.update_state(state=states.FAILURE, meta={'exc_type': type(e).__name__, 'exc_message': str(e)})
+            # Depending on policy, you might want to retry unexpected errors too.
+            # If included in autoretry_for=(Exception,), it would retry. Otherwise, it fails permanently.
+            # Let's assume we want unexpected errors to fail fast.
+            raise Ignore()  # Use Ignore() to prevent retries for truly unexpected errors
+    else:
+        # 1. Aggregate results
+        # (1). Initialize an empty list to store individual DataFrames
+        dfs_to_concat = []
+        # (2). Iterate through results, read Parquet files, and append to the list
+        for entry in results:
+            # chunk = entry["chunk"] # Use if needed for logging/context
+            cache_key = entry["cache_key"]
+            if redis_client.check_cache_exist(cache_key):
+                chunk_parquet_file_path = redis_client.get_cache(cache_key)
+                if chunk_parquet_file_path:
+                    try:
+                        # Read the individual Parquet file into a temporary DataFrame
+                        temp_df = pd.read_parquet(chunk_parquet_file_path, columns=PARQUET_COLUMNS)
+                        # Append the temporary DataFrame to the list
+                        dfs_to_concat.append(temp_df)
+                        print(f"Successfully read and added: {chunk_parquet_file_path}")  # Optional logging
+                    except Exception as e:
+                        # Handle potential errors during file reading (e.g., file not found, corrupted)
+                        print(f"Error reading Parquet file {chunk_parquet_file_path} for key {cache_key}: {e}")
+                else:
+                    print(f"Cache key {cache_key} exists but returned an empty path.")  # Optional logging
+            else:
+                print(f"Cache key {cache_key} not found in Redis.")  # Optional logging
+        # (3). Concatenate all DataFrames in the list into the final result_df
+        if dfs_to_concat:
+            # Concatenate the list of DataFrames along rows (axis=0)
+            # ignore_index=True creates a new continuous index for the resulting DataFrame
+            result_df = pd.concat(dfs_to_concat, ignore_index=True, sort=False)
+            print(f"Concatenated {len(dfs_to_concat)} DataFrames.")
+        else:
+            # If no valid Parquet files were found/read, create an empty DataFrame with the correct columns
+            print("No Parquet files found or read. Creating an empty DataFrame.")
+            result_df = pd.DataFrame(columns=PARQUET_COLUMNS)
+
+        # Write parquet to file
+        parquet_filename_base = file_hash if file_hash else os.path.splitext(os.path.basename(original_pcap_file))[0]
+        result_parquet_file_path = os.path.join(Config.PARQUET_STORAGE_DIR, f"{parquet_filename_base}.parquet")
+        os.makedirs(os.path.dirname(result_parquet_file_path), exist_ok=True)
+        table = pa.Table.from_pandas(result_df, preserve_index=False)
+        pq.write_table(table, result_parquet_file_path, compression='snappy')
+
+        # 2. Cache the final result
+        redis_client = get_redis_client()
+        if redis_client and redis_client._initialized and file_hash and cache_key:
+            try:
+                # Potentially serialize 'final_aggregated_result' before storing
+                logger.info(f"Storing aggregated result in cache key: {cache_key}")
+                redis_client.set_cache(cache_key, result_parquet_file_path)
+                redis_client.set_cache_status(cache_key, CacheStatus.CACHE_READY)
+            except Exception as e:
+                logger.exception(f"Failed to cache result for hash {file_hash} (key: {cache_key}): {e}")
+                # Decide if failure to cache is critical. Maybe retry?
+                # self.retry(exc=e, countdown=30, max_retries=2)
+        # 3. Clean up chunk files (Important: Do this *after* processing/caching)
+        #    Alternative: Chunks could be cleaned by the executor task itself right after processing.
+        #    Cleaning here ensures all are attempted even if some executors failed, but might leave orphans if this task fails.
+        for entry in results:
+            cache_key = entry["cache_key"]
+            if redis_client.check_cache_exist(cache_key):
+                chunk_parquet_file_path = redis_client.get_cache(cache_key)
+                if chunk_parquet_file_path:
+                    try_remove_chunk(chunk_parquet_file_path)
+                redis_client.delete_cache(cache_key)
+        logger.info(f"Finalization complete for original file (hash: {file_hash}).")
+        return result_parquet_file_path  # This is the result the original caller will get

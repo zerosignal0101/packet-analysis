@@ -57,7 +57,7 @@ def split_pcap_file(pcap_file: Union[str, Path], max_packets_per_file: int) -> L
     # --- Prepare Output Directory and Filenames using Hash ---
     # Keep original suffix if needed later, but don't use it for globbing intermediate files
     # pcap_suffix = pcap_file_path.suffix
-    random_id = uuid.uuid4().hex[:8]  # Short random hex ID for run uniqueness
+    random_id = uuid.uuid4().hex[:4]  # Short random hex ID for run uniqueness
 
     # Create a unique temporary directory using the file hash and a random ID
     # Format: base_temp_dir / file_hash_randomid
