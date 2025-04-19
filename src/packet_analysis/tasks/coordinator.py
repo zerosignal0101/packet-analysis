@@ -14,9 +14,6 @@ from src.packet_analysis.utils.cache import get_redis_client, CacheStatus
 
 logger = logging.getLogger(__name__)
 
-# Redis 连接
-redis_client = redis.Redis.from_url(Config.CELERY_RESULT_BACKEND)
-
 
 @celery_app.task
 def process_analysis_request(task_id, pcap_info_list, remote_addr, options):
@@ -27,10 +24,10 @@ def process_analysis_request(task_id, pcap_info_list, remote_addr, options):
     callback_url = Config.CALLBACK_URL if Config.CALLBACK_URL is not None else default_callback_url
     logger.info(f'Callback URL: {callback_url}')
 
-    # 创建任务状态跟踪
-    redis_client.hset(f"task:{task_id}", "status", "processing")
-    redis_client.hset(f"task:{task_id}", "total_pairs", str(len(pcap_info_list)))
-    redis_client.hset(f"task:{task_id}", "completed_pairs", "0")
+    # # 创建任务状态跟踪
+    # redis_client.hset(f"task:{task_id}", "status", "processing")
+    # redis_client.hset(f"task:{task_id}", "total_pairs", str(len(pcap_info_list)))
+    # redis_client.hset(f"task:{task_id}", "completed_pairs", "0")
 
     pair_tasks = []
     info_options_list = []

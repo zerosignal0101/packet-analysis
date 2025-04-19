@@ -28,7 +28,7 @@ class Config:
     CELERY_RESULT_EXPIRES: int = 3600  # 任务结果过期时间(秒)
 
     # 日志配置
-    LOG_LEVEL: str = 'INFO'
+    LOG_LEVEL: Optional[str] = None
 
     # 回调 URL 配置
     CALLBACK_URL: Optional[str] = None

@@ -30,8 +30,6 @@ def extract_pcap_info_with_chord(pcap_file, pair_id, side, options):
         logger.warning(f"Redis not available for caching in extract_pcap_info for {pcap_file}.")
         return {"error": "Redis cache not available"}, {}
 
-    file_hash = None
-    cache_key = None
     pcap_chunks = []  # Initialize chunk list
 
     # --- Cache Check ---
@@ -45,6 +43,7 @@ def extract_pcap_info_with_chord(pcap_file, pair_id, side, options):
             redis_client.set_cache_status(cache_key, CacheStatus.CACHE_MISSING)
 
         callback_cached = finalize_pcap_extraction.s(
+            results=None,
             file_hash=file_hash,
             cache_key=cache_key,
             pcap_chunks=pcap_chunks,  # Pass list of chunks for cleanup
@@ -186,7 +185,7 @@ def finalize_pcap_extraction(self, results, file_hash, cache_key, pcap_chunks, o
     Callback task for the chord. Aggregates results, caches, and cleans up chunks.
     Receives the list of results from the executor tasks.
     """
-    logger.info(f"Finalizing extraction for original pcap file (hash: {file_hash}). Received {len(results)} results.")
+    logger.info(f"Finalizing extraction for original pcap file (hash: {file_hash}).")
     redis_client = get_redis_client()
     # --- Caching Logic (similar to before) ---
     if not redis_client or not redis_client._initialized:
@@ -290,15 +289,16 @@ def finalize_pcap_extraction(self, results, file_hash, cache_key, pcap_chunks, o
             # Let's assume we want unexpected errors to fail fast.
             raise Ignore()  # Use Ignore() to prevent retries for truly unexpected errors
     else:
+        logger.info(f"Finalize_pcap_extraction received {len(results)} results.")
         # 1. Aggregate results
         # (1). Initialize an empty list to store individual DataFrames
         dfs_to_concat = []
         # (2). Iterate through results, read Parquet files, and append to the list
         for entry in results:
             # chunk = entry["chunk"] # Use if needed for logging/context
-            cache_key = entry["cache_key"]
-            if redis_client.check_cache_exist(cache_key):
-                chunk_parquet_file_path = redis_client.get_cache(cache_key)
+            chunk_cache_key = entry["cache_key"]
+            if redis_client.check_cache_exist(chunk_cache_key):
+                chunk_parquet_file_path = redis_client.get_cache(chunk_cache_key)
                 if chunk_parquet_file_path:
                     try:
                         # Read the individual Parquet file into a temporary DataFrame
@@ -308,11 +308,11 @@ def finalize_pcap_extraction(self, results, file_hash, cache_key, pcap_chunks, o
                         print(f"Successfully read and added: {chunk_parquet_file_path}")  # Optional logging
                     except Exception as e:
                         # Handle potential errors during file reading (e.g., file not found, corrupted)
-                        print(f"Error reading Parquet file {chunk_parquet_file_path} for key {cache_key}: {e}")
+                        print(f"Error reading Parquet file {chunk_parquet_file_path} for key {chunk_cache_key}: {e}")
                 else:
-                    print(f"Cache key {cache_key} exists but returned an empty path.")  # Optional logging
+                    print(f"Cache key {chunk_cache_key} exists but returned an empty path.")  # Optional logging
             else:
-                print(f"Cache key {cache_key} not found in Redis.")  # Optional logging
+                print(f"Cache key {chunk_cache_key} not found in Redis.")  # Optional logging
         # (3). Concatenate all DataFrames in the list into the final result_df
         if dfs_to_concat:
             # Concatenate the list of DataFrames along rows (axis=0)
@@ -347,11 +347,11 @@ def finalize_pcap_extraction(self, results, file_hash, cache_key, pcap_chunks, o
         #    Alternative: Chunks could be cleaned by the executor task itself right after processing.
         #    Cleaning here ensures all are attempted even if some executors failed, but might leave orphans if this task fails.
         for entry in results:
-            cache_key = entry["cache_key"]
-            if redis_client.check_cache_exist(cache_key):
-                chunk_parquet_file_path = redis_client.get_cache(cache_key)
+            chunk_cache_key = entry["cache_key"]
+            if redis_client.check_cache_exist(chunk_cache_key):
+                chunk_parquet_file_path = redis_client.get_cache(chunk_cache_key)
                 if chunk_parquet_file_path:
                     try_remove_chunk(chunk_parquet_file_path)
-                redis_client.delete_cache(cache_key)
+                redis_client.delete_cache(chunk_cache_key)
         logger.info(f"Finalization complete for original file (hash: {file_hash}).")
         return result_parquet_file_path  # This is the result the original caller will get

@@ -61,9 +61,14 @@ def run():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    # 保持主进程运行
-    while True:
+    # Keep the main process alive efficiently waiting for signals
+    try:
+        signal.pause()
+    except KeyboardInterrupt:
+        # This might be caught if signal handler doesn't exit, but signal_handler should handle it
         pass
+    except Exception as e:
+        print(f"Main loop encountered an error: {e}")
 
 
 if __name__ == '__main__':

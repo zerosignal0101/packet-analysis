@@ -241,3 +241,11 @@ def redis_lock(lock_name, timeout=Config.LOCK_TIMEOUT_SECONDS, blocking_timeout=
     finally:
         if lock:
             client.release_lock(lock)
+
+
+if __name__ == "__main__":
+    redis_client = get_redis_client()
+
+    file_hash = "15ab45484948"
+    cache_key = f"pcap_info:{file_hash}"
+    redis_client.set_cache(cache_key, 'test value')

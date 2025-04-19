@@ -55,7 +55,7 @@ def process_pcap_to_parquet(pcap_file_path: Union[str, Path]) -> Optional[str]:
         logger.error(f"Cannot process PCAP {pcap_file_path}: {e}")
         return None
 
-    cache_key = f"pcap_parquet:{file_hash}"
+    cache_key = f"chunk_pcap_parquet:{file_hash}"
     lock_key = f"lock:pcap_process:{file_hash}"
 
     # Check Cache
@@ -69,8 +69,7 @@ def process_pcap_to_parquet(pcap_file_path: Union[str, Path]) -> Optional[str]:
                 f"Cache hit for PCAP hash {file_hash}, but Parquet file {parquet_file_path_cache} not found. Re-processing.")
             try:
                 # Attempt to delete the stale cache entry
-                if redis_client.redis:
-                    redis_client.redis.delete(cache_key)
+                redis_client.delete_cache(cache_key)
             except Exception as redis_err:
                 logger.error(f"Failed to delete stale cache key {cache_key}: {redis_err}")
             parquet_file_path_cache = None  # Treat as cache miss
