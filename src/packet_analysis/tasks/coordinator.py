@@ -142,7 +142,6 @@ def create_analysis_chord(side, pair_id, pcap_list, options):
             pair_id=pair_id,
             side=side,
             options=extraction_options,
-            use_cache=False
         )
         # 若遍历到有问题的数据，返回报错信息到上一级任务链生成函数 process_pair_with_chord
         if not isinstance(extract_pcap_info_signature, Signature):

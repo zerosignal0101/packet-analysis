@@ -1,5 +1,9 @@
 import os
 from typing import Optional
+import rootutils
+
+# 查找项目根目录
+project_path = rootutils.find_root(search_from=__file__, indicator=".project-root")
 
 
 class Config:
@@ -28,6 +32,12 @@ class Config:
 
     # 回调 URL 配置
     CALLBACK_URL: Optional[str] = None
+
+    # 缓存相关配置
+    CHUNK_PCAP_STORAGE_DIR: str = os.path.join(project_path, "results/pcap_chunks")
+    CACHE_TTL_SECONDS: int = 3600 * 24
+    LOCK_TIMEOUT_SECONDS: int = 1800
+    PARQUET_STORAGE_DIR: str = os.path.join(project_path, "results/parquet_data")
 
     @classmethod
     def load_config(cls):
@@ -81,6 +91,19 @@ class Config:
         cls.LOG_LEVEL = cls._get_setting('LOG_LEVEL', default='INFO')
 
         cls.CALLBACK_URL = cls._get_setting('CALLBACK_URL', default=None)
+
+        # 缓存相关
+        cls.CACHE_TTL_SECONDS = cls._get_setting(
+            'CACHE_TTL_SECONDS',
+            default=3600 * 24,
+            convert_type=int
+        )
+        cls.LOCK_TIMEOUT_SECONDS = cls._get_setting(
+            'LOCK_TIMEOUT_SECONDS',
+            default=60,
+            convert_type=int
+        )
+        cls.PARQUET_STORAGE_DIR = cls._get_setting('PARQUET_STORAGE_DIR', default='/tmp/parquet_data')
 
     @staticmethod
     def _get_setting(name: str, default=None, convert_type=str):

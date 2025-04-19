@@ -1,12 +1,13 @@
-# redis_utils.py (or wherever these reside)
+# cache.py
 import os
 import redis
 import hashlib
 import time
 import logging
 from functools import wraps
-from redis.exceptions import LockError
+from redis.exceptions import LockError, LockNotOwnedError, RedisError
 from enum import Enum
+from contextlib import contextmanager
 
 # Project imports
 from src.packet_analysis.config import Config  # Make sure this path is correct
@@ -15,11 +16,11 @@ logger = logging.getLogger(__name__)  # It's good practice to add logging
 
 
 class CacheStatus(str, Enum):
-    READ_LOCKED = "read_locked"       # 读取锁定（防止多个进程同时重建缓存）
-    WRITE_LOCKED = "write_locked"     # 写入锁定（防止并发写入）
-    CACHE_READY = "cache_ready"       # 缓存可用（可正常读取）
-    CACHE_PENDING = "cache_pending"   # 缓存不存在，但有写入任务进行中
-    CACHE_MISSING = "cache_missing"   # 缓存不存在，且无写入任务安排
+    READ_LOCKED = "read_locked"  # 读取锁定（防止多个进程同时重建缓存）
+    WRITE_LOCKED = "write_locked"  # 写入锁定（防止并发写入）
+    CACHE_READY = "cache_ready"  # 缓存可用（可正常读取）
+    CACHE_PENDING = "cache_pending"  # 缓存不存在，但有写入任务进行中
+    CACHE_MISSING = "cache_missing"  # 缓存不存在，且无写入任务安排
 
 
 class RedisClient:
@@ -78,6 +79,17 @@ class RedisClient:
             logger.error(f"Failed to get cache status for {cache_key}: {e}")
             return None
 
+    def delete_cache_status(self, key):
+        """移除缓存键值"""
+        if not self.redis:
+            logger.warning(f"Redis client not available. Cannot delete cache status for key: {key}")
+            return False
+        try:
+            status_key = "status:{}".format(key)
+            return self.redis.delete(status_key)
+        except redis.exceptions.RedisError:
+            logger.error(f"Failed to delete cache status")
+
     def check_status_exist(self, cache_key):
         status_key = "status:{}".format(cache_key)
         return self.exists(status_key)
@@ -104,6 +116,16 @@ class RedisClient:
             logger.error(f"Failed to get cache for key {key}: {e}")
             return None
 
+    def delete_cache(self, key):
+        """移除缓存键值"""
+        if not self.redis:
+            logger.warning(f"Redis client not available. Cannot delete cache for key: {key}")
+            return False
+        try:
+            return self.redis.delete(key)
+        except redis.exceptions.RedisError:
+            logger.error(f"Failed to delete cache")
+
     def check_cache_exist(self, key):
         return self.exists(key)
 
@@ -117,6 +139,44 @@ class RedisClient:
         except redis.exceptions.RedisError as e:
             logger.error(f"Failed to check existence for key {key}: {e}")
             return False
+
+    # --- Add Acquire Lock Method (if not implicitly handled by redis_lock context manager) ---
+    def acquire_lock(self, lock_name, timeout=Config.LOCK_TIMEOUT_SECONDS, blocking_timeout=None):
+        if not self.redis:
+            logger.warning("Redis client not available. Cannot acquire lock.")
+            return None
+        try:
+            # Use Redis built-in Lock
+            lock = self.redis.lock(lock_name, timeout=timeout)
+            if lock.acquire(blocking=True, blocking_timeout=blocking_timeout):
+                logger.debug(f"Acquired lock: {lock_name}")
+                return lock  # Return the lock object to be released later
+            else:
+                logger.warning(f"Failed to acquire lock {lock_name} within timeout.")
+                return None
+        except RedisError as e:
+            logger.error(f"Error acquiring lock {lock_name}: {e}")
+            return None
+
+    # --- Add Release Lock Method ---
+    def release_lock(self, lock):
+        if not self.redis or not lock:
+            # logger.warning("Redis client not available or lock invalid. Cannot release lock.")
+            return False  # Don't log if lock is None, already logged acquire failure
+        try:
+            lock.release()
+            logger.debug(f"Released lock: {lock.name}")
+            return True
+        except LockNotOwnedError:
+            logger.warning(f"Attempted to release lock {lock.name} not owned by this client.")
+            return False
+        except RedisError as e:
+            logger.error(f"Error releasing lock {lock.name}: {e}")
+            return False
+
+    @property
+    def initialized(self):
+        return self._initialized
 
 
 # --- End of RedisClient ---
@@ -157,3 +217,27 @@ def get_file_hash(file_path):
     except IOError as e:
         logger.error(f"Error reading file {file_path} for hashing: {e}")
         raise  # Re-raise the exception after logging
+
+
+# --- redis_lock Context Manager ---
+@contextmanager
+def redis_lock(lock_name, timeout=Config.LOCK_TIMEOUT_SECONDS, blocking_timeout=None):
+    """Provides a context manager for acquiring and releasing a Redis lock."""
+    client = get_redis_client()
+    if not client or not client._initialized:
+        # If redis isn't available, maybe proceed without locking? Or raise error?
+        # Let's proceed without lock but log a warning. Depending on criticality, you might raise.
+        logger.warning(f"Redis not available. Proceeding without lock for '{lock_name}'. Potential race condition.")
+        lock = None
+        yield  # Allow the 'with' block to execute
+        return  # Exit context manager
+    # If Redis is available, try to acquire lock
+    lock = client.acquire_lock(lock_name, timeout=timeout, blocking_timeout=blocking_timeout)
+    if lock is None:
+        # Failed to acquire lock (e.g., timed out waiting)
+        raise LockError(f"Could not acquire lock '{lock_name}'")
+    try:
+        yield lock  # Pass lock object if needed, otherwise just yield control
+    finally:
+        if lock:
+            client.release_lock(lock)

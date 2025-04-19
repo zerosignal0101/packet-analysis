@@ -9,22 +9,7 @@ from typing import List, Union  # Import List for type hinting
 
 # project imports
 from src.packet_analysis.utils.cache import get_file_hash
-
-# 查找项目根目录 (Keep this if your project structure requires it)
-# try:
-#     path = rootutils.find_root(search_from=__file__, indicator=".project-root")
-#     rootutils.set_root(
-#         path=path, # path to the root directory
-#         project_root_env_var=True, # set the PROJECT_ROOT environment variable
-#     )
-#     logging.info(f"Project root found at: {path}")
-# except Exception as e:
-#     logging.warning(f"Could not find project root using rootutils: {e}. Using current directory context.")
-#     path = Path(__file__).parent # Fallback or adjust as needed
-
-# Define the base temporary directory for split pcap files
-# Use a subdirectory within the system's temp dir for organization
-base_temp_dir = Path(tempfile.gettempdir()) / "pcap_splitter_temp"
+from src.packet_analysis.config import Config
 
 # Logging
 logger = logging.getLogger(__name__)
@@ -76,7 +61,7 @@ def split_pcap_file(pcap_file: Union[str, Path], max_packets_per_file: int) -> L
 
     # Create a unique temporary directory using the file hash and a random ID
     # Format: base_temp_dir / file_hash_randomid
-    output_dir = base_temp_dir / f"{input_file_hash}_{random_id}"
+    output_dir = Path(os.path.join(Config.CHUNK_PCAP_STORAGE_DIR, f"{input_file_hash}_{random_id}"))
     try:
         output_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"Created temporary output directory: {output_dir}")
