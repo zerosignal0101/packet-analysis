@@ -1,3 +1,6 @@
+from typing import List, Dict, Any
+
+# Project imports
 from src.packet_analysis.celery_app.celery import celery_app
 from src.packet_analysis.services.analyzer.producer import analyze_producer_data
 from src.packet_analysis.services.analyzer.playback import analyze_playback_data
@@ -5,11 +8,11 @@ from src.packet_analysis.services.analyzer.comparator import compare_producer_pl
 
 
 @celery_app.task
-def analyze_producer(extracted_info, options):
+def analyze_producer(results: List[str], options: Dict[str, Any]) -> Dict[str, Any]:
     """分析生产端提取的数据"""
     analysis_result = analyze_producer_data(
-        # extracted_info,
-        # options
+        results,
+        options
     )
 
     result = {
@@ -21,11 +24,11 @@ def analyze_producer(extracted_info, options):
 
 
 @celery_app.task
-def analyze_playback(extracted_info, options):
+def analyze_playback(results: List[str], options: Dict[str, Any]) -> Dict[str, Any]:
     """分析回放端提取的数据"""
     analysis_result = analyze_playback_data(
-        # extracted_info,
-        # options
+        results,
+        options
     )
 
     result = {

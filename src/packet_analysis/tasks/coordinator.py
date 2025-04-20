@@ -6,6 +6,8 @@ from celery.canvas import Signature
 from collections import defaultdict
 import time
 from datetime import datetime, timedelta
+import rootutils
+from pathlib import Path
 
 # Project imports
 from src.packet_analysis.celery_app.celery import celery_app
@@ -15,6 +17,9 @@ from src.packet_analysis.tasks.result_handler import merge_results, send_callbac
 from src.packet_analysis.config import Config
 from src.packet_analysis.utils.cache import get_redis_client, CacheStatus
 
+project_root = rootutils.find_root(search_from=__file__, indicator=".project-root")
+
+# Logging
 logger = logging.getLogger(__name__)
 
 
@@ -32,6 +37,10 @@ def process_analysis_request(task_id, pcap_info_list, remote_addr, options):
     # redis_client.hset(f"task:{task_id}", "total_pairs", str(len(pcap_info_list)))
     # redis_client.hset(f"task:{task_id}", "completed_pairs", "0")
 
+    # 创建任务结果储存文件夹
+    task_result_path = Path(project_root, 'results', f'{task_id}')
+    # task_result_path.mkdir(parents=True, exist_ok=True)
+
     pair_tasks = []
     info_options_list = []
     for pcap_info_idx, pcap_info in enumerate(pcap_info_list):
@@ -45,6 +54,8 @@ def process_analysis_request(task_id, pcap_info_list, remote_addr, options):
         # 创建新字典合并原有options和新字段
         pair_options = {
             **options,
+            'pair_id': pair_id,
+            'task_result_path': str(task_result_path),
             'collect_log': pcap_info['collect_log'],
             'replay_log': pcap_info['replay_log'],
             'replay_task_id': pcap_info['replay_task_id']
@@ -282,10 +293,9 @@ def clear_invalid_info_options(info_options):
             if cache_status == CacheStatus.CACHE_PENDING:
                 redis_client.set_cache_status(cache_key, CacheStatus.CACHE_MISSING)
             elif cache_status == CacheStatus.CACHE_READY:
-                logger.error("Cache duplicated. Severe error message.")
-                pass
+                logger.info("Cache already ready. No need to clear this cache.")
             else:
-                logger.error("Cache workflow already exist. Severe error message.")
+                logger.info("Cache missing. Pass this cache.")
 
 
 def merge_info_options(*info_options_list):

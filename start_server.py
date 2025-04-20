@@ -29,8 +29,9 @@ def start_celery_worker():
 def start_celery_beat():
     """启动Celery Beat调度器"""
     Path(Config.CELERY_BEAT_DIR).mkdir(parents=True, exist_ok=True)
+    beat_schedule_path = Path(Config.CELERY_BEAT_DIR, 'celerybeat_schedule')
     from src.packet_analysis.celery_app import celery_app
-    celery_app.start(argv=['beat', f'--schedule={Config.CELERY_BEAT_DIR}', '--loglevel=info'])
+    celery_app.start(argv=['beat', f'--schedule={beat_schedule_path}', '--loglevel=info'])
 
 
 def run():

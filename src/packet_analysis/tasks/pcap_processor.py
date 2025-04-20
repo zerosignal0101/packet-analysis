@@ -329,11 +329,14 @@ def finalize_pcap_extraction(self, results, file_hash, cache_key, pcap_chunks, o
             print("No Parquet files found or read. Creating an empty DataFrame.")
             result_df = pd.DataFrame(columns=PARQUET_COLUMNS)
 
+        # Sort by Sniff_time
+        sorted_df = result_df.sort_values(by='Sniff_time')
+
         # Write parquet to file
         parquet_filename_base = file_hash if file_hash else os.path.splitext(os.path.basename(original_pcap_file))[0]
         result_parquet_file_path = os.path.join(Config.PARQUET_STORAGE_DIR, f"{parquet_filename_base}.parquet")
         os.makedirs(os.path.dirname(result_parquet_file_path), exist_ok=True)
-        table = pa.Table.from_pandas(result_df, preserve_index=False)
+        table = pa.Table.from_pandas(sorted_df, preserve_index=False)
         pq.write_table(table, result_parquet_file_path, compression='snappy')
 
         # 2. Cache the final result
