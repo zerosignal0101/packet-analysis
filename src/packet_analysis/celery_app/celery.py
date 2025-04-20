@@ -28,14 +28,14 @@ celery_app.conf.update(
     timezone='UTC',
     enable_utc=True,
     # 任务结果过期时间
-    result_expires=3600,
+    result_expires=Config.CELERY_RESULT_EXPIRES,
     # 并发工作进程数，根据硬件配置调整
     worker_concurrency=os.cpu_count(),
     # 启用任务事件，方便监控
     worker_send_task_events=True,
     task_send_sent_event=True,
     # 任务超时设置
-    task_time_limit=3600,
+    task_time_limit=Config.CELERY_TASK_TIME_LIMIT,
     # 缓存配置
     task_ignore_result=False,
     worker_redirect_stdouts=False,  # Recommended: False
@@ -47,7 +47,7 @@ celery_app.conf.update(
 celery_app.conf.beat_schedule = {
     'cleanup-expired-cache': {
         'task': 'src.packet_analysis.tasks.coordinator.cleanup_expired_cache',
-        'schedule': 3600.0,  # 每小时执行一次
+        'schedule': 86400.0,  # 每天执行一次
     },
 }
 

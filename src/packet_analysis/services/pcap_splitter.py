@@ -54,14 +54,23 @@ def split_pcap_file(pcap_file: Union[str, Path], max_packets_per_file: int) -> L
         logger.error(f"Unexpected error during hashing for {pcap_file_path}: {e}")
         raise RuntimeError(f"Unexpected hashing error for input file: {pcap_file_path}") from e
 
-    # --- Prepare Output Directory and Filenames using Hash ---
-    # Keep original suffix if needed later, but don't use it for globbing intermediate files
-    # pcap_suffix = pcap_file_path.suffix
-    random_id = uuid.uuid4().hex[:4]  # Short random hex ID for run uniqueness
+    # # --- Prepare Output Directory and Filenames using Hash ---
+    # # Keep original suffix if needed later, but don't use it for globbing intermediate files
+    # # pcap_suffix = pcap_file_path.suffix
+    # random_id = uuid.uuid4().hex[:4]  # Short random hex ID for run uniqueness
+    #
+    # # Create a unique temporary directory using the file hash and a random ID
+    # # Format: base_temp_dir / file_hash_randomid
+    # output_dir = Path(os.path.join(Config.CHUNK_PCAP_STORAGE_DIR, f"{input_file_hash}_{random_id}"))
+    # try:
+    #     output_dir.mkdir(parents=True, exist_ok=True)
+    #     logger.info(f"Created temporary output directory: {output_dir}")
+    # except OSError as e:
+    #     logger.error(f"Failed to create temporary directory {output_dir}: {e}")
+    #     raise  # Re-raise the error
 
-    # Create a unique temporary directory using the file hash and a random ID
-    # Format: base_temp_dir / file_hash_randomid
-    output_dir = Path(os.path.join(Config.CHUNK_PCAP_STORAGE_DIR, f"{input_file_hash}_{random_id}"))
+    # --- Prepare Output Directory and Filenames using Hash ---
+    output_dir = Path(Config.CHUNK_PCAP_STORAGE_DIR)
     try:
         output_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"Created temporary output directory: {output_dir}")

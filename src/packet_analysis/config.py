@@ -20,7 +20,8 @@ class Config:
     CELERY_BROKER_URL: Optional[str] = None
     CELERY_RESULT_BACKEND: Optional[str] = None
     CACHE_RESULT_BACKEND: Optional[str] = None
-    ENABLE_CELERY_BEAT: bool = False  # 是否启用定时任务
+    ENABLE_CELERY_BEAT: bool = True  # 是否启用定时任务
+    CELERY_BEAT_DIR: str = os.path.join(project_path, "results/celerybeat_schedule")
 
     # Celery 性能配置
     CELERY_WORKER_CONCURRENCY: int = os.cpu_count() or 4
@@ -35,7 +36,7 @@ class Config:
 
     # 缓存相关配置
     CHUNK_PCAP_STORAGE_DIR: str = os.path.join(project_path, "results/pcap_chunks")
-    CACHE_TTL_SECONDS: int = 3600 * 24
+    CACHE_TTL_DAYS: int = 7
     LOCK_TIMEOUT_SECONDS: int = 1800
     PARQUET_STORAGE_DIR: str = os.path.join(project_path, "results/parquet_data")
 
@@ -86,6 +87,10 @@ class Config:
             default=3600,
             convert_type=int
         )
+        cls.CELERY_BEAT_DIR = cls._get_setting(
+            'CELERY_BEAT_DIR',
+            default="results/celerybeat_schedule"
+        )
 
         # 日志配置
         cls.LOG_LEVEL = cls._get_setting('LOG_LEVEL', default='INFO')
@@ -93,9 +98,9 @@ class Config:
         cls.CALLBACK_URL = cls._get_setting('CALLBACK_URL', default=None)
 
         # 缓存相关
-        cls.CACHE_TTL_SECONDS = cls._get_setting(
-            'CACHE_TTL_SECONDS',
-            default=3600 * 24,
+        cls.CACHE_TTL_DAYS = cls._get_setting(
+            'CACHE_TTL_DAYS',
+            default=7,
             convert_type=int
         )
         cls.LOCK_TIMEOUT_SECONDS = cls._get_setting(

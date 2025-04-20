@@ -1,8 +1,11 @@
+import os
 from celery import group, chain, chord
 import redis
 import logging
 from celery.canvas import Signature
 from collections import defaultdict
+import time
+from datetime import datetime, timedelta
 
 # Project imports
 from src.packet_analysis.celery_app.celery import celery_app
@@ -176,9 +179,91 @@ def create_analysis_chord(side, pair_id, pcap_list, options):
 
 @celery_app.task
 def cleanup_expired_cache():
-    """清理过期的缓存项（由 Celery Beat 定期调度）"""
-    # 此处实现清理过期缓存的逻辑
-    pass
+    """
+    清理过期的缓存项（由 Celery Beat 定期调度）。
+    此实现依赖 Parquet 文件的最后修改时间来判断过期。
+    注意：文件修改时间可能不完全等于缓存创建时间。
+    更健壮的方法是在创建缓存时将时间戳存储在 Redis 中。
+    """
+    logger.info("Starting expired cache cleanup task...")
+    redis_client = get_redis_client()
+    # --- Caching Logic (similar to before) ---
+    if not redis_client or not redis_client._initialized:
+        logger.error("Redis client is not available. Cannot proceed with caching.")
+        return None
+    now = time.time()
+    expiration_threshold = now - timedelta(days=Config.CACHE_TTL_DAYS).total_seconds()
+    expiration_dt_str = datetime.fromtimestamp(expiration_threshold).strftime('%Y-%m-%d %H:%M:%S')
+    logger.info(f"Cleaning up cache entries older than {Config.CACHE_TTL_DAYS} days (modified before {expiration_dt_str}).")
+    keys_to_delete_redis = []
+    files_deleted_count = 0
+    keys_deleted_count = 0
+    errors_count = 0
+    try:
+        # 使用 scan_iter 避免阻塞 Redis
+        # 匹配 pcap_info:<hash> 格式的键
+        for pcap_info_key in redis_client.redis.scan_iter(match="pcap_info:*"):
+            try:
+                file_path = redis_client.redis.get(pcap_info_key)
+                if not file_path:
+                    logger.warning(f"Key '{pcap_info_key}' exists but has no value. Adding to delete list.")
+                    keys_to_delete_redis.append(pcap_info_key)
+                    continue
+                logger.debug(f"Checking key '{pcap_info_key}', file path: '{file_path}'")
+                if not os.path.exists(file_path):
+                    logger.warning(f"File '{file_path}' for key '{pcap_info_key}' does not exist. Scheduling Redis keys for deletion.")
+                    keys_to_delete_redis.append(pcap_info_key)
+                    status_key = pcap_info_key.replace("pcap_info:", "status:pcap_info:", 1)
+                    if status_key != pcap_info_key:
+                        keys_to_delete_redis.append(status_key)
+                    continue
+                # 获取文件最后修改时间
+                file_mtime = os.path.getmtime(file_path)
+                if file_mtime < expiration_threshold:
+                    logger.info(f"Expired: Key '{pcap_info_key}', File '{file_path}' (mtime: {datetime.fromtimestamp(file_mtime).strftime('%Y-%m-%d %H:%M:%S')}). Deleting.")
+                    # 1. 删除文件
+                    try:
+                        os.remove(file_path)
+                        logger.info(f"Successfully deleted file: {file_path}")
+                        files_deleted_count += 1
+                        # 2. 文件删除成功后，准备删除 Redis 键
+                        keys_to_delete_redis.append(pcap_info_key)
+                    except FileNotFoundError:
+                        logger.warning(f"File '{file_path}' was already gone before deletion attempt. Scheduling Redis keys for deletion.")
+                        # 文件已不在，仍然清理 Redis 键
+                        keys_to_delete_redis.append(pcap_info_key)
+                    except OSError as e:
+                        logger.error(f"Error deleting file '{file_path}': {e}. Skipping Redis key deletion for this entry.")
+                        errors_count += 1
+                else:
+                    logger.debug(f"Not expired: Key '{pcap_info_key}', File '{file_path}' (mtime: {datetime.fromtimestamp(file_mtime).strftime('%Y-%m-%d %H:%M:%S')})")
+            except Exception as e:
+                logger.error(f"Error processing key '{pcap_info_key}': {e}")
+                errors_count += 1
+        # 批量删除 Redis 键
+        if keys_to_delete_redis:
+            # 去重，以防 status key 和 pcap_info key 因为某种原因重复添加
+            unique_keys_to_delete = list(set(keys_to_delete_redis))
+            logger.info(f"Attempting to delete {len(unique_keys_to_delete)} Redis keys: {unique_keys_to_delete}")
+            try:
+                deleted_count = 0
+                for cache_key in unique_keys_to_delete:
+                    redis_client.delete_cache(cache_key)
+                    redis_client.delete_cache_status(cache_key)
+                    deleted_count += 1
+                keys_deleted_count = deleted_count
+                logger.info(f"Successfully deleted {deleted_count} Redis keys.")
+            except redis.RedisError as e:
+                logger.error(f"Error deleting Redis keys: {e}")
+                errors_count += len(unique_keys_to_delete) # 算作错误，因为未成功删除
+    except redis.RedisError as e:
+        logger.error(f"Redis connection error during scan: {e}")
+        errors_count += 1
+    except Exception as e:
+        logger.error(f"An unexpected error occurred during cleanup: {e}")
+        errors_count += 1
+    logger.info(f"Cache cleanup task finished. Files deleted: {files_deleted_count}. Redis keys deleted: {keys_deleted_count}. Errors encountered: {errors_count}.")
+
 
 @celery_app.task
 def clear_invalid_info_options(info_options):

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import os
 import subprocess
+from pathlib import Path
 import signal
 import sys
 from multiprocessing import Process
@@ -27,8 +28,9 @@ def start_celery_worker():
 
 def start_celery_beat():
     """启动Celery Beat调度器"""
+    Path(Config.CELERY_BEAT_DIR).mkdir(parents=True, exist_ok=True)
     from src.packet_analysis.celery_app import celery_app
-    celery_app.worker_main(argv=['beat', '--loglevel=info'])
+    celery_app.start(argv=['beat', f'--schedule={Config.CELERY_BEAT_DIR}', '--loglevel=info'])
 
 
 def run():
