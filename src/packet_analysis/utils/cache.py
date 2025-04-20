@@ -16,8 +16,6 @@ logger = logging.getLogger(__name__)  # It's good practice to add logging
 
 
 class CacheStatus(str, Enum):
-    READ_LOCKED = "read_locked"  # 读取锁定（防止多个进程同时重建缓存）
-    WRITE_LOCKED = "write_locked"  # 写入锁定（防止并发写入）
     CACHE_READY = "cache_ready"  # 缓存可用（可正常读取）
     CACHE_PENDING = "cache_pending"  # 缓存不存在，但有写入任务进行中
     CACHE_MISSING = "cache_missing"  # 缓存不存在，且无写入任务安排

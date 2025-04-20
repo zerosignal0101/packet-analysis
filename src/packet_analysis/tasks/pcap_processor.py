@@ -62,11 +62,15 @@ def extract_pcap_info_with_chord(pcap_file, pair_id, side, options):
         if cache_status == CacheStatus.CACHE_PENDING:
             logger.info(f"Cache already pending. No need to repeat the task scheduling for extraction.")
             return callback_cached, info_options
-        elif (cache_status == CacheStatus.CACHE_READY or
-              cache_status == CacheStatus.READ_LOCKED or
-              cache_status == CacheStatus.WRITE_LOCKED):
-            logger.warning(f"Cache already in procession. Please check the status of {pcap_file}.")
-            return callback_cached, info_options
+        elif cache_status == CacheStatus.CACHE_READY:
+            parquet_file_path = redis_client.get_cache(cache_key)
+            if os.path.exists(parquet_file_path):
+                logger.info(f"Cache already ready.")
+                return callback_cached, info_options
+            else:
+                logger.warning(
+                    f"Cache status ready, but the cache file is missing. Restart the task scheduler for extraction.")
+                redis_client.set_cache_status(cache_key, CacheStatus.CACHE_PENDING)
         elif cache_status == CacheStatus.CACHE_MISSING:
             logger.info(f"Cache missing. Create extraction workflow for {pcap_file} (hash: {file_hash}")
             redis_client.set_cache_status(cache_key, CacheStatus.CACHE_PENDING)
@@ -174,11 +178,12 @@ class CacheStateError(Exception):
 
 
 @celery_app.task(bind=True,
+                 default_retry_delay=CACHE_WAIT_RETRY_DELAY_SECONDS,
                  # Automatically retry for these exceptions
                  autoretry_for=(RedisError, Retry, CacheWaitTimeoutError, CacheStateError),
                  retry_kwargs={'max_retries': CACHE_WAIT_MAX_RETRIES + 5},  # Add a buffer
                  retry_backoff=True,  # Exponential backoff
-                 retry_backoff_max=60,  # Max backoff delay (seconds)
+                 retry_backoff_max=CACHE_WAIT_RETRY_DELAY_SECONDS * 5,  # Max backoff delay (seconds)
                  retry_jitter=True)  # Add randomness to backoff
 def finalize_pcap_extraction(self, results, file_hash, cache_key, pcap_chunks, original_pcap_file, is_cached=False):
     """
@@ -268,7 +273,7 @@ def finalize_pcap_extraction(self, results, file_hash, cache_key, pcap_chunks, o
             # Since we raise Retry directly, Celery handles it before this block.
             # If using autoretry_for, raising the exception type is sufficient.
             logger.info(f"[Task ID: {self.request.id}] Explicit retry requested: {e}")
-            raise  # Re-raise to let Celery handle the retry
+            raise self.retry(exc=e)  # Re-raise to let Celery handle the retry
         except (CacheWaitTimeoutError, CacheStateError, FileNotFoundError) as e:
             # These are potentially terminal errors for this specific task execution,
             # although autoretry might still attempt them based on the decorator config.
@@ -277,7 +282,7 @@ def finalize_pcap_extraction(self, results, file_hash, cache_key, pcap_chunks, o
             # For now, log and re-raise for autoretry handling.
             logger.error(f"[Task ID: {self.request.id}] Encountered error: {type(e).__name__} - {e}")
             self.update_state(state=states.FAILURE, meta={'exc_type': type(e).__name__, 'exc_message': str(e)})
-            raise  # Re-raise to let Celery handle retries/failure
+            raise e  # Re-raise to let Celery handle retries/failure
         except Exception as e:
             # Catch any other unexpected exceptions
             logger.exception(
