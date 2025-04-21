@@ -25,14 +25,15 @@ def analyze_producer(results: List[str], options: Dict[str, Any]) -> Dict[str, A
 @celery_app.task
 def analyze_playback(results: List[str], options: Dict[str, Any]) -> Dict[str, Any]:
     """分析回放端提取的数据"""
-    analysis_result = analyze_playback_data(
+    res = analyze_playback_data(
         results,
         options
     )
 
     result = {
         "side": "playback",
-        "analysis": analysis_result
+        "parquet_file_path": res["parquet_file_path"],
+        "general_analysis_result": res["general_analysis_result"],
     }
 
     return result

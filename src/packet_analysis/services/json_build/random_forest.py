@@ -12,6 +12,9 @@ logger = logging.getLogger(__name__)
 
 def calc_forest_model(file_path, results_path='results/', csv_prefix=''):
     # Step 1: 加载数据并处理特征和目标变量
+    if not os.path.exists(file_path):
+        logger.error(f"File {file_path} does not exist. [calc forest model]")
+        return pd.DataFrame(), pd.DataFrame()
     df = pd.read_csv(file_path)
 
     # 选择奇数列作为特征，最后一列作为目标变量
@@ -41,7 +44,7 @@ def calc_forest_model(file_path, results_path='results/', csv_prefix=''):
 
     # 打印特征重要性
     logger.info("KPI 随机森林模型计算结果：")
-    for index, row in importances_df:
+    for index, row in importances_df.iterrows():
         logger.info(f"KPI: {row['KPI']}, Importance: {row['Importance']}")
 
     # Step 6: 评估模型性能
