@@ -54,7 +54,7 @@ def process_analysis_request(task_id, pcap_info_list, remote_addr, options):
         # 创建新字典合并原有options和新字段
         pair_options = {
             **options,
-            'pair_id': pair_id,
+            'pcap_info_idx': pcap_info_idx,
             'task_result_path': str(task_result_path),
             'collect_log': pcap_info['collect_log'],
             'replay_log': pcap_info['replay_log'],
@@ -129,10 +129,12 @@ def create_analysis_chord(side, pair_id, pcap_list, options):
     task_signatures = []
     pcap_chunks = []
     cache_key_list = []
+    host_ip_list = []
     for entry in pcap_list:
         if Config.DEBUG:
             logger.debug(f"[Entry in pcap_list]: {entry}")
         ip_address = entry["ip"]
+        host_ip_list.append(ip_address)
         port_number = entry["port"]
         file_path = entry["collect_path" if side == "producer" else "replay_path"]
         # Options
@@ -172,10 +174,15 @@ def create_analysis_chord(side, pair_id, pcap_list, options):
 
     # 创建提取任务的 group 签名
     extraction_group_signature = group(task_signatures)
+    # Options
+    analyzer_options = {
+        **options,
+        'host_ip_list': host_ip_list,
+    }
     # 创建分析任务的签名
     analysis_signature = (
-        analyze_producer.s(options=options) if side == "producer" else
-        analyze_playback.s(options=options)
+        analyze_producer.s(options=analyzer_options) if side == "producer" else
+        analyze_playback.s(options=analyzer_options)
     )
     task_chord = chord(extraction_group_signature, analysis_signature)
 

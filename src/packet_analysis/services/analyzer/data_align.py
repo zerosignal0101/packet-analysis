@@ -5,6 +5,9 @@ from datetime import datetime
 from collections import defaultdict
 import logging
 
+# Project imports
+from src.packet_analysis.utils.path import classify_path
+
 # Logging
 logger = logging.getLogger(__name__)
 
@@ -21,19 +24,6 @@ def parse_time(sniff_time):
         except ValueError:
             continue
     raise ValueError(f"时间格式不匹配: {sniff_time}")
-
-
-def classify_path(path):
-    if 'post' in path.lower() or path == '/portal_todo_moa/api/getDataByUserId':
-        return 'api_post'
-    elif 'get' in path.lower():
-        return 'api_get'
-    elif '/static/' in path or path.endswith(('.css', '.js', '.png', '.jpg', '.gif')):
-        return 'static_resource'
-    elif path.endswith(('.php', '.asp', '.jsp', '.html')):
-        return 'dynamic_resource'
-    else:
-        return 'other'
 
 
 def alignment_two_paths(csv_production_output, csv_back_output, alignment_csv_file_path):

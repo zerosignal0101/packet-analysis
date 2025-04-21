@@ -9,6 +9,7 @@ from pathlib import Path
 # Project imports
 from src.packet_analysis.config import Config
 from src.packet_analysis.services.pcap_extractor import PARQUET_COLUMNS
+from src.packet_analysis.services.analyzer.general import general_data_analyzer
 
 # Logging
 logger = logging.getLogger(__name__)
@@ -46,7 +47,13 @@ def analyze_producer_data(results: List[str], options: Dict[str, Any]) -> Dict[s
 
     # Write parquet file
     Path(options['task_result_path']).mkdir(parents=True, exist_ok=True)
-    result_parquet_file_path = os.path.join(options['task_result_path'], f"{options['pair_id']}_producer.parquet")
+    result_parquet_file_path = os.path.join(options['task_result_path'], f"extracted_data_{options['pcap_info_idx']}_producer.parquet")
     table = pa.Table.from_pandas(sorted_df, preserve_index=False)
     pq.write_table(table, result_parquet_file_path, compression='snappy')
-    return {}
+
+    analysis_result = general_data_analyzer(sorted_df, options)
+
+    return {
+        "parquet_file_path": result_parquet_file_path,
+        "analysis_result": [],
+    }

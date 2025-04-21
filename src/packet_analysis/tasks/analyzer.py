@@ -10,17 +10,16 @@ from src.packet_analysis.services.analyzer.comparator import compare_producer_pl
 @celery_app.task
 def analyze_producer(results: List[str], options: Dict[str, Any]) -> Dict[str, Any]:
     """分析生产端提取的数据"""
-    analysis_result = analyze_producer_data(
+    res = analyze_producer_data(
         results,
         options
     )
 
-    result = {
+    return {
         "side": "producer",
-        "analysis": analysis_result
+        "parquet_file_path": res["parquet_file_path"],
+        "analysis_result": res["analysis_result"],
     }
-
-    return result
 
 
 @celery_app.task
