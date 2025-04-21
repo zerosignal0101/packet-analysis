@@ -34,7 +34,7 @@ def convert_dctime(dctime):
 # 提取数据的函数 将日志json格式化成需要的格式
 def extract_data(json_data, kpi_mapping):
     extracted_data = []
-    logger.info("0000000")
+    logger.info("Extracting data from json file")
     for monitor_type, machines in json_data.items():
         if monitor_type in ['server', 'databases']:
             for machine_type, ips in machines.items():
@@ -55,13 +55,13 @@ def extract_data(json_data, kpi_mapping):
                                     readable_time = convert_dctime(int(item['DCTIME']))
                                     kpi_name = kpi_mapping.get(kpi_no, '未知指标')
                                     extracted_data.append({
-                                        '监控类型': monitor_type,
-                                        '主机或数据库类型': machine_type,
-                                        'IP地址': ip_address,
+                                        'monitor_type': monitor_type,
+                                        'machine_type': machine_type,
+                                        'ip_address': ip_address,
                                         'DCTIME': readable_time,
                                         'VALUE': item['VALUE'],
-                                        'KPI_NO': kpi_no,
-                                        '指标名称': kpi_name
+                                        'kpi_no': kpi_no,
+                                        'kpi_name': kpi_name
                                     })
                                 except ValueError as e:
                                     logger.error(f"DCTIME 转换失败 for item: {item}, 错误信息: {e}")
@@ -69,8 +69,8 @@ def extract_data(json_data, kpi_mapping):
                                 logger.warning(f"缺少 'DCTIME' 或 'VALUE' in item: {item}, 跳过此条记录")
         elif monitor_type == 'apm':
             extracted_data.append({
-                '监控类型': monitor_type,
-                '原始数据': machines
+                'monitor_type': monitor_type,
+                'original_data': machines
             })
     return extracted_data
     # 上述代码用于提取信息，就算输入的回放数据为空，extracted_data里面至少也会有一个apm的字典
@@ -153,10 +153,10 @@ def compute_correlation(kpi_data, request_data, kpi_name, output_kpi_csv_path, t
         correlation, _ = pearsonr(mean_delays, kpi_values)
 
         return {
-            '监控类型': monitor_type,
-            'KPI名称': kpi_name,
-            '相关系数': safe_format(correlation)
-            # '相关系数': "{:.6f}".format(correlation)  #hyf
+            'monitor_type': monitor_type,
+            'kpi_name': kpi_name,
+            'correlation_value': safe_format(correlation)
+            # 'correlation_value': "{:.6f}".format(correlation)  #hyf
         }
     else:
         logger.warning(f"{kpi_name} 数据不足以进行相关性计算")
@@ -167,20 +167,23 @@ def compute_correlation(kpi_data, request_data, kpi_name, output_kpi_csv_path, t
 def calc_correlation(json_file_path: str, request_data: pd.DataFrame, output_csv_path: str, output_kpi_csv_path: str,
                      kpi_mapping_file='src/packet_analysis/services/json_build/kpi_mapping.txt', time_threshold=10):
     kpi_mapping = load_kpi_mapping(kpi_mapping_file)
-    # logger.info(f'{kpi_mapping}')
+    # logger.debug(f'{kpi_mapping}')
 
     with open(json_file_path, 'r', encoding='utf-8') as f:
         json_data = json.load(f)
     extracted_info = extract_data(json_data, kpi_mapping)  # 返回的格式是一个字典列表
-    # logger.info("1111111111此处输出处理后的日志信息，已注释1111111111")
-    # logger.info(extracted_info)
+    # 判断提取出来的信息是否空白
+    if not extracted_info:
+        logger.debug("Extracted data is empty. Cannot calculate correlation.")
+        return pd.DataFrame()
+    # logger.debug("1111111111此处输出json提取处理后的日志信息1111111111")
+    # logger.debug(extracted_info)
 
     extracted_df = pd.DataFrame(extracted_info)
-    # extracted_df = extracted_df.dropna(subset=['KPI_NO', 'IP地址']) #hyf 在分组之前，过滤掉不包含目标字段的数据
 
     all_correlations = []
     try:
-        for (monitor_type, kpi_no, host_ip), kpi_group in extracted_df.groupby(['监控类型', 'KPI_NO', 'IP地址']):
+        for (monitor_type, kpi_no, host_ip), kpi_group in extracted_df.groupby(['monitor_type', 'kpi_no', 'ip_address']):
             kpi_name = kpi_mapping.get(kpi_no, '未知指标')
             kpi_group['DCTIME'] = pd.to_datetime(kpi_group['DCTIME'])
             kpi_group = kpi_group.sort_values(by='DCTIME')
@@ -199,16 +202,17 @@ def calc_correlation(json_file_path: str, request_data: pd.DataFrame, output_csv
             if correlations:
                 all_correlations.append(correlations)
     except Exception as e:
-        logger.info(f'计算相关系数分组时候发生错误：{e}')
+        logger.error(f'计算相关系数分组时候发生错误：{e}')
+        raise e
 
     if all_correlations:  # 检查是否有有效的相关性数据
-        correlation_df = pd.DataFrame(all_correlations).sort_values(by='相关系数', ascending=False)
+        correlation_df = pd.DataFrame(all_correlations).sort_values(by='correlation_value', ascending=False)
         correlation_df.to_csv(output_csv_path, index=False, encoding='utf-8-sig')
         logger.info(f"结果已保存到CSV文件 {output_csv_path}")
     else:
         logger.warning(f"没有计算出有效的相关性数据，输出文件 {output_csv_path} 将为空")
         # 创建一个空的 DataFrame，并添加相关列，写入文件
-        empty_df = pd.DataFrame(columns=['监控类型', 'KPI名称', '相关系数'])
+        empty_df = pd.DataFrame(columns=['monitor_type', 'kpi_name', 'correlation_value'])
         empty_df.to_csv(output_csv_path, index=False, encoding='utf-8-sig')
 
-    return correlation_df if 'correlation_df' in locals() else pd.DataFrame(columns=['监控类型', 'KPI名称', '相关系数'])
+    return correlation_df if 'correlation_df' in locals() else pd.DataFrame(columns=['monitor_type', 'kpi_name', 'correlation_value'])

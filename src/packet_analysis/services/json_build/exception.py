@@ -4,6 +4,8 @@ from datetime import datetime
 from datetime import timedelta
 import logging
 
+import pandas as pd
+
 # Project imports
 from src.packet_analysis.utils.path import classify_path
 
@@ -51,7 +53,7 @@ def _load_csv_logs(csv_file):
     return logs
 
 
-def match_exception_logs(exception_logs, csv_logs):
+def match_exception_logs(exception_logs, csv_logs: pd.DataFrame):
     matched_results = []
 
     for db_log in exception_logs:
@@ -67,9 +69,9 @@ def match_exception_logs(exception_logs, csv_logs):
         min_time_diff = float("inf")
 
         # 在时间范围内寻找 URL 请求
-        for csv_log in csv_logs:
-            csv_time = datetime.strptime(csv_log["Sniff_time"], "%Y-%m-%d %H:%M:%S.%f")
-            time_since_request = float(csv_log["Time_since_request"])
+        for index, csv_log in csv_logs.iterrows():
+            csv_time = csv_log["Sniff_time"]
+            time_since_request = csv_log["Time_since_request"].total_seconds()
 
             # 检查是否在时间范围内，并且 Time_since_request 大于数据库执行时间
             if time_end - timedelta(

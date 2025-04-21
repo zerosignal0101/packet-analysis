@@ -323,22 +323,6 @@ def general_data_analyzer(result_df: pd.DataFrame, options: Dict[str, Any]) -> D
 
     # --- 3. Database Log Analysis ---
     logger.info(f"Starting Database Log Analysis for {env_name} environment.")
-    # Extract request data from result_df (used for matching logs to requests)
-    try:
-        # Assuming 'Dataframe' column holds dictionaries mapping paths to details
-        df_list_raw = result_df['Dataframe'].tolist()
-        # Combine all dictionaries into one for easier lookup
-        df_list = {}
-        for item in df_list_raw:
-            if isinstance(item, dict):
-                df_list.update(item)
-        logger.debug(f"Extracted {len(df_list)} request paths from result_df for log matching.")
-    except KeyError:
-        logger.error("'Dataframe' column not found in result_df. Cannot perform log matching.", exc_info=True)
-        df_list = {}  # Set to empty dict to prevent downstream errors, analysis will be limited
-    except Exception as e:
-        logger.error(f"Error processing 'Dataframe' column from result_df: {e}", exc_info=True)
-        df_list = {}
 
     # Initialize result structure with default/error message
     bottleneck_analysis_database = {
@@ -368,19 +352,18 @@ def general_data_analyzer(result_df: pd.DataFrame, options: Dict[str, Any]) -> D
         logger.info(f"Found {len(database_logs)} slow database queries (>{exec_time_threshold}ms).")
 
         analysis_database_logs: List[Dict[str, Any]] = []  # Type hint for clarity
-        database_logs_ratio = 0.0
 
-        if df_list and database_logs:
+        if not result_df.empty and database_logs:
             # Match slow database logs with request data from result_df
             logger.info("Matching slow database logs to request paths...")
             analysis_database_logs = match_database_logs(
                 database_logs,
-                df_list  # Pass the combined dictionary
+                result_df  # Pass the combined dictionary
             )
             logger.info(
                 f"Successfully matched {len(analysis_database_logs)} slow database queries to specific requests.")
-        elif not df_list:
-            logger.warning("Cannot match database logs as request path data ('df_list') is unavailable.")
+        elif result_df.empty:
+            logger.warning("Cannot match database logs as request path data ('result_df') is unavailable.")
         elif not database_logs:
             logger.info("No slow database queries found above the threshold.")
 
@@ -460,17 +443,17 @@ def general_data_analyzer(result_df: pd.DataFrame, options: Dict[str, Any]) -> D
 
         analysis_exception_logs: List[Dict[str, Any]] = []  # Type hint
 
-        if df_list and exception_logs:
+        if not result_df.empty and exception_logs:
             # Match exception logs with request data from result_df
             logger.info("Matching exception logs to request paths...")
             analysis_exception_logs = match_exception_logs(
                 exception_logs,  # This might be aggregated exceptions
-                df_list  # Pass the combined dictionary
+                result_df  # Pass the combined dictionary
             )
             logger.info(
                 f"Successfully matched {len(analysis_exception_logs)} exception occurrences to specific requests.")
-        elif not df_list:
-            logger.warning("Cannot match exception logs as request path data ('df_list') is unavailable.")
+        elif result_df.empty:
+            logger.warning("Cannot match exception logs as request path data ('result_df') is unavailable.")
         elif not exception_logs:
             logger.info("No exception logs found in the provided file.")
 

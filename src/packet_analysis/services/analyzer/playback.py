@@ -8,6 +8,7 @@ from pathlib import Path
 
 # Project imports
 from src.packet_analysis.config import Config
+from src.packet_analysis.services.analyzer.general import general_data_analyzer
 from src.packet_analysis.services.pcap_extractor import PARQUET_COLUMNS
 
 
@@ -28,4 +29,10 @@ def analyze_playback_data(results: List[str], options: Dict[str, Any]) -> Dict[s
     )
     table = pa.Table.from_pandas(sorted_df, preserve_index=False)
     pq.write_table(table, result_parquet_file_path, compression='snappy')
-    return {}
+
+    general_analysis_result = general_data_analyzer(sorted_df, options)
+
+    return {
+        "parquet_file_path": result_parquet_file_path,
+        "general_analysis_result": general_analysis_result,
+    }
