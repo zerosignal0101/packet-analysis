@@ -6,9 +6,17 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from pathlib import Path
 
+# Project imports
+from src.packet_analysis.config import Config
+from src.packet_analysis.services.json_build.correlation import load_kpi_mapping
+
+# Logger
+logger = logging.getLogger(__name__)
+
 
 def compare_producer_playback(
-        analyzer_results: List[Dict[str, Any]],
+        producer_data: Dict[str, Any],
+        playback_data: Dict[str, Any],
         options: Dict[str, Any]) -> Dict[str, Any]:
     """
     TODO: Implement comparison between producer and playback data
@@ -16,6 +24,11 @@ def compare_producer_playback(
     - Calculate synchronization metrics
     - Identify discrepancies between original and playback
     """
+    # Debug
+    if Config.DEBUG:
+        logger.debug("Comparing producer and playback data")
+        logger.debug(f"Producer data: {producer_data}")
+        logger.debug(f"Playback data: {playback_data}")
     contrast_delay_conclusion = None
     res = {
         "comparison_analysis": {},
@@ -25,27 +38,15 @@ def compare_producer_playback(
         "request_url": "/portal_todo/api/getAllUserTodoData",
         "env": "production",
         "count": 9999,  # hyf 修改格式
-        "hostip": ", ".join(options["host_ip_list"]),
+        "hostip": ", ".join(options["producer_host_ip_list"]),
         "class_method": "api_get",
         "bottleneck_cause": "(当前该部分为展示样例)",
         "solution": "(当前该部分为展示样例)"
     }]
     res['anomaly_detection']['dict'] = anomaly_dict
+    if Config.DEBUG:
+        logger.debug(f"Anomaly_dict data: {anomaly_dict}")
     return []
-
-
-def load_kpi_mapping(file_path):
-    kpi_mapping = {}
-    with open(file_path, 'r', encoding='utf-8') as file:
-        for line in file:
-            # 跳过空行和注释行
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            # 按照冒号分割行内容，并去除多余空格
-            kpi_no, description = map(str.strip, line.split(":", 1))
-            kpi_mapping[kpi_no] = description
-    return kpi_mapping
 
 
 class MergedFrame:

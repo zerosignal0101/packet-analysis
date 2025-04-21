@@ -113,7 +113,12 @@ def process_pair_with_chord(pair_id, producer_pcap, playback_pcap, options):
     # Chord 的 header 是并行执行的任务组
     header = group(producer_chord, playback_chord)
     # Chord 的 body 是回调任务的签名，它会自动接收 header 中所有任务的结果列表
-    callback_task = compare_results_chord_callback.s(pair_id=pair_id, options=options)
+    compare_options = {
+        **options,
+        'producer_host_ip_list': producer_info_options['host_ip_list'],
+        'playback_host_ip_list': playback_info_options['host_ip_list'],
+    }
+    callback_task = compare_results_chord_callback.s(pair_id=pair_id, options=compare_options)
     # 创建 Chord 签名
     process_pair_chord = chord(header, callback_task)
     # Debug
@@ -140,6 +145,7 @@ def create_analysis_chord(side, pair_id, pcap_list, options):
         # Options
         extraction_options = {
             **options,
+            'side': side,
             'ip': ip_address,
             'port': port_number,
         }
@@ -177,6 +183,7 @@ def create_analysis_chord(side, pair_id, pcap_list, options):
     # Options
     analyzer_options = {
         **options,
+        'side': side,
         'host_ip_list': host_ip_list,
     }
     # 创建分析任务的签名
@@ -188,6 +195,8 @@ def create_analysis_chord(side, pair_id, pcap_list, options):
 
     # Info options
     info_options = {
+        'side': side,
+        'host_ip_list': host_ip_list,
         'pcap_chunks': pcap_chunks,
         'cache_keys': cache_key_list
     }

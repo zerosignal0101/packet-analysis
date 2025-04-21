@@ -22,7 +22,10 @@ def analyze_playback_data(results: List[str], options: Dict[str, Any]) -> Dict[s
 
     # Write parquet file
     Path(options['task_result_path']).mkdir(parents=True, exist_ok=True)
-    result_parquet_file_path = os.path.join(options['task_result_path'], f"{options['pair_id']}_playback.parquet")
+    result_parquet_file_path = os.path.join(
+        options['task_result_path'],
+        f"extracted_data_{options['pcap_info_idx']}_playback.parquet"
+    )
     table = pa.Table.from_pandas(sorted_df, preserve_index=False)
     pq.write_table(table, result_parquet_file_path, compression='snappy')
     return {}

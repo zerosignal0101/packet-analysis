@@ -1,10 +1,14 @@
 import json
 import time
+import logging
 
 # Project imports
 from src.packet_analysis.celery_app.celery import celery_app
 from src.packet_analysis.services.result_manager import merge_analysis_results
 from src.packet_analysis.utils.callback import send_callback_request
+
+# Logger
+logger = logging.getLogger(__name__)
 
 
 @celery_app.task
@@ -32,7 +36,7 @@ def send_callback(self, result, callback_url):
     Sends the final result back to the requesting service via callback URL.
     Retries on failure.
     """
-    print(
+    logger.info(
         f"[send_callback] Task ID (from result): {result.get('task_id', 'N/A')}: Attempting callback to {callback_url}")
     try:
         # Make the actual HTTP request
@@ -40,10 +44,10 @@ def send_callback(self, result, callback_url):
         if response.status_code not in (200, 201, 202):
             # Log specific error before raising for retry
             error_msg = f"Callback failed for task {result.get('task_id', 'N/A')} to {callback_url}. Status code: {response.status_code}"
-            print(error_msg)
+            logger.error(error_msg)
             # Raise an exception to trigger Celery's retry mechanism
             raise Exception(error_msg)
-        print(
+        logger.info(
             f"[send_callback] Task ID {result.get('task_id', 'N/A')}: Callback successful (Status: {response.status_code}).")
         # Optional: Update Redis status to 'callback_sent' or 'finished' here if needed,
         # but be aware this task might run on a different worker without direct redis_client access
@@ -54,7 +58,7 @@ def send_callback(self, result, callback_url):
             "response_code": response.status_code
         }
     except Exception as exc:
-        print(
+        logger.error(
             f"[send_callback] Task ID {result.get('task_id', 'N/A')}: Callback attempt {self.request.retries + 1} failed: {exc}. Retrying...")
         # Celery's retry mechanism
         raise self.retry(exc=exc)

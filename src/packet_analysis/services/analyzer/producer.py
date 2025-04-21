@@ -37,10 +37,10 @@ def analyze_producer_data(results: List[str], options: Dict[str, Any]) -> Dict[s
         # Concatenate the list of DataFrames along rows (axis=0)
         # ignore_index=True creates a new continuous index for the resulting DataFrame
         result_df = pd.concat(dfs_to_concat, ignore_index=True, sort=False)
-        print(f"Concatenated {len(dfs_to_concat)} DataFrames.")
+        logger.info(f"Concatenated {len(dfs_to_concat)} DataFrames.")
     else:
         # If no valid Parquet files were found/read, create an empty DataFrame with the correct columns
-        print("No Parquet files found or read. Creating an empty DataFrame.")
+        logger.warning("No Parquet files found or read. Creating an empty DataFrame.")
         result_df = pd.DataFrame(columns=PARQUET_COLUMNS)
     # Sort by Sniff_time
     sorted_df = result_df.sort_values(by='Sniff_time')
@@ -51,9 +51,9 @@ def analyze_producer_data(results: List[str], options: Dict[str, Any]) -> Dict[s
     table = pa.Table.from_pandas(sorted_df, preserve_index=False)
     pq.write_table(table, result_parquet_file_path, compression='snappy')
 
-    analysis_result = general_data_analyzer(sorted_df, options)
+    general_analysis_result = general_data_analyzer(sorted_df, options)
 
     return {
         "parquet_file_path": result_parquet_file_path,
-        "analysis_result": [],
+        "general_analysis_result": general_analysis_result,
     }

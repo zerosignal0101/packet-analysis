@@ -310,23 +310,23 @@ def finalize_pcap_extraction(self, results, file_hash, cache_key, pcap_chunks, o
                         temp_df = pd.read_parquet(chunk_parquet_file_path, columns=PARQUET_COLUMNS)
                         # Append the temporary DataFrame to the list
                         dfs_to_concat.append(temp_df)
-                        print(f"Successfully read and added: {chunk_parquet_file_path}")  # Optional logging
+                        logger.info(f"Successfully read and added: {chunk_parquet_file_path}")  # Optional logging
                     except Exception as e:
                         # Handle potential errors during file reading (e.g., file not found, corrupted)
-                        print(f"Error reading Parquet file {chunk_parquet_file_path} for key {chunk_cache_key}: {e}")
+                        logger.error(f"Error reading Parquet file {chunk_parquet_file_path} for key {chunk_cache_key}: {e}")
                 else:
-                    print(f"Cache key {chunk_cache_key} exists but returned an empty path.")  # Optional logging
+                    logger.error(f"Cache key {chunk_cache_key} exists but returned an empty path.")  # Optional logging
             else:
-                print(f"Cache key {chunk_cache_key} not found in Redis.")  # Optional logging
+                logger.error(f"Cache key {chunk_cache_key} not found in Redis.")  # Optional logging
         # (3). Concatenate all DataFrames in the list into the final result_df
         if dfs_to_concat:
             # Concatenate the list of DataFrames along rows (axis=0)
             # ignore_index=True creates a new continuous index for the resulting DataFrame
             result_df = pd.concat(dfs_to_concat, ignore_index=True, sort=False)
-            print(f"Concatenated {len(dfs_to_concat)} DataFrames.")
+            logger.info(f"Concatenated {len(dfs_to_concat)} DataFrames.")
         else:
             # If no valid Parquet files were found/read, create an empty DataFrame with the correct columns
-            print("No Parquet files found or read. Creating an empty DataFrame.")
+            logger.warning("No Parquet files found or read. Creating an empty DataFrame.")
             result_df = pd.DataFrame(columns=PARQUET_COLUMNS)
 
         # Sort by Sniff_time

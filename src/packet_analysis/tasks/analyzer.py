@@ -16,9 +16,9 @@ def analyze_producer(results: List[str], options: Dict[str, Any]) -> Dict[str, A
     )
 
     return {
-        "side": "producer",
+        "side": options["side"],
         "parquet_file_path": res["parquet_file_path"],
-        "analysis_result": res["analysis_result"],
+        "general_analysis_result": res["general_analysis_result"],
     }
 
 
@@ -44,9 +44,9 @@ def compare_results_chord_callback(results, pair_id, options):
     producer_result = results[0]
     playback_result = results[1]
     comparison = compare_producer_playback(
-        # producer_data=producer_result["analysis"],
-        # playback_data=playback_result["analysis"],
-        # options=options
+        producer_data=producer_result,
+        playback_data=playback_result,
+        options=options
     )
 
     result = {
