@@ -37,10 +37,6 @@ def process_analysis_request(task_id, pcap_info_list, remote_addr, options):
     # redis_client.hset(f"task:{task_id}", "total_pairs", str(len(pcap_info_list)))
     # redis_client.hset(f"task:{task_id}", "completed_pairs", "0")
 
-    # 创建任务结果储存文件夹
-    task_result_path = Path(project_root, 'results', f'{task_id}')
-    # task_result_path.mkdir(parents=True, exist_ok=True)
-
     pair_tasks = []
     info_options_list = []
     for pcap_info_idx, pcap_info in enumerate(pcap_info_list):
@@ -55,7 +51,6 @@ def process_analysis_request(task_id, pcap_info_list, remote_addr, options):
         pair_options = {
             **options,
             'pcap_info_idx': pcap_info_idx,
-            'task_result_path': str(task_result_path),
             'collect_log': pcap_info['collect_log'],
             'replay_log': pcap_info['replay_log'],
             'replay_task_id': pcap_info['replay_task_id']
@@ -90,7 +85,6 @@ def process_analysis_request(task_id, pcap_info_list, remote_addr, options):
     merge_options = {
         **options,
         'pair_num': pair_num,
-        'task_result_path': str(task_result_path),
     }
     callback = chain(merge_results.s(options=merge_options), send_callback.s(callback_url=callback_url))
     chord(group(pair_tasks), callback).apply_async()
