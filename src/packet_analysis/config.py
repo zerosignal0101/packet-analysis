@@ -11,9 +11,9 @@ class Config:
 
     # Flask 基础配置
     FLASK_HOST: str = '0.0.0.0'
-    FLASK_PORT: int = 5000
+    FLASK_PORT: int = 7956
     SECRET_KEY: Optional[str] = None
-    DEBUG: bool = True
+    DEBUG: Optional[bool] = None
     MAX_CONTENT_LENGTH: int = 16 * 1024 * 1024  # 16MB 文件上传限制
 
     # Celery 基础配置
