@@ -412,13 +412,13 @@ def calc_correlation(
     extracted_info = extract_data(json_data, kpi_mapping)
     if not extracted_info:
         logger.warning("No processable KPI data extracted from the JSON file. Cannot calculate correlations.")
-        # Still create empty output files for consistency
-        pd.DataFrame(columns=['monitor_type', 'kpi_name', 'correlation_value']).to_csv(output_correlation_csv_path,
-                                                                                       index=False,
-                                                                                       encoding='utf-8-sig')
-        pd.DataFrame().to_csv(output_kpi_delay_csv_path, index=False, encoding='utf-8-sig')
-        logger.info(f"Empty correlation summary saved to {output_correlation_csv_path}")
-        logger.info(f"Empty KPI/delay data saved to {output_kpi_delay_csv_path}")
+        # # Still create empty output files for consistency
+        # pd.DataFrame(columns=['monitor_type', 'kpi_name', 'correlation_value']).to_csv(output_correlation_csv_path,
+        #                                                                                index=False,
+        #                                                                                encoding='utf-8-sig')
+        # pd.DataFrame().to_csv(output_kpi_delay_csv_path, index=False, encoding='utf-8-sig')
+        # logger.info(f"Empty correlation summary saved to {output_correlation_csv_path}")
+        # logger.info(f"Empty KPI/delay data saved to {output_kpi_delay_csv_path}")
         return pd.DataFrame(columns=['monitor_type', 'kpi_name', 'correlation_value'])
 
     extracted_df = pd.DataFrame(extracted_info)

@@ -9,6 +9,7 @@ from pathlib import Path
 # Project imports
 from src.packet_analysis.config import Config
 from src.packet_analysis.services.json_build.correlation import load_kpi_mapping
+from src.packet_analysis.services.analyzer.data_align import alignment_two_paths
 
 # Logger
 logger = logging.getLogger(__name__)
@@ -29,6 +30,16 @@ def compare_producer_playback(
         logger.debug("Comparing producer and playback data")
         logger.debug(f"Producer data: {producer_data}")
         logger.debug(f"Playback data: {playback_data}")
+
+    # Path 路径
+    Path(options['task_result_path']).mkdir(parents=True, exist_ok=True)
+    producer_parquet_file_path = producer_data['parquet_file_path']
+    playback_parquet_file_path = playback_data['parquet_file_path']
+    alignment_parquet_file_path = os.path.join(options['task_result_path'], f"alignment_{options['pcap_info_idx']}.parquet")
+    # Align 对齐
+    alignment_two_paths(producer_parquet_file_path, playback_parquet_file_path, alignment_parquet_file_path)
+
+
     contrast_delay_conclusion = None
     res = {
         "comparison_analysis": {},

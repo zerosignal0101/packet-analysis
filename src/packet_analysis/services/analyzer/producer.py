@@ -44,6 +44,18 @@ def analyze_producer_data(results: List[str], options: Dict[str, Any]) -> Dict[s
         result_df = pd.DataFrame(columns=PARQUET_COLUMNS)
     # Sort by Sniff_time
     sorted_df = result_df.sort_values(by='Sniff_time')
+    # 添加 'No' 列，从 1 开始的序号
+    sorted_df.insert(0, 'No', range(1, len(sorted_df) + 1))
+
+    # 若为空表跳过处理
+    if sorted_df.empty:
+        pass
+    else:
+        # 获取第一个Sniff_time的时间戳
+        first_sniff_time = sorted_df['Sniff_time'].iloc[0]
+
+        # 计算每个Sniff_time相对于第一个Sniff_time的相对时间（以秒为单位）
+        sorted_df['Relative_time'] = (sorted_df['Sniff_time'] - first_sniff_time).dt.total_seconds()
 
     # Write parquet file
     Path(options['task_result_path']).mkdir(parents=True, exist_ok=True)

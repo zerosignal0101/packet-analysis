@@ -20,6 +20,18 @@ def analyze_playback_data(results: List[str], options: Dict[str, Any]) -> Dict[s
     """
     parquet_file_path = results[0]
     sorted_df = pd.read_parquet(parquet_file_path, columns=PARQUET_COLUMNS)
+    # 添加 'No' 列，从 1 开始的序号
+    sorted_df.insert(0, 'No', range(1, len(sorted_df) + 1))
+
+    # 若为空表跳过处理
+    if sorted_df.empty:
+        pass
+    else:
+        # 获取第一个Sniff_time的时间戳
+        first_sniff_time = sorted_df['Sniff_time'].iloc[0]
+
+        # 计算每个Sniff_time相对于第一个Sniff_time的相对时间（以秒为单位）
+        sorted_df['Relative_time'] = (sorted_df['Sniff_time'] - first_sniff_time).dt.total_seconds()
 
     # Write parquet file
     Path(options['task_result_path']).mkdir(parents=True, exist_ok=True)
