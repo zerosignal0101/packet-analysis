@@ -91,7 +91,7 @@ class DB:
             return stats  # Return defaults if df is empty, col missing, or all NaNs
 
         # Drop NaNs before calculating stats to avoid issues with some aggregations
-        valid_data = df[col].dropna().dt.total_seconds()
+        valid_data = df[col].dropna()
         if valid_data.empty:
             return stats  # Return defaults if only NaNs existed
 

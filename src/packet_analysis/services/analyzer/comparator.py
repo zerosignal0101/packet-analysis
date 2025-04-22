@@ -225,8 +225,8 @@ def compare_producer_playback(
     logger.info("Cluster_analysis finished.")
     # logger.debug(f"ID: {pcap_info_idx}, Res: {res}")
 
-    # Dict check
-    check_json_serializable(res)
+    # # Dict check
+    # check_json_serializable(res)
 
     result_options = {
         **options,

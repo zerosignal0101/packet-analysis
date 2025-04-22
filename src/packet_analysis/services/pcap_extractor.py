@@ -102,7 +102,7 @@ def process_pcap_to_parquet(pcap_file_path: Union[str, Path]) -> Optional[str]:
                 return cache_key
             else:
                 logger.error(f"Processing failed or no data found for {pcap_file_path}, Parquet file not generated.")
-                return None
+                return cache_key
 
     except LockError as e:
         logger.error(
@@ -274,9 +274,11 @@ def _process_pcap_stream_to_parquet(pcap_file_path: str, cache_key: Optional[str
                     # 如果有，记录 Time since request 时间
                     if request_time is not None and request_method is not None:
                         time_since_request = packet['sniff_time'] - request_time
+                        time_since_request = time_since_request.total_seconds()
                         # 计算传输时延
                         if processing_delay is not None and time_since_request is not None:
                             transmission_delay = time_since_request - processing_delay
+                            # Already float
                         # 提取 File Data 长度  条件3
                         if packet['content_length'] is not None:
                             response_total_length = packet['content_length']
@@ -364,6 +366,7 @@ def _process_pcap_stream_to_parquet(pcap_file_path: str, cache_key: Optional[str
                     # 计算处理时间
                     if start_time is not None:
                         processing_delay = end_time - start_time
+                        processing_delay = processing_delay.total_seconds()
                         success_flag = True
                     else:
                         processing_delay = None

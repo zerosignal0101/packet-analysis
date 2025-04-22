@@ -28,11 +28,11 @@ ALIGNED_SCHEMA = {
     'Src_Port': pd.Int64Dtype(),
     'Request_Method': 'string',
     # Production
-    'Production_Sniff_time': 'datetime64[ns]',  # Changed to datetime type
-    'Production_Relative_time': 'timedelta64[ns]',  # Changed to timedelta
-    'Production_Time_since_request': 'timedelta64[ns]',  # Changed to timedelta
-    'Production_Processing_delay': 'timedelta64[ns]',  # Changed to timedelta
-    'Production_Transmission_delay': 'timedelta64[ns]',  # Changed to timedelta
+    'Production_Sniff_time': 'datetime64[ns]',
+    'Production_Relative_time': 'float',
+    'Production_Time_since_request': 'float',
+    'Production_Processing_delay': 'float',
+    'Production_Transmission_delay': 'float',
     'Production_Request_Packet_Length': pd.Int64Dtype(),
     'Production_Response_Packet_Length': pd.Int64Dtype(),
     'Production_Response_Total_Length': pd.Int64Dtype(),
@@ -42,11 +42,11 @@ ALIGNED_SCHEMA = {
     'Production_Src_Ip': 'string',
     'Production_Dst_Ip': 'string',
     # Back
-    'Back_Sniff_time': 'datetime64[ns]',  # Changed to datetime type
-    'Back_Relative_time': 'timedelta64[ns]',  # Changed to timedelta
-    'Back_Time_since_request': 'timedelta64[ns]',  # Changed to timedelta
-    'Back_Processing_delay': 'timedelta64[ns]',  # Changed to timedelta
-    'Back_Transmission_delay': 'timedelta64[ns]',  # Changed to timedelta
+    'Back_Sniff_time': 'datetime64[ns]',
+    'Back_Relative_time': 'float',
+    'Back_Time_since_request': 'float',
+    'Back_Processing_delay': 'float',
+    'Back_Transmission_delay': 'float',
     'Back_Request_Packet_Length': pd.Int64Dtype(),
     'Back_Response_Packet_Length': pd.Int64Dtype(),
     'Back_Response_Total_Length': pd.Int64Dtype(),
@@ -208,11 +208,11 @@ def alignment_two_paths(parquet_production_output: str, parquet_back_output: str
                 production_row.get('Request_Method')) else pd.NA,
             'Request_type': classify_path(prod_path),
 
-            'Production_Sniff_time': pd.to_datetime(production_row.get('Sniff_time')) if pd.notna(production_row.get('Sniff_time')) else pd.NaT,
-            'Production_Relative_time': pd.to_timedelta(production_row.get('Relative_time'), unit='ns') if pd.notna(production_row.get('Relative_time')) else pd.NaT,
-            'Production_Time_since_request': pd.to_timedelta(production_row.get('Time_since_request'), unit='ns') if pd.notna(production_row.get('Time_since_request')) else pd.NaT,
-            'Production_Processing_delay': pd.to_timedelta(production_row.get('Processing_delay'), unit='ns') if pd.notna(production_row.get('Processing_delay')) else pd.NaT,
-            'Production_Transmission_delay': pd.to_timedelta(production_row.get('Transmission_delay'), unit='ns') if pd.notna(production_row.get('Transmission_delay')) else pd.NaT,
+            'Production_Sniff_time': production_row.get('Sniff_time'),
+            'Production_Relative_time': production_row.get('Relative_time'),
+            'Production_Time_since_request': production_row.get('Time_since_request'),
+            'Production_Processing_delay': production_row.get('Processing_delay'),
+            'Production_Transmission_delay': production_row.get('Transmission_delay'),
             'Production_Request_Packet_Length': production_row.get('Request_Packet_Length', pd.NA),
             'Production_Response_Packet_Length': production_row.get('Response_Packet_Length', pd.NA),
             'Production_Response_Total_Length': production_row.get('Response_Total_Length', pd.NA),

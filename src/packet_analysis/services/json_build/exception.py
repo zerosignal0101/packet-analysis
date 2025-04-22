@@ -71,7 +71,7 @@ def match_exception_logs(exception_logs, csv_logs: pd.DataFrame):
         # 在时间范围内寻找 URL 请求
         for index, csv_log in csv_logs.iterrows():
             csv_time = csv_log["Sniff_time"]
-            time_since_request = csv_log["Time_since_request"].total_seconds()
+            time_since_request = csv_log["Time_since_request"]
 
             # 检查是否在时间范围内，并且 Time_since_request 大于数据库执行时间
             if time_end - timedelta(
