@@ -16,6 +16,7 @@ from src.packet_analysis.services.json_build.alignment_analysis import analyze_s
 from src.packet_analysis.services.json_build.anomaly import analysis, process_anomalies
 from src.packet_analysis.services.json_build.comparison import DB
 from src.packet_analysis.services.json_build.suggestions import safe_format, get_bottleneck_analysis
+from src.packet_analysis.utils.dict_checker import check_json_serializable
 
 # Logger
 logger = logging.getLogger(__name__)
@@ -223,6 +224,9 @@ def compare_producer_playback(
 
     logger.info("Cluster_analysis finished.")
     # logger.debug(f"ID: {pcap_info_idx}, Res: {res}")
+
+    # Dict check
+    check_json_serializable(res)
 
     result_options = {
         **options,

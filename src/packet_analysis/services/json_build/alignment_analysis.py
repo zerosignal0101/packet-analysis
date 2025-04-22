@@ -112,7 +112,7 @@ def analyze_status_code(data: pd.DataFrame, output_prefix):
                 detail_entry["request_paths"].append({
                     "request_url": path,
                     "class_method": classify_path(path),  # 如果有具体方法信息，可以替换此值
-                    "path_abnormal_count": count,
+                    "path_abnormal_count": int(count),
                     "path_request_total_count": path_total,
                     "abnormal_ratio": proportion
                 })
