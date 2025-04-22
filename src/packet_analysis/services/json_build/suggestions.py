@@ -37,3 +37,48 @@ optimization_suggestions_random_forest = {
     "关闭连接数": "1. 检查是否有连接泄漏，使用工具（如`netstat`）分析连接状态。2. 优化应用程序，及时关闭不再使用的连接。3. 调整连接超时时间（如`keepalive_timeout`）。4. 使用长连接复用技术（如HTTP/2）减少连接开销。",
     "文件系统总利用率": "1. 清理不必要的文件（如日志文件、临时文件）。2. 增加磁盘容量或使用分布式文件系统（如HDFS）。3. 优化文件存储（如压缩文件、使用更高效的文件系统）。4. 使用对象存储（如S3）替代本地文件系统。"
 }
+
+
+def safe_format(value):
+    # 如果值是 NaN 或 None，则返回 0 或其他默认值
+    if pd.isna(value):
+        return None  # 或者根据需求返回 None
+    return "{:.6f}".format(value)
+
+
+def get_bottleneck_analysis(url):
+    """根据URL特征返回字符串格式的分析"""
+    # 增强版规则库
+    analysis_rules = [
+        {
+            'keywords': ['account', 'act'],
+            'cause': "高频账户操作导致数据库锁竞争",
+            'solution': "优化账户表索引（添加复合索引）；引入Redis缓存账户状态信息；批量处理账户操作"  # 改为字符串
+        },
+        {
+            'keywords': ['cust', 'customer'],
+            'cause': "客户信息关联查询复杂度过高",
+            'solution': "物化视图预计算关联数据；引入Elasticsearch优化查询；业务拆分降低事务粒度"
+        },
+        {
+            'keywords': ['insert', 'create'],
+            'cause': "逐条写入导致IO压力过大",
+            'solution': "批量操作合并数据库事务；采用异步队列缓冲写入；调整存储引擎配置"
+        },
+        {
+            'keywords': ['file', 'upload'],
+            'cause': "大文件传输引发网络瓶颈",
+            'solution': "实现分块上传/断点续传；使用OSS对象存储分流；启用Brotli压缩传输"
+        }
+    ]
+
+    # 带优先级的匹配逻辑
+    for rule in analysis_rules:
+        if any(kw in url.lower() for kw in rule['keywords']):
+            return rule
+
+    # 默认返回（也保持字符串格式）
+    return {
+        'cause': "业务逻辑处理耗时过长",
+        'solution': "使用性能剖析工具定位热点；优化算法时间复杂度；考虑JIT编译优化"
+    }

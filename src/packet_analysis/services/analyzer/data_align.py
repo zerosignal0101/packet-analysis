@@ -123,8 +123,9 @@ def alignment_two_paths(parquet_production_output: str, parquet_back_output: str
                 match_found = True
                 best_match_details = (back_sniff_time, back_index, back_row_dict)
                 # matched_back_indices.add(back_index) # Mark as used
-                logger.debug(
-                    f"Matched Prod[{production_index}] with Back[{back_index}] on Path/Query: {prod_path}?{prod_query}")
+                # # Debug
+                # logger.debug(
+                #     f"Matched Prod[{production_index}] with Back[{back_index}] on Path/Query: {prod_path}?{prod_query}")
                 break  # Stop searching for this production item
 
             else:
@@ -276,6 +277,8 @@ def alignment_two_paths(parquet_production_output: str, parquet_back_output: str
     # --- Timing ---
     end = datetime.now()
     logger.info(f"Alignment module total time: {end - start}")
+
+    return aligned_df
 
 # Example usage (remove or guard with if __name__ == '__main__':)
 # if __name__ == '__main__':

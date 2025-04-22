@@ -17,8 +17,7 @@ def analyze_producer(results: List[str], options: Dict[str, Any]) -> Dict[str, A
 
     return {
         "side": options["side"],
-        "parquet_file_path": res["parquet_file_path"],
-        "general_analysis_result": res["general_analysis_result"],
+        **res
     }
 
 
@@ -30,13 +29,10 @@ def analyze_playback(results: List[str], options: Dict[str, Any]) -> Dict[str, A
         options
     )
 
-    result = {
+    return {
         "side": "playback",
-        "parquet_file_path": res["parquet_file_path"],
-        "general_analysis_result": res["general_analysis_result"],
+        **res
     }
-
-    return result
 
 
 @celery_app.task

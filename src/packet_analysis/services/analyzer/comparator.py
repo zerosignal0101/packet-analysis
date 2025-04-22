@@ -1,15 +1,21 @@
 import os
+from collections import defaultdict
 from typing import List, Dict, Any
 import logging
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 from pathlib import Path
+from datetime import datetime
 
 # Project imports
 from src.packet_analysis.config import Config
-from src.packet_analysis.services.json_build.correlation import load_kpi_mapping
 from src.packet_analysis.services.analyzer.data_align import alignment_two_paths
+from src.packet_analysis.services.json_build.alignment_analysis import analyze_status_code, analyze_empty_responses, \
+    analyze_zero_window_issues
+from src.packet_analysis.services.json_build.anomaly import analysis, process_anomalies
+from src.packet_analysis.services.json_build.comparison import DB
+from src.packet_analysis.services.json_build.suggestions import safe_format, get_bottleneck_analysis
 
 # Logger
 logger = logging.getLogger(__name__)
@@ -18,9 +24,8 @@ logger = logging.getLogger(__name__)
 def compare_producer_playback(
         producer_data: Dict[str, Any],
         playback_data: Dict[str, Any],
-        options: Dict[str, Any]) -> Dict[str, Any]:
+        options: Dict[str, Any]):
     """
-    TODO: Implement comparison between producer and playback data
     - Align producer and playback data streams
     - Calculate synchronization metrics
     - Identify discrepancies between original and playback
@@ -33,13 +38,19 @@ def compare_producer_playback(
 
     # Path 路径
     Path(options['task_result_path']).mkdir(parents=True, exist_ok=True)
+    outputs_path = Path(options['task_result_path'])
+    pcap_info_idx = options['pcap_info_idx']
     producer_parquet_file_path = producer_data['parquet_file_path']
     playback_parquet_file_path = playback_data['parquet_file_path']
-    alignment_parquet_file_path = os.path.join(options['task_result_path'], f"alignment_{options['pcap_info_idx']}.parquet")
+    alignment_parquet_file_path = os.path.join(options['task_result_path'], f"alignment_{pcap_info_idx}.parquet")
+    # IP str
+    producer_host_ip_str: str = ", ".join(options['producer_host_ip_list'])
+    playback_host_ip_str: str = ", ".join(options['playback_host_ip_list'])
     # Align 对齐
-    alignment_two_paths(producer_parquet_file_path, playback_parquet_file_path, alignment_parquet_file_path)
+    alignment_df = alignment_two_paths(producer_parquet_file_path, playback_parquet_file_path,
+                                       alignment_parquet_file_path)
 
-
+    # Anomaly_dict
     contrast_delay_conclusion = None
     res = {
         "comparison_analysis": {},
@@ -55,311 +66,162 @@ def compare_producer_playback(
         "solution": "(当前该部分为展示样例)"
     }]
     res['anomaly_detection']['dict'] = anomaly_dict
-    if Config.DEBUG:
-        logger.debug(f"Anomaly_dict data: {anomaly_dict}")
-    return []
-
-
-class MergedFrame:
-    def __init__(self, url, request_method, back_dataframe, production_dataframe):
-        self.url = url
-        self.request_method = request_method
-        self.data_back = back_dataframe
-        self.data_production = production_dataframe
-
-    def get_production_delay_mean(self):
-        return round(self.data_production['Time_since_request'].mean(), 6)
-
-    def get_replay_delay_mean(self):
-        return round(self.data_back['Time_since_request'].mean(), 6)
-
-    def get_replay_delay_median(self):
-        return round(self.data_back['Time_since_request'].median(), 6)
-
-    def get_production_delay_median(self):
-        return round(self.data_production['Time_since_request'].median(), 6)
-
-    def get_production_delay_max(self):
-        return round(self.data_production['Time_since_request'].max(), 6)
-
-    def get_replay_delay_max(self):
-        return round(self.data_back['Time_since_request'].max(), 6)
-
-    def get_production_delay_min(self):
-        return round(self.data_production['Time_since_request'].min(), 6)
-
-    def get_replay_delay_min(self):
-        return round(self.data_back['Time_since_request'].min(), 6)
-
-    def get_request_count(self):
-        return self.data_production.shape[0]
-
-    def get_request_count_replay(self):
-        return self.data_back.shape[0]
-
-    def get_difference_ratio(self):
-        return round(self.get_replay_delay_mean() / self.get_production_delay_mean(), 6)
-
-
-class DB:
-    def __init__(self, csv_production, csv_back):
-        pd.options.display.float_format = '{:.6f}'.format  # 保证数值不使用科学计数法
-        self.csv_production = csv_production  # 保存文件路径
-        self.csv_back = csv_back
-        self.df_product = pd.read_csv(csv_production, encoding='utf-8')
-        self.df_back = pd.read_csv(csv_back, encoding='utf-8')
-        self.request_info_dict = load_kpi_mapping('src/packet_analysis/services/json_build/api_config.txt')
-
-    def get_all_path(self):
-        unique_values = self.df_product['Path'].unique()
-        unique_values_list = list(unique_values)
-        return unique_values_list
-
-    def built_df(self, url):
-        df_product = self.df_product[self.df_product['Path'] == url]
-        df_back = self.df_back[self.df_back['Path'] == url]
-
-        # Extract the most frequent Request_Method for this URL
-        if not df_product.empty:
-            request_method = df_product['Request_Method'].mode()[0]
-        else:
-            request_method = None
-
-        dataframe = MergedFrame(url, request_method, df_back, df_product)
-        production_delay_mean = dataframe.get_production_delay_mean()
-
-        replay_delay_mean = dataframe.get_replay_delay_mean()
-
-        return dataframe, production_delay_mean, replay_delay_mean
-
-    # def get_function_description(self, url, count_pro, count_replay):
-    #     """
-    #     查询路径的功能描述信息，返回对应的详细说明。
-    #     """
-    #     if url in self.request_info_dict:
-    #         return {"function_description": self.request_info_dict[url]}
-    #     else:
-    #         return {"function_description": "未查询到功能介绍"}
-
-    def get_function_description(self, url, count_pro, count_replay):
-        """
-        查询路径的功能描述信息，返回对应的详细说明。
-        参数:
-            url (str): 请求的 URL 路径。
-            count_pro (int): 生产环境中该 URL 请求的数量。
-            count_replay (int): 回放环境中该 URL 请求的数量。
-        返回:
-            dict: 包含功能描述和请求数量信息的字典。
-        """
-        # 基础信息
-        base_info = f"生产环境请求了 {count_pro} 次，回放环境请求了 {count_replay} 次。"
-
-        # 判断是否存在功能描述
-        if url in self.request_info_dict:
-            description = f"该请求的功能介绍：{self.request_info_dict[url]}"
-        else:
-            description = "未查询到功能介绍"
-        # 判断是否需要增加额外提示
-        additional_info = ""
-        if count_pro > 0 and count_replay > 0 and count_pro / count_replay > 2:
-            additional_info = " 该请求回放环境的数据量远远不够，请仔细检查相关信息。"
-        elif count_pro > 0 and count_replay > 0 and count_pro / count_replay <= 2:
-            additional_info = " 该请求生产环境和回放环境数据量基本正常"
-
-        # 返回最终信息
-        return {
-            "function_description": base_info + description + additional_info
+    try:
+        # Process CSV files and get comparison analysis data to build JSON
+        logger.info(f"json comparison started at {datetime.now()}")
+        comparison_database = DB(producer_parquet_file_path, playback_parquet_file_path)
+        data_list, path_delay_dict, contrast_delay_conclusion = comparison_database.get_analysis_results()
+        # Update response with the data_list for the current analysis
+        data_legend = {
+            "production": "生产环境",
+            "replay": "回放环境",
+            "mean_difference_ratio": "差异倍数"
         }
+        # res['comparison_analysis']['data'] = data_list
+        res['replay_task_id'] = options['replay_task_id']
+        res['replay_id'] = options['replay_id']
+        res['comparison_analysis']['title'] = "生产与回放环境处理时延对比分析"
+        res['comparison_analysis']['x_axis_label'] = "请求路径"
+        res['comparison_analysis']['y_axis_label'] = "时延（s）"
+        res['comparison_analysis']['data'] = data_list
+        res['comparison_analysis']['legend'] = data_legend
 
-    # def built_single_dict(self, df: df):
-    #     df_dict = {}
-    #     production_delay_mean = "{:.6f}".format(df.get_production_delay_mean())
-    #     replay_delay_mean = "{:.6f}".format(df.get_replay_delay_mean())
-    #     replay_delay_median = "{:.6f}".format(df.get_replay_delay_median())
-    #     production_delay_median = "{:.6f}".format(df.get_production_delay_median())
-    #     production_delay_max = "{:.6f}".format(df.get_production_delay_max())
-    #     replay_delay_max = "{:.6f}".format(df.get_replay_delay_max())
-    #     production_delay_min = "{:.6f}".format(df.get_production_delay_min())
-    #     replay_delay_min = "{:.6f}".format(df.get_replay_delay_min())
-    #     request_count = df.get_request_count()
-    #     difference_ratio = "{:.6f}".format(df.get_difference_ratio())
+        # production cluster anomaly and replay cluster anomaly 在这一步，不同组数据发生报错 该步骤输出classifiy文件 分类后每一类的异常数据文件
+        folder_output_pro = os.path.join(outputs_path, f"cluster_production_{pcap_info_idx}")
+        pro_anomaly_csv_list, pro_plot_cluster_list = analysis(producer_parquet_file_path, folder_output_pro,
+                                                               pcap_info_idx, data_list, env='pro')
+        folder_output_replay = os.path.join(outputs_path, f"cluster_replay_{pcap_info_idx}")
+        replay_anomaly_csv_list, replay_plot_cluster_list = analysis(playback_parquet_file_path, folder_output_replay,
+                                                                     pcap_info_idx, data_list, env='replay')
 
-    #     # Get additional information from the function description file
-    #     description_info = self.get_function_description(df.url)
+        # Process anomaly CSV files to build JSON
+        all_pro_anomaly_details = process_anomalies(pro_anomaly_csv_list, "production",
+                                                    producer_host_ip_str)
+        all_replay_anomaly_details = process_anomalies(replay_anomaly_csv_list, "replay",
+                                                       playback_host_ip_str)
+        combined_anomaly_details = all_pro_anomaly_details + all_replay_anomaly_details
+        # res['anomaly_detection']['details'] = combined_anomaly_details  #既包含生产又包含回放的异常数据0225hyf
+        res['anomaly_detection']['details'] = all_replay_anomaly_details  # 只包含回放的异常数据
 
-    #     df_dict['url'] = df.url
-    #     df_dict['request_method'] = df.request_method
-    #     df_dict['production_delay_mean'] = production_delay_mean
-    #     df_dict['replay_delay_mean'] = replay_delay_mean
-    #     df_dict['production_delay_median'] = production_delay_median
-    #     df_dict['replay_delay_median'] = replay_delay_median
-    #     df_dict['production_delay_min'] = production_delay_min
-    #     df_dict['replay_delay_min'] = replay_delay_min
-    #     df_dict['production_delay_max'] = production_delay_max
-    #     df_dict['replay_delay_max'] = replay_delay_max
-    #     df_dict['mean_difference_ratio'] = difference_ratio
-    #     df_dict['request_count'] = request_count
-    #     df_dict.update(description_info)
+        request_summary = defaultdict(lambda: {"count": 0, "env": "", "hostip": "", "class_method": ""})
 
-    #     return df_dict
+        for entry in all_replay_anomaly_details:
+            request_url = entry["request_url"]
+            request_summary[request_url]["count"] = int(entry["count"])
+            request_summary[request_url]["env"] = entry["env"]
+            request_summary[request_url]["hostip"] = entry["hostip"]
+            request_summary[request_url]["class_method"] = entry["class_method"]
 
-    def built_single_dict(self, df: MergedFrame):
-        def safe_format(value):
-            # 如果值是 NaN 或 None，则返回 0 或其他默认值
-            if pd.isna(value):
-                return "0"  # 或者根据需求返回 None
-            return "{:.6f}".format(value)
-
-        df_dict = {}
-        production_delay_mean = safe_format(df.get_production_delay_mean())
-        replay_delay_mean = safe_format(df.get_replay_delay_mean())
-        replay_delay_median = safe_format(df.get_replay_delay_median())
-        production_delay_median = safe_format(df.get_production_delay_median())
-        production_delay_max = safe_format(df.get_production_delay_max())
-        replay_delay_max = safe_format(df.get_replay_delay_max())
-        production_delay_min = safe_format(df.get_production_delay_min())
-        replay_delay_min = safe_format(df.get_replay_delay_min())
-        difference_ratio = safe_format(df.get_difference_ratio())
-
-        request_count = df.get_request_count()
-        request_count_replay = df.get_request_count_replay()
-
-        # Get additional information from the function description file
-        description_info = self.get_function_description(df.url, request_count, request_count_replay)
-
-        df_dict['url'] = df.url
-        df_dict['request_method'] = df.request_method
-        df_dict['production_delay_mean'] = production_delay_mean
-        df_dict['replay_delay_mean'] = replay_delay_mean
-        df_dict['production_delay_median'] = production_delay_median
-        df_dict['replay_delay_median'] = replay_delay_median
-        df_dict['production_delay_min'] = production_delay_min
-        df_dict['replay_delay_min'] = replay_delay_min
-        df_dict['production_delay_max'] = production_delay_max
-        df_dict['replay_delay_max'] = replay_delay_max
-        df_dict['mean_difference_ratio'] = difference_ratio
-        df_dict['request_count'] = request_count
-        df_dict.update(description_info)
-
-        return df_dict
-
-    def get_difference_ratio_weighted(self, all_df_list):
-        # 用来统计总请求数、回放时延较低的请求数和生产时延较低的请求数
-        total_requests = 0
-        replay_lower_count = 0
-        production_lower_count = 0
-
-        total_weighted_production_delay = 0
-        total_weighted_replay_delay = 0
-
-        # 用来加权计算
-        weighted_replay = 0
-        weighted_production = 0
-
-        for df_dict in all_df_list:
-            # 获取每个 URL 的信息
-            difference_ratio = float(df_dict['mean_difference_ratio'])  # difference_ratio
-            request_count = df_dict['request_count']  # 每种请求的数量
-            production_delay_mean = float(df_dict["production_delay_mean"])
-            replay_delay_mean = float(df_dict["replay_delay_mean"])
-
-            total_requests += request_count  # 累加总请求数
-
-            # 如果该url不存在回放请求，为保证加权平均时延的一致性，生产的也不计算了
-            if replay_delay_mean != 0.0:
-                total_weighted_production_delay += production_delay_mean * request_count
-                total_weighted_replay_delay += replay_delay_mean * request_count
-            else:
-                total_weighted_production_delay += 0
-                total_weighted_replay_delay += 0
-
-            if difference_ratio >= 1:
-                production_lower_count += request_count  # 生产时延较低
-                weighted_production += request_count * difference_ratio  # 加权计算生产时延
-
-            else:
-                replay_lower_count += request_count  # 回放时延较低
-                if difference_ratio != 0.0:
-                    weighted_replay += request_count * (1 / difference_ratio)  # 加权计算回放时延
-                else:
-                    weighted_replay += 0
-
-        # 计算整体加权
-        weighted_average_production = weighted_production / total_requests
-        weighted_average_replay = weighted_replay / total_requests
-
-        overall_production_delay = total_weighted_production_delay / total_requests
-        overall_replay_delay = total_weighted_replay_delay / total_requests
-
-        # 得出结论
-        if overall_replay_delay > overall_production_delay:
-            contrast_delay_conclusion = f"生产环境整体时延较低,生产环境加权平均时延为{round(overall_production_delay, 6)}s,回放环境加权平均时延为{round(overall_replay_delay, 6)}s,生产环境时延低的权重为：{weighted_average_production}, 回放环境时延低的权重为：{weighted_average_replay},生产较快的请求数为{production_lower_count},回放较快的请求数为{replay_lower_count},总请求数为{total_requests}"
-        else:
-            contrast_delay_conclusion = f"回放环境整体时延较低,回放环境加权平均时延为{round(overall_replay_delay, 6)}s,生产环境加权平均时延为{round(overall_production_delay, 6)}s,回放环境时延低的权重为：{weighted_average_replay}, 生产环境时延低的权重为：{weighted_average_production},回放较快的请求数为{replay_lower_count},生产较快的请求数为{production_lower_count},总请求数为{total_requests}"
-
-        return contrast_delay_conclusion
-
-    def built_all_dict(self):
-        all_df_list = []
-        path_delay_dict = {}
-        for url in self.get_all_path():
-            df, production_delay_mean, replay_delay_mean = self.built_df(url)  # 先构建了一个df结构
-            all_df_list.append(self.built_single_dict(df))
-            path_delay_dict[url] = {
-                "production_delay_mean": production_delay_mean,
-
-                "replay_delay_mean": replay_delay_mean,
-
+        # 生成目标格式
+        dict_output = [
+            {
+                "request_url": url,
+                "env": details["env"],
+                "count": details["count"],
+                "hostip": details["hostip"],
+                "class_method": details["class_method"],
+                "bottleneck_cause": get_bottleneck_analysis(url)['cause'],
+                "solution": get_bottleneck_analysis(url)['solution']
             }
-        contrast_delay_conclusion = self.get_difference_ratio_weighted(all_df_list)
-        return all_df_list, path_delay_dict, contrast_delay_conclusion
+            for url, details in request_summary.items()
+        ]
+        res['anomaly_detection']['dict'] = dict_output
+    except Exception as e:
+        logger.error(f"Exception while comparing producer and playback data: {e}", exc_info=True)
 
-    def add_delay_to_df(self):
-        _, path_delay_dict, _ = self.built_all_dict()
+    # 相关性、随机森林结果和预留传递数据
+    res['anomaly_detection']['correlation'] = [
+        producer_data['general_analysis_result']['analysis_result_correlation'],
+        playback_data['general_analysis_result']['analysis_result_correlation']
+    ]
+    res['anomaly_detection']['random_forest'] = [
+        producer_data['general_analysis_result']['analysis_result_random_forest'],
+        playback_data['general_analysis_result']['analysis_result_random_forest']
+    ]
+    res['performance_bottleneck_analysis'] = {
+        "bottlenecks": [
+            {
+                "env": "瓶颈发生的环境replay",
+                "hostip": playback_host_ip_str,
+                "class_name": "该部分为扩展用的备用瓶颈结论接口，暂无输出",
+                "cause": "扩展用的瓶颈原因",
+                "criteria": "判断为该瓶颈的标准",
+                "solution": "该瓶颈的解决方案"
+            },
+            {
+                "env": "瓶颈发生的环境production",
+                "hostip": producer_host_ip_str,
+                "class_name": "扩展用的瓶颈结论接口，暂无输出",
+                "cause": "瓶颈原因的备用接口，可扩展",
+                "criteria": "判断为该瓶颈的标准，扩展备用",
+                "solution": "该瓶颈的解决方案，扩展备用"
+            }
+        ]
+    }
 
-        # 遍历 path，给 self.df_product 和 self.df_back 添加平均值
-        self.df_product['average_delay'] = self.df_product['Path'].map(
-            lambda path: path_delay_dict.get(path, {}).get("production_delay_mean", None)
-        )
+    # 分析瓶颈1 状态码
+    bottleneck_analysis_response_code = (
+        analyze_status_code(alignment_df, output_prefix=f'{outputs_path}/test_status_code_analysis_{pcap_info_idx}'))
+    # 方式1 返回的是txt文本内容
+    # bottleneck_analysis_response_code["env"] = "replay"    #此处应该是生产加上回放，两环境的
+    # bottleneck_analysis_response_code["hostip"] = replay_ip
+    # logger.info(f"bottleneck_analysis_response_code: {bottleneck_analysis_response_code}")
+    # res['performance_bottleneck_analysis']['bottlenecks'].append(bottleneck_analysis_response_code)
 
-        self.df_back['average_delay'] = self.df_back['Path'].map(
-            lambda path: path_delay_dict.get(path, {}).get("replay_delay_mean", None)
-        )
+    # 方式2 返回json格式的信息
+    bottleneck_analysis_response_code[0]["hostip"] = producer_host_ip_str
+    bottleneck_analysis_response_code[1]["hostip"] = playback_host_ip_str
+    res['performance_bottleneck_analysis']['response_code'] = bottleneck_analysis_response_code
 
-    def save_to_csv(self, file_name):
-        self.add_delay_to_df()
-        self.df_product.to_csv(self.csv_production, encoding='utf-8-sig', index=False)
-        self.df_back.to_csv(self.csv_back, encoding='utf-8-sig', index=False)
+    # 分析瓶颈2 响应包是否完整
+    bottleneck_analysis_empty_response = (
+        analyze_empty_responses(alignment_df, output_prefix=f'{outputs_path}/empty_responses_analysis_{pcap_info_idx}'))
 
-        all_dicts, _, _ = self.built_all_dict()
-        df_result = pd.DataFrame(all_dicts)
-        df_result.to_csv(file_name, encoding='utf-8-sig', index=False)  # 使用'utf-8-sig'编码保证中文不乱码
+    # 方式1 返回的是txt文本内容
+    # bottleneck_analysis_empty_response["env"] = "replay"    #此处应该是生产加上回放，两环境的
+    # bottleneck_analysis_empty_response["hostip"] = replay_ip
+    # logger.info(f"bottleneck_analysis_empty_response: {bottleneck_analysis_empty_response}")
+    # res['performance_bottleneck_analysis']['bottlenecks'].append(bottleneck_analysis_empty_response)
 
-    # def plot_mean_difference_ratio(self, file_name):
-    #     all_dicts, _, _ = self.built_all_dict()
-    #     df_result = pd.DataFrame(all_dicts)
-    #
-    #     # 将'mean_difference_ratio'转为浮点数
-    #     df_result['mean_difference_ratio'] = df_result['mean_difference_ratio'].astype(float)
-    #
-    #     plt.figure(figsize=(14, 8))  # 调整图片尺寸
-    #
-    #     # 颜色：如果mean_difference_ratio小于1，则柱状图为红色，否则为蓝色
-    #     colors = ['red' if ratio < 1 else 'blue' for ratio in df_result['mean_difference_ratio']]
-    #
-    #     bars = plt.bar(df_result['url'], df_result['mean_difference_ratio'], color=colors)
-    #
-    #     plt.xlabel('URL', fontsize=10)  # 调整x轴标签字体大小
-    #     plt.ylabel('Mean Difference Ratio', fontsize=10)  # 调整y轴标签字体大小
-    #     plt.title('Mean Difference Ratio for Each Request', fontsize=12)  # 调整标题字体大小
-    #
-    #     plt.xticks(rotation=45, ha='right', fontsize=8)  # 旋转x轴标签并调整字体大小
-    #     plt.tight_layout()  # 自动调整布局防止重叠
-    #
-    #     # 在柱状图上方显示数值，调整字体大小
-    #     for bar in bars:
-    #         height = bar.get_height()
-    #         plt.text(bar.get_x() + bar.get_width() / 2.0, height, f'{height:.2f}', ha='center', va='bottom', fontsize=8)
-    #
-    #     plt.savefig(file_name)
-    #     # plt.show()
+    # 方式2 返回json格式的信息
+    bottleneck_analysis_empty_response[0]["hostip"] = producer_host_ip_str
+    bottleneck_analysis_empty_response[1]["hostip"] = playback_host_ip_str
+    bottleneck_analysis_empty_response[0]["env"] = "production"
+    bottleneck_analysis_empty_response[1]["env"] = "replay"
+    res['performance_bottleneck_analysis']['empty_response'] = bottleneck_analysis_empty_response
+    # logger.warning("222222222222")
+    # logger.warning(bottleneck_analysis_empty_response)
+
+    # 分析瓶颈3 传输窗口瓶颈检测
+    bottleneck_analysis_zero_window = (
+        analyze_zero_window_issues(alignment_df, output_prefix=f'{outputs_path}/zero_window_analysis_{pcap_info_idx}'))
+    # 方式1 返回的是txt文本内容
+    # bottleneck_analysis_zero_window["env"] = "replay"    #此处应该是生产加上回放，两环境的
+    # bottleneck_analysis_zero_window["hostip"] = replay_ip
+    # logger.info(f"bottleneck_analysis_zero_window: {bottleneck_analysis_zero_window}")
+    # res['performance_bottleneck_analysis']['bottlenecks'].append(bottleneck_analysis_zero_window)
+
+    # 方式2 返回json格式的信息
+    bottleneck_analysis_zero_window[0]["hostip"] = producer_host_ip_str
+    bottleneck_analysis_zero_window[1]["hostip"] = playback_host_ip_str
+    bottleneck_analysis_zero_window[0]["env"] = "production"
+    bottleneck_analysis_zero_window[1]["env"] = "replay"
+    res['performance_bottleneck_analysis']['transmission_window'] = bottleneck_analysis_zero_window
+
+    # 分析瓶颈4 数据库查询瓶颈检测
+    # 方式2 返回json格式的信息
+    res['performance_bottleneck_analysis']['database'] = [
+        producer_data['general_analysis_result']['bottleneck_analysis_database'],
+        playback_data['general_analysis_result']['bottleneck_analysis_database']
+    ]
+
+    # 分析瓶颈5 Exception 分析
+    res['performance_bottleneck_analysis']['exception'] = [
+        producer_data['general_analysis_result']['bottleneck_analysis_exception'],
+        playback_data['general_analysis_result']['bottleneck_analysis_exception']
+    ]
+
+    logger.info("Cluster_analysis finished.")
+    logger.debug(f"ID: {pcap_info_idx}, Res: {res}")
+
+    return pcap_info_idx, res, contrast_delay_conclusion
