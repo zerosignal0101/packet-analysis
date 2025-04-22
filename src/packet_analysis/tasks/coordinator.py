@@ -86,7 +86,13 @@ def process_analysis_request(task_id, pcap_info_list, remote_addr, options):
         pair_tasks.append(pair_task)
 
     # 使用 chord 等待所有对分析完成后合并结果
-    callback = chain(merge_results.s(task_id=task_id), send_callback.s(callback_url=callback_url))
+    pair_num = len(pair_tasks)
+    merge_options = {
+        **options,
+        'pair_num': pair_num,
+        'task_result_path': str(task_result_path),
+    }
+    callback = chain(merge_results.s(options=merge_options), send_callback.s(callback_url=callback_url))
     chord(group(pair_tasks), callback).apply_async()
 
     return {"task_id": task_id, "status": "initiated", "ok": True}

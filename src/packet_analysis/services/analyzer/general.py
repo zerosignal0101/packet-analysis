@@ -140,7 +140,7 @@ def general_data_analyzer(result_df: pd.DataFrame, options: Dict[str, Any]) -> D
                                                  kpi_result_file_path)
 
         # Process the correlation results if successful and not empty
-        if not correlation_result_df.empty and '相关系数' in correlation_result_df.columns and 'KPI名称' in correlation_result_df.columns:
+        if not correlation_result_df.empty and 'correlation_value' in correlation_result_df.columns and 'kpi_name' in correlation_result_df.columns:
             logger.info(f"Successfully calculated correlations. Processing {len(correlation_result_df)} results.")
             processed_data = []
             max_corr_kpi = None
@@ -148,9 +148,9 @@ def general_data_analyzer(result_df: pd.DataFrame, options: Dict[str, Any]) -> D
 
             for index, row in correlation_result_df.iterrows():
                 # Check if correlation coefficient is valid
-                if pd.notna(row['相关系数']):
-                    kpi_name = row['KPI名称']
-                    correlation_value = row['相关系数']
+                if pd.notna(row['correlation_value']):
+                    kpi_name = row['kpi_name']
+                    correlation_value = row['correlation_value']
                     processed_data.append({
                         "index_id": kpi_name,
                         "value": correlation_value  # Keep as float
@@ -182,7 +182,7 @@ def general_data_analyzer(result_df: pd.DataFrame, options: Dict[str, Any]) -> D
             logger.warning("Correlation analysis resulted in an empty DataFrame. Check input data and time alignment.")
         else:
             logger.warning(
-                f"Columns '相关系数' or 'KPI名称' missing in correlation result DataFrame. Columns found: {correlation_result_df.columns.tolist()}")
+                f"Columns 'correlation_value' or 'kpi_name' missing in correlation result DataFrame. Columns found: {correlation_result_df.columns.tolist()}")
             # Keep the default error message
 
     except FileNotFoundError as e:

@@ -222,6 +222,15 @@ def compare_producer_playback(
     ]
 
     logger.info("Cluster_analysis finished.")
-    logger.debug(f"ID: {pcap_info_idx}, Res: {res}")
+    # logger.debug(f"ID: {pcap_info_idx}, Res: {res}")
 
-    return pcap_info_idx, res, contrast_delay_conclusion
+    result_options = {
+        **options,
+        'contrast_delay_conclusion': contrast_delay_conclusion,
+        'producer_parquet_file_path': producer_parquet_file_path,
+        'playback_parquet_file_path': playback_parquet_file_path,
+        'alignment_parquet_file_path': alignment_parquet_file_path,
+        'res': res
+    }
+
+    return result_options

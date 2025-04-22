@@ -45,10 +45,4 @@ def compare_results_chord_callback(results, pair_id, options):
         playback_data=playback_result,
         options=options
     )
-
-    result = {
-        "pair_id": pair_id,
-        "comparison": comparison
-    }
-
-    return result
+    return comparison

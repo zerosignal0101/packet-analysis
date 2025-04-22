@@ -55,17 +55,7 @@ def load_database_logs(json_file, exec_time_threshold):
     return long_running_logs, total_count
 
 
-# 2. 加载 CSV 文件
-def _load_csv_logs(csv_file):
-    logs = []
-    with open(csv_file, "r", encoding="utf-8") as file:
-        reader = csv.DictReader(file)
-        for row in reader:
-            logs.append(row)
-    return logs
-
-
-# 3. 时间匹配
+# 2. 时间匹配
 def match_database_logs(database_logs, csv_logs):
     matched_results = []
 
@@ -113,42 +103,3 @@ def match_database_logs(database_logs, csv_logs):
             })
 
     return matched_results
-
-
-# 4. 主函数
-def main():
-    # 文件路径
-    json_file = "../../../raw_data/raw_data_1883351909503537154/collect_20250123_205906_1882216342594195457_242.json"
-    csv_file = "/home/zsig/Documents/gits/packet-analysis/results/ae1b1bc1-d784-4007-aba3-d0a0331a264b/extracted_production_data_3.csv"
-
-    # 设置执行时间阈值（单位：毫秒）
-    exec_time_threshold = 200
-
-    # 加载日志
-    database_logs, total_count = load_database_logs(json_file, exec_time_threshold)
-    csv_logs = _load_csv_logs(csv_file)
-
-    # Test
-    print("时延较大的数据库处理项目数：", len(database_logs))
-
-    # 匹配日志
-    matched_results = match_database_logs(database_logs, csv_logs)
-
-    # 输出结果
-    print("===== 匹配结果 =====")
-    for result in matched_results:
-        print(f"数据库请求开始时间: {result['db_start_time']}")
-        print(f"数据库执行时间: {result['exec_time']} 毫秒")
-        print(f"SQL 查询内容: {result['sql_content']}")
-        print(f"URL 请求路径: {result['url_path']}")
-        print(f"URL 请求时间: {result['url_sniff_time']}")
-        print(f"Time since request: {result['time_since_request']} 秒")
-        print(f"Ratio: {result['ratio']}")
-        print(f"响应状态码: {result['response_code']}")
-        print(f"请求方法: {result['request_method']}")
-        print(f"请求类别：{result['class_method']}")
-        print("-----------------------------")
-
-
-if __name__ == "__main__":
-    main()

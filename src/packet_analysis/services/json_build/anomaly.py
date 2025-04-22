@@ -237,7 +237,7 @@ def detect_anomalies(
 # --- Main Analysis Orchestrator ---
 
 def analysis(
-        csv_input: str,
+        parquet_input: str,
         folder_output: str,
         numbers: str,
         data_list: List[Dict[str, Any]],
@@ -249,7 +249,7 @@ def analysis(
     Performs the main analysis workflow: load, classify, detect anomalies, and optionally plot.
 
     Args:
-        csv_input: Path to the input CSV file containing request data.
+        parquet_input: Path to the input CSV file containing request data.
         folder_output: Base directory for saving output files (CSV, plots).
         numbers: Identifier number (e.g., batch number) for filenames.
         data_list: List of dictionaries with URL reference delays.
@@ -277,18 +277,18 @@ def analysis(
 
     # --- Load and Prepare Data ---
     try:
-        data = pd.read_csv(csv_input, encoding='utf-8')
-        logger.info(f"Successfully loaded data from: {csv_input}")
+        data = pd.read_parquet(parquet_input)
+        logger.info(f"Successfully loaded data from: {parquet_input}")
     except FileNotFoundError:
-        logger.error(f"Input CSV file not found: {csv_input}")
+        logger.error(f"Input parquet file not found: {parquet_input}")
         return [], []
     except Exception as e:
-        logger.error(f"Error reading CSV file {csv_input}: {e}")
+        logger.error(f"Error reading parquet file {parquet_input}: {e}")
         return [], []
 
     required_columns = ['Path', 'Request_Method', 'Time_since_request', 'Sniff_time', 'No', 'Relative_time']
     if not all(col in data.columns for col in required_columns):
-        logger.error(f"Input CSV missing required columns. Needed: {required_columns}, Found: {list(data.columns)}")
+        logger.error(f"Input parquet missing required columns. Needed: {required_columns}, Found: {list(data.columns)}")
         return [], []
 
     # Basic cleaning

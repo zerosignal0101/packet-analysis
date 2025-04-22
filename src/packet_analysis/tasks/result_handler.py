@@ -12,10 +12,12 @@ logger = logging.getLogger(__name__)
 
 
 @celery_app.task
-def merge_results(pair_results, task_id):
+def merge_results(pair_results, options):
     """合并所有分析对的结果"""
     # 调用合并服务
-    merged_data = merge_analysis_results(pair_results)
+    merged_data = merge_analysis_results(pair_results, options)
+
+    task_id = options.get('task_id')
 
     final_result = {
         "task_id": task_id,

@@ -473,7 +473,7 @@ def calc_correlation(
                     'monitor_type': effective_monitor_type,
                     'ip_address': host_ip,  # Add IP address to output for clarity
                     'kpi_name': kpi_name,
-                    'correlation_value': safe_format(correlation_value)
+                    'correlation_value': correlation_value
                 })
             if aligned_df_slice is not None and not aligned_df_slice.empty:
                 # Add identifier columns to the aligned data slice before storing

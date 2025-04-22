@@ -262,7 +262,6 @@ def analyze_empty_responses(data: pd.DataFrame, output_prefix, result_dict=None,
 
         # 保存统计数据到文件
         path_counts.to_csv(f"{output_prefix}_{env}_empty_response_counts.csv")
-        empty_data[sniff_time_column] = pd.to_datetime(empty_data[sniff_time_column])
         empty_data['time_group'] = empty_data[sniff_time_column].dt.floor('5min')
         time_distribution = empty_data.groupby('time_group').size()
         time_distribution.to_csv(f"{output_prefix}_{env}_empty_response_time_distribution.csv")

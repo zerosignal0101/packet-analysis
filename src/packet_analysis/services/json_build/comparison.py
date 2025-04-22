@@ -11,7 +11,7 @@ from src.packet_analysis.services.json_build.suggestions import safe_format
 from src.packet_analysis.services.json_build.correlation import load_kpi_mapping
 
 # --- Configuration ---
-DEFAULT_API_CONFIG_PATH = 'src/packet_analysis/preprocess/api_config.txt'
+DEFAULT_API_CONFIG_PATH = 'src/packet_analysis/services/json_build/api_config.txt'
 STATS_COL = 'Time_since_request'
 DECIMALS = 6
 
@@ -91,7 +91,7 @@ class DB:
             return stats  # Return defaults if df is empty, col missing, or all NaNs
 
         # Drop NaNs before calculating stats to avoid issues with some aggregations
-        valid_data = df[col].dropna()
+        valid_data = df[col].dropna().dt.total_seconds()
         if valid_data.empty:
             return stats  # Return defaults if only NaNs existed
 
@@ -158,7 +158,7 @@ class DB:
 
         single_dict = {
             'url': url,
-            'request_method': request_method if request_method else 'N/A',
+            'request_method': request_method if request_method else None,
             'production_delay_mean': safe_format(prod_mean),
             'replay_delay_mean': safe_format(back_mean),
             'production_delay_median': safe_format(prod_stats.get('median')),
@@ -167,7 +167,7 @@ class DB:
             'replay_delay_min': safe_format(back_stats.get('min')),
             'production_delay_max': safe_format(prod_stats.get('max')),
             'replay_delay_max': safe_format(back_stats.get('max')),
-            'mean_difference_ratio': safe_format(difference_ratio, default="N/A"),  # Use N/A if cannot compute
+            'mean_difference_ratio': safe_format(difference_ratio),
             'request_count_production': int(prod_stats['count']),
             'request_count_replay': int(back_stats['count']),
         }
@@ -254,9 +254,9 @@ class DB:
             # Store raw means (handle potential string conversion issues if needed)
             try:
                 prod_mean_val = float(single_dict['production_delay_mean']) if single_dict[
-                                                                                   'production_delay_mean'] != "N/A" else np.nan
+                                                                                   'production_delay_mean'] is not None else np.nan
                 replay_mean_val = float(single_dict['replay_delay_mean']) if single_dict[
-                                                                                 'replay_delay_mean'] != "N/A" else np.nan
+                                                                                 'replay_delay_mean'] is not None else np.nan
             except ValueError:
                 prod_mean_val = np.nan
                 replay_mean_val = np.nan
