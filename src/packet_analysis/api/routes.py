@@ -31,7 +31,7 @@ def submit_analysis():
 
         # Convert Pydantic model to dict for Celery
         data_dict = request_data.model_dump()
-        task_result_path = Path(project_root, 'results', f'{task_id}')
+        task_result_path = Path(project_root, 'results/task_results', f'{task_id}')
         try:
             response_json_path = os.path.join(task_result_path, 'request.json')
             task_result_path.mkdir(parents=True, exist_ok=True)

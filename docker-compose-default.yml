@@ -1,0 +1,57 @@
+version: '3'
+
+services:
+  redis:
+    image: redis:alpine
+    restart: always
+    volumes:
+      - ./results/redis_data:/data
+    networks:
+      - app_network
+
+  web-api:
+    image: zerosignal0101/packet-analysis-tool:v0.3.0
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: gunicorn --workers 4 --bind 0.0.0.0:7956 "src.packet_analysis.app:create_app()"
+    volumes: &common-volumes
+      - ./raw_data:/packet-analysis/raw_data
+      - ./results:/packet-analysis/results
+      - ./src:/packet-analysis/src
+    ports:
+      - "7956:7956"
+    depends_on:
+      - redis
+    networks:
+      - app_network
+
+  celery-worker:
+    image: zerosignal0101/packet-analysis-tool:v0.3.0
+    command: celery -A src.packet_analysis.celery_app.celery_app worker
+    volumes: *common-volumes
+    depends_on:
+      - redis
+    networks:
+      - app_network
+
+  celery-beat:
+    build: .
+    command: >
+      sh -c "rm -f ${CELERY_BEAT_DIR}/celerybeat.pid && # Remove stale pid file
+             celery -A src.packet_analysis.celery_app.celery_app beat --schedule=${CELERY_BEAT_SCHEDULE_FILENAME}"
+    volumes:
+      - *common-volumes
+      - celerybeat_data:/packet-analysis/celerybeat # Use a named volume to persist the schedule
+    environment:
+      - CELERY_BEAT_DIR=/packet-analysis/celerybeat # Must match volume mount and Dockerfile
+      - CELERY_BEAT_SCHEDULE_FILENAME=/packet-analysis/celerybeat/celerybeat_schedule
+    depends_on:
+      - redis
+
+networks:
+  app_network:
+    driver: bridge
+
+volumes:
+  celerybeat_data: # Define the named volume for persistence

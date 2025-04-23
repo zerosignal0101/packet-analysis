@@ -10,8 +10,8 @@ class Config:
     """应用配置类"""
 
     # Flask 基础配置
-    FLASK_HOST: str = '0.0.0.0'
-    FLASK_PORT: int = 7956
+    FLASK_HOST: Optional[str] = None
+    FLASK_PORT: Optional[int] = None
     SECRET_KEY: Optional[str] = None
     DEBUG: Optional[bool] = None
     MAX_CONTENT_LENGTH: int = 16 * 1024 * 1024  # 16MB 文件上传限制
@@ -44,8 +44,8 @@ class Config:
     def load_config(cls):
         """加载配置，优先级: 实例属性 > 环境变量 > 默认值"""
         # Flask 配置
-        cls.FLASK_HOST = cls._get_setting('FLASK_HOST')
-        cls.FLASK_PORT = cls._get_setting('FLASK_PORT', convert_type=int)
+        cls.FLASK_HOST = cls._get_setting('FLASK_HOST', default='0.0.0.0')
+        cls.FLASK_PORT = cls._get_setting('FLASK_PORT', default=7956, convert_type=int)
         cls.SECRET_KEY = cls._get_setting('SECRET_KEY', default='dev-secret-key')
         cls.DEBUG = cls._get_setting('DEBUG', default=False, convert_type=bool)
         cls.MAX_CONTENT_LENGTH = cls._get_setting(

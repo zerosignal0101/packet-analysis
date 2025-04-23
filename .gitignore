@@ -260,3 +260,5 @@ raw_data/*
 
 test_field
 test_field/*
+
+docker-compose.yml

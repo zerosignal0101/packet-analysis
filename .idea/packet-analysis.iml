@@ -5,6 +5,18 @@
       <excludeFolder url="file://$MODULE_DIR$/.venv" />
       <excludeFolder url="file://$MODULE_DIR$/results/logs" />
       <excludeFolder url="file://$MODULE_DIR$/test_field" />
+      <excludeFolder url="file://$MODULE_DIR$/raw_data/data_failed" />
+      <excludeFolder url="file://$MODULE_DIR$/raw_data/raw_data_09622e39" />
+      <excludeFolder url="file://$MODULE_DIR$/raw_data/raw_data_09622e39_small" />
+      <excludeFolder url="file://$MODULE_DIR$/results/245c8b6e-0edf-44aa-b5ae-f32d2df9cab5" />
+      <excludeFolder url="file://$MODULE_DIR$/results/93645abf-3d60-4198-b9a4-7324afc6762a" />
+      <excludeFolder url="file://$MODULE_DIR$/results/celerybeat_schedule" />
+      <excludeFolder url="file://$MODULE_DIR$/results/d2d870bb-b27b-4569-866b-479dd2b7694f" />
+      <excludeFolder url="file://$MODULE_DIR$/results/e21bb9c3-3145-4f50-b192-8cad49cb7450" />
+      <excludeFolder url="file://$MODULE_DIR$/results/e4ca4cbc-8fb6-4d3e-85cd-e09c8b8230df" />
+      <excludeFolder url="file://$MODULE_DIR$/results/f1331b51-12c4-455e-b242-d9c460f6a1eb" />
+      <excludeFolder url="file://$MODULE_DIR$/results/parquet_data" />
+      <excludeFolder url="file://$MODULE_DIR$/results/pcap_chunks" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.11 (packet-analysis)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
