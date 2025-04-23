@@ -1,11 +1,11 @@
 import logging
 import os
-from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler # Keep both imports for reference, but only use TimedRotatingFileHandler now
+from logging.handlers import RotatingFileHandler, \
+    TimedRotatingFileHandler  # Keep both imports for reference, but only use TimedRotatingFileHandler now
 import rootutils
 
 # Project imports
 from src.packet_analysis.config import Config
-
 
 # 查找项目根目录
 path = rootutils.find_root(search_from=__file__, indicator=".project-root")
@@ -48,11 +48,11 @@ CELERY_LOGGING = {
         'celery_file': {
             'level': LOG_LEVEL,
             # --- MODIFIED HERE ---
-            'class': 'logging.handlers.TimedRotatingFileHandler', # Use time-based rotation
+            'class': 'logging.handlers.TimedRotatingFileHandler',  # Use time-based rotation
             'filename': CELERY_LOG_FILE,
             'when': 'midnight',  # Rotate daily at midnight
-            'interval': 1,       # Check once per day (when='midnight')
-            'backupCount': 7,    # Keep 7 backup logs (e.g., one week)
+            'interval': 1,  # Check once per day (when='midnight')
+            'backupCount': 7,  # Keep 7 backup logs (e.g., one week)
             # 'maxBytes': 1024 * 1024 * 100, # Removed maxBytes
             # --- END MODIFICATION ---
             'formatter': 'default',
@@ -61,14 +61,14 @@ CELERY_LOGGING = {
         'celery_task_file': {
             'level': LOG_LEVEL,
             # --- MODIFIED HERE ---
-            'class': 'logging.handlers.TimedRotatingFileHandler', # Use time-based rotation
-            'filename': CELERY_LOG_FILE, # Log tasks to the SAME file
+            'class': 'logging.handlers.TimedRotatingFileHandler',  # Use time-based rotation
+            'filename': CELERY_LOG_FILE,  # Log tasks to the SAME file
             'when': 'midnight',  # Rotate daily at midnight (Consistent with celery_file)
-            'interval': 1,       # Check once per day
-            'backupCount': 7,    # Keep 7 backup logs (Consistent with celery_file)
+            'interval': 1,  # Check once per day
+            'backupCount': 7,  # Keep 7 backup logs (Consistent with celery_file)
             # 'maxBytes': 1024 * 1024 * 100, # Removed maxBytes
-             # --- END MODIFICATION ---
-            'formatter': 'task', # Use specific 'task' formatter for task logs
+            # --- END MODIFICATION ---
+            'formatter': 'task',  # Use specific 'task' formatter for task logs
             'encoding': 'utf-8',
         },
         'console': {
@@ -119,9 +119,9 @@ def setup_flask_logging(app):
     # --- MODIFIED HERE ---
     file_handler = TimedRotatingFileHandler(
         FLASK_LOG_FILE,
-        when='midnight',    # Rotate daily at midnight
-        interval=1,         # Check once per day
-        backupCount=7,      # Keep 7 backup logs (e.g., one week)
+        when='midnight',  # Rotate daily at midnight
+        interval=1,  # Check once per day
+        backupCount=7,  # Keep 7 backup logs (e.g., one week)
         # maxBytes=1024 * 1024 * 5, # Removed maxBytes
         encoding='utf-8'
     )
@@ -139,18 +139,20 @@ def setup_flask_logging(app):
 
     # Add handlers if they aren't already present
     # Check specifically for our file handler by filename
-    if not any(isinstance(h, logging.FileHandler) and getattr(h, 'baseFilename', None) == FLASK_LOG_FILE for h in app.logger.handlers):
+    if not any(isinstance(h, logging.FileHandler) and getattr(h, 'baseFilename', None) == FLASK_LOG_FILE for h in
+               app.logger.handlers):
         app.logger.addHandler(file_handler)
         app.logger.info(f"Added TimedRotatingFileHandler logging to {FLASK_LOG_FILE}")
 
     # Add console handler if not present
     if not any(isinstance(h, logging.StreamHandler) for h in app.logger.handlers):
-         app.logger.addHandler(console_handler) # Also add console handler to app logger
+        app.logger.addHandler(console_handler)  # Also add console handler to app logger
 
     # --- Configure Werkzeug Logger (for request logs) ---
     werkzeug_logger = logging.getLogger('werkzeug')
     # Check and add handlers to Werkzeug logger
-    if not any(isinstance(h, logging.FileHandler) and getattr(h, 'baseFilename', None) == FLASK_LOG_FILE for h in werkzeug_logger.handlers):
+    if not any(isinstance(h, logging.FileHandler) and getattr(h, 'baseFilename', None) == FLASK_LOG_FILE for h in
+               werkzeug_logger.handlers):
         werkzeug_logger.addHandler(file_handler)
     # Add console handler to Werkzeug if needed (ensures requests go to console too)
     if not any(isinstance(h, logging.StreamHandler) for h in werkzeug_logger.handlers):
@@ -159,6 +161,6 @@ def setup_flask_logging(app):
     # Set the level for the app logger itself AFTER adding handlers
     app.logger.setLevel(log_level)
     # Optionally set Werkzeug level (often INFO is sufficient)
-    werkzeug_logger.setLevel(logging.INFO) # Or use log_level if you want DEBUG requests logged
+    werkzeug_logger.setLevel(logging.INFO)  # Or use log_level if you want DEBUG requests logged
 
     app.logger.info('Flask application logging configured with Time Rotation.')
