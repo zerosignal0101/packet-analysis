@@ -42,7 +42,7 @@ def send_callback(self, result, callback_url):
         f"[send_callback] Task ID (from result): {result.get('task_id', 'N/A')}: Attempting callback to {callback_url}")
     try:
         # Make the actual HTTP request
-        response = send_callback_request(callback_url, result)  # Pass the full result dictionary
+        response = send_callback_request(callback_url, result.get('results', 'N/A'))  # Pass the full result dictionary
         if response.status_code not in (200, 201, 202):
             # Log specific error before raising for retry
             error_msg = f"Callback failed for task {result.get('task_id', 'N/A')} to {callback_url}. Status code: {response.status_code}"
