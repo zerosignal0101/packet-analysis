@@ -54,7 +54,23 @@ def analyze_status_code(data: pd.DataFrame, output_prefix):
         status_code_descriptions: dict，状态码与其含义的映射表。
     """
     if data.empty:
-        return []
+        return [
+            {
+                "class_name": f"{env_name}环境异常状态码分析",
+                "details": [
+                    {
+                        "bottleneck_type": "无法解析数据，对齐后的数据为空",
+                        "cause": "对齐后的数据为空",
+                        "count": 0,
+                        "total_count": 0,
+                        "ratio": 0.0,
+                        "solution": "请检查对齐算法实现以及输入 pcap 包是否为空",
+                        "request_paths": []
+                    }
+                ],
+            }
+            for env_name in ['生产', '回放']
+        ]
 
     # 筛选异常状态码的请求，同时排除空值状态码
     prod_abnormal = data[(data['Production_Response_Code'] != 200) & (data['Production_Response_Code'].notna())]
@@ -210,7 +226,23 @@ def analyze_empty_responses(data: pd.DataFrame, output_prefix, result_dict=None,
         result_key (str, optional): 字典中存储结果的键。
     """
     if data.empty:
-        return []
+        return [
+            {
+                "class_name": f"{env_name}环境响应包为空分析",
+                "details": [
+                    {
+                        "bottleneck_type": "无法解析数据，对齐后的数据为空",
+                        "cause": "对齐后的数据为空",
+                        "count": 0,
+                        "total_count": 0,
+                        "ratio": 0.0,
+                        "solution": "请检查对齐算法实现以及输入 pcap 包是否为空",
+                        "request_paths": []
+                    }
+                ],
+            }
+            for env_name in ['生产', '回放']
+        ]
 
     # 筛选响应包为空的请求
     prod_empty = data[data['Production_Response_Total_Length'] == 0]
@@ -310,7 +342,23 @@ def analyze_zero_window_issues(data: pd.DataFrame, output_prefix, result_dict=No
         result_key (str, optional): 字典中存储结果的键。
     """
     if data.empty:
-        return []
+        return [
+            {
+                "class_name": f"{env_name}环境TCP传输窗口分析",
+                "details": [
+                    {
+                        "bottleneck_type": "无法解析数据，对齐后的数据为空",
+                        "cause": "对齐后的数据为空",
+                        "count": 0,
+                        "total_count": 0,
+                        "ratio": 0.0,
+                        "solution": "请检查对齐算法实现以及输入 pcap 包是否为空",
+                        "request_paths": []
+                    }
+                ],
+            }
+            for env_name in ['生产', '回放']
+        ]
 
     # 筛选生产环境和回放环境中传输窗口已满的问题
     prod_zero_window = data[data['Production_Is_zero_window'] == True]

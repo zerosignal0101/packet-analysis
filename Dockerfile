@@ -96,6 +96,7 @@ ENV PATH="/packet-analysis/.venv/bin:$PATH"
 ENV PYTHONPATH=/packet-analysis
 ENV CELERY_BROKER_URL=redis://redis:6379/0
 ENV CELERY_RESULT_BACKEND=redis://redis:6379/1
+ENV CACHE_RESULT_BACKEND=redis://redis:6379/2
 ENV ENABLE_CELERY_BEAT=true
 # Openblas multi thread restriction
 ENV OPENBLAS_NUM_THREADS=4
