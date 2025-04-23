@@ -53,6 +53,9 @@ def analyze_status_code(data: pd.DataFrame, output_prefix):
         output_prefix: str，输出文件的前缀名。
         status_code_descriptions: dict，状态码与其含义的映射表。
     """
+    if data.empty:
+        return []
+
     # 筛选异常状态码的请求，同时排除空值状态码
     prod_abnormal = data[(data['Production_Response_Code'] != 200) & (data['Production_Response_Code'].notna())]
     back_abnormal = data[(data['Back_Response_Code'] != 200) & (data['Back_Response_Code'].notna())]
@@ -206,6 +209,9 @@ def analyze_empty_responses(data: pd.DataFrame, output_prefix, result_dict=None,
         result_dict (dict, optional): 用于存储分析结果的字典。
         result_key (str, optional): 字典中存储结果的键。
     """
+    if data.empty:
+        return []
+
     # 筛选响应包为空的请求
     prod_empty = data[data['Production_Response_Total_Length'] == 0]
     back_empty = data[data['Back_Response_Total_Length'] == 0]
@@ -303,6 +309,9 @@ def analyze_zero_window_issues(data: pd.DataFrame, output_prefix, result_dict=No
         result_dict (dict, optional): 用于存储分析结果的字典。
         result_key (str, optional): 字典中存储结果的键。
     """
+    if data.empty:
+        return []
+
     # 筛选生产环境和回放环境中传输窗口已满的问题
     prod_zero_window = data[data['Production_Is_zero_window'] == True]
     back_zero_window = data[data['Back_Is_zero_window'] == True]
