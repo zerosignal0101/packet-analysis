@@ -25,8 +25,8 @@ class Config:
 
     # Celery 性能配置
     CELERY_WORKER_CONCURRENCY: int = os.cpu_count() or 4
-    CELERY_TASK_TIME_LIMIT: int = 7200  # 任务超时时间(秒)
-    CELERY_RESULT_EXPIRES: int = 7200  # 任务结果过期时间(秒)
+    CELERY_TASK_TIME_LIMIT: int = 43200  # 任务超时时间(秒)
+    CELERY_RESULT_EXPIRES: int = 86400  # 任务结果过期时间(秒)
 
     # 日志配置
     LOG_LEVEL: Optional[str] = None
