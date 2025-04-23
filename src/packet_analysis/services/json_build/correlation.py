@@ -236,11 +236,6 @@ def compute_correlation_for_group(
         # Or attempt conversion: request_data['Sniff_time'] = pd.to_datetime(request_data['Sniff_time'], errors='coerce')
         return None, None, effective_monitor_type
 
-    # Pre-convert Time_since_request to numeric if it's not already
-    request_data['Time_since_request'] = pd.to_numeric(request_data['Time_since_request'], errors='coerce')
-    # Drop rows where conversion failed
-    request_data.dropna(subset=['Time_since_request'], inplace=True)
-
     for kpi_point in kpi_group_data:
         kpi_time = kpi_point['DCTIME']
         kpi_value = kpi_point['VALUE']
@@ -447,6 +442,13 @@ def calc_correlation(
         group_count = len(grouped_kpi)
         logger.info(f"Created {group_count} groups for correlation analysis.")
 
+        request_data = request_data.copy()
+
+        # Pre-convert Time_since_request to numeric if it's not already
+        request_data['Time_since_request'] = pd.to_numeric(request_data['Time_since_request'], errors='coerce')
+        # Drop rows where conversion failed
+        request_data.dropna(subset=['Time_since_request'], inplace=True)
+
         for i, ((monitor_type, kpi_no, host_ip), kpi_group) in enumerate(grouped_kpi):
             logger.debug(f"Processing group {i + 1}/{group_count}: Monitor={monitor_type}, KPI={kpi_no}, IP={host_ip}")
             kpi_name = kpi_mapping.get(kpi_no, f'未知指标 ({kpi_no})')
@@ -459,7 +461,7 @@ def calc_correlation(
             # Call the computation function for this group
             aligned_df_slice, correlation_value, effective_monitor_type = compute_correlation_for_group(
                 kpi_group_data=kpi_group_records,
-                request_data=request_data.copy(),  # Pass a copy to avoid modification issues if any
+                request_data=request_data,  # Pass a copy to avoid modification issues if any
                 kpi_name=kpi_name,
                 time_threshold_seconds=time_threshold_seconds,
                 ip_address=host_ip,
