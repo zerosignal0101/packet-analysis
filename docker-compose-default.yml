@@ -45,6 +45,8 @@ services:
       - celerybeat_data:/packet-analysis/celerybeat # Use a named volume to persist the schedule
     depends_on:
       - redis
+    networks:
+      - app_network
 
 networks:
   app_network:
