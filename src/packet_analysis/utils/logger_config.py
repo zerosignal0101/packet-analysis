@@ -1,6 +1,6 @@
 import logging
 import os
-from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
+from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler # Keep both imports for reference, but only use TimedRotatingFileHandler now
 import rootutils
 
 # Project imports
@@ -26,7 +26,7 @@ CONSOLE_LOG_FORMAT = "[%(asctime)s: %(levelname)s/%(processName)s] %(message)s"
 # 日志记录等级
 LOG_LEVEL = 'DEBUG' if Config.DEBUG else Config.LOG_LEVEL
 
-# --- Define Logging Configuration Dictionary ---
+# --- Define Logging Configuration Dictionary (Modified for Time Rotation) ---
 CELERY_LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,  # Important: Keep Celery's default loggers
@@ -46,57 +46,63 @@ CELERY_LOGGING = {
     },
     'handlers': {
         'celery_file': {
-            'level': LOG_LEVEL,  # Log level for this handler
-            'class': 'logging.handlers.RotatingFileHandler',  # Use rotating file handler
-            'filename': CELERY_LOG_FILE,
-            'maxBytes': 1024 * 1024 * 100,  # 100 MB log file size
-            'backupCount': 5,  # Keep 5 backup logs
-            'formatter': 'default',  # Use 'default' formatter for general logs
-            'encoding': 'utf-8',
-        },
-        'celery_task_file': {  # You could use the same handler as above if format is the same
-            # Or define a separate one if needed (e.g., different file/format)
             'level': LOG_LEVEL,
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': CELERY_LOG_FILE,  # Log tasks to the SAME file
-            'maxBytes': 1024 * 1024 * 100,
-            'backupCount': 5,
-            'formatter': 'task',  # Use specific 'task' formatter for task logs
+            # --- MODIFIED HERE ---
+            'class': 'logging.handlers.TimedRotatingFileHandler', # Use time-based rotation
+            'filename': CELERY_LOG_FILE,
+            'when': 'midnight',  # Rotate daily at midnight
+            'interval': 1,       # Check once per day (when='midnight')
+            'backupCount': 7,    # Keep 7 backup logs (e.g., one week)
+            # 'maxBytes': 1024 * 1024 * 100, # Removed maxBytes
+            # --- END MODIFICATION ---
+            'formatter': 'default',
             'encoding': 'utf-8',
         },
-        'console': {  # Optional: Keep logging to console as well
+        'celery_task_file': {
+            'level': LOG_LEVEL,
+            # --- MODIFIED HERE ---
+            'class': 'logging.handlers.TimedRotatingFileHandler', # Use time-based rotation
+            'filename': CELERY_LOG_FILE, # Log tasks to the SAME file
+            'when': 'midnight',  # Rotate daily at midnight (Consistent with celery_file)
+            'interval': 1,       # Check once per day
+            'backupCount': 7,    # Keep 7 backup logs (Consistent with celery_file)
+            # 'maxBytes': 1024 * 1024 * 100, # Removed maxBytes
+             # --- END MODIFICATION ---
+            'formatter': 'task', # Use specific 'task' formatter for task logs
+            'encoding': 'utf-8',
+        },
+        'console': {
             'level': LOG_LEVEL,
             'class': 'logging.StreamHandler',
             'formatter': 'console_formatter',
         },
     },
     'loggers': {
-        'celery': {  # Logger for base Celery messages
-            'handlers': ['celery_file', 'console'],  # Send to file and console
-            'level': LOG_LEVEL,
-            'propagate': False,  # Do not pass messages up to the root logger
-        },
-        'celery.task': {  # Logger for task-related messages
-            'handlers': ['celery_task_file', 'console'],  # Use the task handler/formatter
-            'level': LOG_LEVEL,
-            'propagate': False,
-        },
-        'celery.beat': {  # Logger for Celery Beat
-            'handlers': ['celery_file', 'console'],  # Use the default file handler
-            'level': LOG_LEVEL,
-            'propagate': False,
-        },
-        'celery.worker': {  # Logger for Worker specific messages
+        'celery': {
             'handlers': ['celery_file', 'console'],
             'level': LOG_LEVEL,
             'propagate': False,
         },
-        # You might want to configure the root logger or your app's loggers too
+        'celery.task': {
+            'handlers': ['celery_task_file', 'console'],
+            'level': LOG_LEVEL,
+            'propagate': False,
+        },
+        'celery.beat': {
+            'handlers': ['celery_file', 'console'],
+            'level': LOG_LEVEL,
+            'propagate': False,
+        },
+        'celery.worker': {
+            'handlers': ['celery_file', 'console'],
+            'level': LOG_LEVEL,
+            'propagate': False,
+        },
         'root': {
             'handlers': ['celery_file', 'console'],
             'level': LOG_LEVEL,
         },
-        '__main__': {  # Logger for the main module running tasks
+        '__main__': {
             'handlers': ['celery_file', 'console'],
             'level': LOG_LEVEL,
             'propagate': False,
@@ -106,42 +112,53 @@ CELERY_LOGGING = {
 
 
 def setup_flask_logging(app):
-    """Configures logging for the Flask app (File and Console)."""
+    """Configures logging for the Flask app (File and Console) with Time Rotation."""
     log_level = logging.DEBUG if app.config.get('DEBUG') else logging.INFO
-    # --- File Handler Setup ---
-    file_handler = RotatingFileHandler(
+
+    # --- File Handler Setup (Modified for Time Rotation) ---
+    # --- MODIFIED HERE ---
+    file_handler = TimedRotatingFileHandler(
         FLASK_LOG_FILE,
-        maxBytes=1024 * 1024 * 5,  # 5 MB
-        backupCount=5,
+        when='midnight',    # Rotate daily at midnight
+        interval=1,         # Check once per day
+        backupCount=7,      # Keep 7 backup logs (e.g., one week)
+        # maxBytes=1024 * 1024 * 5, # Removed maxBytes
         encoding='utf-8'
     )
-    file_handler.setLevel(log_level)  # File logs at the configured level
-    file_formatter = logging.Formatter(
-        '%(asctime)s %(levelname)s: %(message)s '
-        '[in %(pathname)s:%(lineno)d]'
-    )
+    # --- END MODIFICATION ---
+
+    file_handler.setLevel(log_level)
+    file_formatter = logging.Formatter(FILE_LOG_FORMAT)
     file_handler.setFormatter(file_formatter)
+
     # --- Console Handler Setup ---
-    console_handler = logging.StreamHandler()  # Writes to stderr by default
-    # Set console level - maybe INFO even if DEBUG is on for file? Adjust as needed.
-    # For simplicity, let's use the same log_level for now.
+    console_handler = logging.StreamHandler()
     console_handler.setLevel(log_level)
-    # Use a simpler format for the console
     console_formatter = logging.Formatter(CONSOLE_LOG_FORMAT)
     console_handler.setFormatter(console_formatter)
+
     # Add handlers if they aren't already present
-    # Check specifically for our file handler
-    if not any(isinstance(h, logging.FileHandler) and getattr(h, 'baseFilename', None) == FLASK_LOG_FILE for h in
-               app.logger.handlers):
+    # Check specifically for our file handler by filename
+    if not any(isinstance(h, logging.FileHandler) and getattr(h, 'baseFilename', None) == FLASK_LOG_FILE for h in app.logger.handlers):
         app.logger.addHandler(file_handler)
-        app.logger.info(f"Added FileHandler logging to {FLASK_LOG_FILE}")
+        app.logger.info(f"Added TimedRotatingFileHandler logging to {FLASK_LOG_FILE}")
+
+    # Add console handler if not present
+    if not any(isinstance(h, logging.StreamHandler) for h in app.logger.handlers):
+         app.logger.addHandler(console_handler) # Also add console handler to app logger
+
     # --- Configure Werkzeug Logger (for request logs) ---
     werkzeug_logger = logging.getLogger('werkzeug')
-    # werkzeug_logger.setLevel(log_level)  # Set level for Werkzeug
-    # Add file handler to Werkzeug logger (checking for duplicates)
-    if not any(isinstance(h, logging.FileHandler) and getattr(h, 'baseFilename', None) == FLASK_LOG_FILE for h in
-               werkzeug_logger.handlers):
+    # Check and add handlers to Werkzeug logger
+    if not any(isinstance(h, logging.FileHandler) and getattr(h, 'baseFilename', None) == FLASK_LOG_FILE for h in werkzeug_logger.handlers):
         werkzeug_logger.addHandler(file_handler)
+    # Add console handler to Werkzeug if needed (ensures requests go to console too)
+    if not any(isinstance(h, logging.StreamHandler) for h in werkzeug_logger.handlers):
         werkzeug_logger.addHandler(console_handler)
-    app.logger.info('Flask application logging configured.')
-    # This message will now go to both file and console (if levels permit)
+
+    # Set the level for the app logger itself AFTER adding handlers
+    app.logger.setLevel(log_level)
+    # Optionally set Werkzeug level (often INFO is sufficient)
+    werkzeug_logger.setLevel(logging.INFO) # Or use log_level if you want DEBUG requests logged
+
+    app.logger.info('Flask application logging configured with Time Rotation.')
