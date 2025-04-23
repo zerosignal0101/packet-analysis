@@ -48,7 +48,7 @@ COPY ./pdm.lock /packet-analysis
 RUN pdm install
 
 # 第二阶段：运行环境
-FROM python:3.10-slim-bullseye
+FROM python:3.11-slim-bullseye
 
 # 设置工作目录
 WORKDIR /packet-analysis
@@ -88,13 +88,15 @@ VOLUME /packet-analysis/raw_data
 VOLUME /packet-analysis/results
 VOLUME /packet-analysis/src
 
+# 设置项目根目录标识
+RUN touch /packet-analysis/.project-root
+
 # 设置环境变量
 ENV PATH="/packet-analysis/.venv/bin:$PATH"
 ENV PYTHONPATH=/packet-analysis
 ENV CELERY_BROKER_URL=redis://redis:6379/0
 ENV CELERY_RESULT_BACKEND=redis://redis:6379/1
 ENV ENABLE_CELERY_BEAT=true
-ENV CELERY_BEAT_DIR=/packet-analysis/celerybeat
 # Openblas multi thread restriction
 ENV OPENBLAS_NUM_THREADS=4
 
