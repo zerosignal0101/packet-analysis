@@ -8,7 +8,7 @@ services:
       - app_network
 
   web-api:
-    image: zerosignal0101/packet-analysis-tool:v0.3.0
+    image: &image-name zerosignal0101/packet-analysis-tool:v0.3.0
     build:
       context: .
       dockerfile: Dockerfile
@@ -25,7 +25,7 @@ services:
       - app_network
 
   celery-worker:
-    image: zerosignal0101/packet-analysis-tool:v0.3.0
+    image: *image-name
     command: celery -A src.packet_analysis.celery_app.celery_app worker
     volumes: *common-volumes
     depends_on:
@@ -34,7 +34,7 @@ services:
       - app_network
 
   celery-beat:
-    build: .
+    image: *image-name
     command: >
       sh -c "rm -f $/packet-analysis/celerybeat/celerybeat.pid && # Remove stale pid file
              celery -A src.packet_analysis.celery_app.celery_app beat --schedule=/packet-analysis/celerybeat/celerybeat_schedule"
