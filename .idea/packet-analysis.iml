@@ -17,6 +17,8 @@
       <excludeFolder url="file://$MODULE_DIR$/results/f1331b51-12c4-455e-b242-d9c460f6a1eb" />
       <excludeFolder url="file://$MODULE_DIR$/results/parquet_data" />
       <excludeFolder url="file://$MODULE_DIR$/results/pcap_chunks" />
+      <excludeFolder url="file://$MODULE_DIR$/results/redis_data" />
+      <excludeFolder url="file://$MODULE_DIR$/results/task_results" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.11 (packet-analysis)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
