@@ -161,66 +161,90 @@ def compare_producer_playback(
     }
 
     # 分析瓶颈1 状态码
-    bottleneck_analysis_response_code = (
-        analyze_status_code(alignment_df, output_prefix=f'{outputs_path}/test_status_code_analysis_{pcap_info_idx}'))
-    # 方式1 返回的是txt文本内容
-    # bottleneck_analysis_response_code["env"] = "replay"    #此处应该是生产加上回放，两环境的
-    # bottleneck_analysis_response_code["hostip"] = replay_ip
-    # logger.info(f"bottleneck_analysis_response_code: {bottleneck_analysis_response_code}")
-    # res['performance_bottleneck_analysis']['bottlenecks'].append(bottleneck_analysis_response_code)
+    try:
+        bottleneck_analysis_response_code = (
+            analyze_status_code(alignment_df, output_prefix=f'{outputs_path}/test_status_code_analysis_{pcap_info_idx}'))
+        # 方式1 返回的是txt文本内容
+        # bottleneck_analysis_response_code["env"] = "replay"    #此处应该是生产加上回放，两环境的
+        # bottleneck_analysis_response_code["hostip"] = replay_ip
+        # logger.info(f"bottleneck_analysis_response_code: {bottleneck_analysis_response_code}")
+        # res['performance_bottleneck_analysis']['bottlenecks'].append(bottleneck_analysis_response_code)
 
-    # 方式2 返回json格式的信息
-    bottleneck_analysis_response_code[0]["hostip"] = producer_host_ip_str
-    bottleneck_analysis_response_code[1]["hostip"] = playback_host_ip_str
-    res['performance_bottleneck_analysis']['response_code'] = bottleneck_analysis_response_code
-
+        # 方式2 返回json格式的信息
+        if bottleneck_analysis_response_code:
+            bottleneck_analysis_response_code[0]["hostip"] = producer_host_ip_str
+            bottleneck_analysis_response_code[1]["hostip"] = playback_host_ip_str
+            res['performance_bottleneck_analysis']['response_code'] = bottleneck_analysis_response_code
+        else:
+            res['performance_bottleneck_analysis']['response_code'] = []
+    except Exception as e:
+        res['performance_bottleneck_analysis']['response_code'] = []
+        logger.error(f"Exception while analysing response code of producer and playback data: {e}", exc_info=True)
     # 分析瓶颈2 响应包是否完整
-    bottleneck_analysis_empty_response = (
-        analyze_empty_responses(alignment_df, output_prefix=f'{outputs_path}/empty_responses_analysis_{pcap_info_idx}'))
+    try:
+        bottleneck_analysis_empty_response = (
+            analyze_empty_responses(alignment_df, output_prefix=f'{outputs_path}/empty_responses_analysis_{pcap_info_idx}'))
 
-    # 方式1 返回的是txt文本内容
-    # bottleneck_analysis_empty_response["env"] = "replay"    #此处应该是生产加上回放，两环境的
-    # bottleneck_analysis_empty_response["hostip"] = replay_ip
-    # logger.info(f"bottleneck_analysis_empty_response: {bottleneck_analysis_empty_response}")
-    # res['performance_bottleneck_analysis']['bottlenecks'].append(bottleneck_analysis_empty_response)
+        # 方式1 返回的是txt文本内容
+        # bottleneck_analysis_empty_response["env"] = "replay"    #此处应该是生产加上回放，两环境的
+        # bottleneck_analysis_empty_response["hostip"] = replay_ip
+        # logger.info(f"bottleneck_analysis_empty_response: {bottleneck_analysis_empty_response}")
+        # res['performance_bottleneck_analysis']['bottlenecks'].append(bottleneck_analysis_empty_response)
 
-    # 方式2 返回json格式的信息
-    bottleneck_analysis_empty_response[0]["hostip"] = producer_host_ip_str
-    bottleneck_analysis_empty_response[1]["hostip"] = playback_host_ip_str
-    bottleneck_analysis_empty_response[0]["env"] = "production"
-    bottleneck_analysis_empty_response[1]["env"] = "replay"
-    res['performance_bottleneck_analysis']['empty_response'] = bottleneck_analysis_empty_response
+        # 方式2 返回json格式的信息
+        if bottleneck_analysis_empty_response:
+            bottleneck_analysis_empty_response[0]["hostip"] = producer_host_ip_str
+            bottleneck_analysis_empty_response[1]["hostip"] = playback_host_ip_str
+            bottleneck_analysis_empty_response[0]["env"] = "production"
+            bottleneck_analysis_empty_response[1]["env"] = "replay"
+            res['performance_bottleneck_analysis']['empty_response'] = bottleneck_analysis_empty_response
+        else:
+            res['performance_bottleneck_analysis']['empty_response'] = []
+    except Exception as e:
+        res['performance_bottleneck_analysis']['empty_response'] = []
+        logger.error(f"Exception while analysing empty response of producer and playback data: {e}", exc_info=True)
     # logger.warning("222222222222")
     # logger.warning(bottleneck_analysis_empty_response)
 
     # 分析瓶颈3 传输窗口瓶颈检测
-    bottleneck_analysis_zero_window = (
-        analyze_zero_window_issues(alignment_df, output_prefix=f'{outputs_path}/zero_window_analysis_{pcap_info_idx}'))
-    # 方式1 返回的是txt文本内容
-    # bottleneck_analysis_zero_window["env"] = "replay"    #此处应该是生产加上回放，两环境的
-    # bottleneck_analysis_zero_window["hostip"] = replay_ip
-    # logger.info(f"bottleneck_analysis_zero_window: {bottleneck_analysis_zero_window}")
-    # res['performance_bottleneck_analysis']['bottlenecks'].append(bottleneck_analysis_zero_window)
-
-    # 方式2 返回json格式的信息
-    bottleneck_analysis_zero_window[0]["hostip"] = producer_host_ip_str
-    bottleneck_analysis_zero_window[1]["hostip"] = playback_host_ip_str
-    bottleneck_analysis_zero_window[0]["env"] = "production"
-    bottleneck_analysis_zero_window[1]["env"] = "replay"
-    res['performance_bottleneck_analysis']['transmission_window'] = bottleneck_analysis_zero_window
+    try:
+        bottleneck_analysis_zero_window = (
+            analyze_zero_window_issues(alignment_df, output_prefix=f'{outputs_path}/zero_window_analysis_{pcap_info_idx}'))
+        # 方式1 返回的是txt文本内容
+        # bottleneck_analysis_zero_window["env"] = "replay"    #此处应该是生产加上回放，两环境的
+        # bottleneck_analysis_zero_window["hostip"] = replay_ip
+        # logger.info(f"bottleneck_analysis_zero_window: {bottleneck_analysis_zero_window}")
+        # res['performance_bottleneck_analysis']['bottlenecks'].append(bottleneck_analysis_zero_window)
+        if bottleneck_analysis_zero_window:
+            # 方式2 返回json格式的信息
+            bottleneck_analysis_zero_window[0]["hostip"] = producer_host_ip_str
+            bottleneck_analysis_zero_window[1]["hostip"] = playback_host_ip_str
+            bottleneck_analysis_zero_window[0]["env"] = "production"
+            bottleneck_analysis_zero_window[1]["env"] = "replay"
+            res['performance_bottleneck_analysis']['transmission_window'] = bottleneck_analysis_zero_window
+        else:
+            res['performance_bottleneck_analysis']['transmission_window'] = []
+    except Exception as e:
+        res['performance_bottleneck_analysis']['transmission_window'] = []
+        logger.error(f"Exception while analysing transmission window of producer and playback data: {e}", exc_info=True)
 
     # 分析瓶颈4 数据库查询瓶颈检测
     # 方式2 返回json格式的信息
-    res['performance_bottleneck_analysis']['database'] = [
-        producer_data['general_analysis_result']['bottleneck_analysis_database'],
-        playback_data['general_analysis_result']['bottleneck_analysis_database']
-    ]
+    try:
+        res['performance_bottleneck_analysis']['database'] = [
+            producer_data['general_analysis_result']['bottleneck_analysis_database'],
+            playback_data['general_analysis_result']['bottleneck_analysis_database']
+        ]
 
-    # 分析瓶颈5 Exception 分析
-    res['performance_bottleneck_analysis']['exception'] = [
-        producer_data['general_analysis_result']['bottleneck_analysis_exception'],
-        playback_data['general_analysis_result']['bottleneck_analysis_exception']
-    ]
+        # 分析瓶颈5 Exception 分析
+        res['performance_bottleneck_analysis']['exception'] = [
+            producer_data['general_analysis_result']['bottleneck_analysis_exception'],
+            playback_data['general_analysis_result']['bottleneck_analysis_exception']
+        ]
+    except Exception as e:
+        res['performance_bottleneck_analysis']['database'] = []
+        res['performance_bottleneck_analysis']['exception'] = []
+        logger.error(f"Exception while copy database/exception result: {e}", exc_info=True)
 
     logger.info("Cluster_analysis finished.")
     # logger.debug(f"ID: {pcap_info_idx}, Res: {res}")
