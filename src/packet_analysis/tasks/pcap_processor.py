@@ -179,12 +179,7 @@ class CacheStateError(Exception):
 
 @celery_app.task(bind=True,
                  default_retry_delay=CACHE_WAIT_RETRY_DELAY_SECONDS,
-                 # Automatically retry for these exceptions
-                 autoretry_for=(RedisError, Retry, CacheWaitTimeoutError, CacheStateError),
-                 retry_kwargs={'max_retries': CACHE_WAIT_MAX_RETRIES + 5},  # Add a buffer
-                 retry_backoff=True,  # Exponential backoff
-                 retry_backoff_max=CACHE_WAIT_RETRY_DELAY_SECONDS * 5,  # Max backoff delay (seconds)
-                 retry_jitter=True)  # Add randomness to backoff
+                 max_retries=CACHE_WAIT_MAX_RETRIES)  # Add randomness to backoff
 def finalize_pcap_extraction(self, results, file_hash, cache_key, pcap_chunks, original_pcap_file, is_cached=False):
     """
     Callback task for the chord. Aggregates results, caches, and cleans up chunks.
@@ -265,7 +260,7 @@ def finalize_pcap_extraction(self, results, file_hash, cache_key, pcap_chunks, o
             logger.error(f"[Task ID: {self.request.id}] Redis error interacting with key {cache_key}: {e}. Retrying...")
             # Update state and let autoretry handle it
             self.update_state(state=states.RETRY, meta={'exc_type': 'RedisError', 'exc_message': str(e)})
-            raise  # Re-raise the caught RedisError to trigger autoretry
+            raise self.retry(exc=e)  # Re-raise the caught RedisError to trigger autoretry
         except Retry as e:
             # This block is only entered if self.retry() was called *without* raising the Retry exception
             # (which we aren't doing here, we raise directly).
@@ -282,7 +277,7 @@ def finalize_pcap_extraction(self, results, file_hash, cache_key, pcap_chunks, o
             # For now, log and re-raise for autoretry handling.
             logger.error(f"[Task ID: {self.request.id}] Encountered error: {type(e).__name__} - {e}")
             self.update_state(state=states.FAILURE, meta={'exc_type': type(e).__name__, 'exc_message': str(e)})
-            raise e  # Re-raise to let Celery handle retries/failure
+            raise self.retry(exc=e)  # Re-raise to let Celery handle retries/failure
         except Exception as e:
             # Catch any other unexpected exceptions
             logger.exception(
@@ -292,7 +287,7 @@ def finalize_pcap_extraction(self, results, file_hash, cache_key, pcap_chunks, o
             # Depending on policy, you might want to retry unexpected errors too.
             # If included in autoretry_for=(Exception,), it would retry. Otherwise, it fails permanently.
             # Let's assume we want unexpected errors to fail fast.
-            raise Ignore()  # Use Ignore() to prevent retries for truly unexpected errors
+            raise e  # Use Ignore() to prevent retries for truly unexpected errors
     else:
         logger.info(f"Finalize_pcap_extraction received {len(results)} results.")
         # 1. Aggregate results
