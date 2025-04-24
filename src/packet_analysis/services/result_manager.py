@@ -129,7 +129,13 @@ def generate_overview_conclusion(result_options):
 
         # 生成请求数量结论
         count_conclusion = f"生产环境有 {production_count} 个请求，回放环境有 {replay_count} 个请求。"
-        if max(production_count, replay_count) / min(production_count, replay_count) >= 1.2:
+        if production_count == 0 and replay_count == 0:
+            count_conclusion += " 生产、回放环境请求数量均为 0，请检查数据输入"
+        elif production_count == 0:
+            count_conclusion += " 生产环境请求数量为 0，回放存在数据，请检查数据输入"
+        elif replay_count == 0:
+            count_conclusion += " 生产环境和回放环境请求数量上存在显著差异，请检查回放时间是否足够"
+        elif max(production_count, replay_count) / min(production_count, replay_count) >= 1.2:
             count_conclusion += " 生产环境和回放环境请求数量上存在显著差异，请检查回放时间是否足够"
         else:
             count_conclusion += " 生产环境和回放环境数量上差异不大。"

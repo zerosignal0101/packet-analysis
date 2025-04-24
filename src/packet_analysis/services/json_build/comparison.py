@@ -111,8 +111,8 @@ class DB:
 
     def get_function_description(self, url: str, count_pro: int, count_replay: int) -> Dict[str, str]:
         """Generates a description string including function info and count comparison."""
-        base_info = f"Production requests: {count_pro}, Replay requests: {count_replay}."
-        description = f" Function: {self.request_info_dict.get(url, 'N/A')}."  # Use .get for safety
+        base_info = f"生产请求数量: {count_pro}, 回放请求数量: {count_replay}."
+        description = f" 路径对应业务: {self.request_info_dict.get(url, 'N/A')}."  # Use .get for safety
         additional_info = ""
 
         if count_pro > 0 and count_replay > 0:
@@ -120,19 +120,19 @@ class DB:
                 # Avoid division by zero
                 ratio = count_pro / count_replay if count_replay > 0 else float('inf')
                 if ratio > 2:
-                    additional_info = " WARNING: Replay request count significantly lower than production."
+                    additional_info = " WARNING: 回放请求数量显著低于生产环境。"
                 elif count_replay / count_pro > 2:  # Check the other way too
-                    additional_info = " WARNING: Production request count significantly lower than replay."
+                    additional_info = " WARNING: 生产请求数量显著低于回放。"
                 else:
-                    additional_info = " Request counts are comparable."
+                    additional_info = " 两环境请求数量相当。"
             except ZeroDivisionError:
-                additional_info = " Note: Cannot compare counts due to zero requests in replay."
+                additional_info = " Note: 由于回放中请求数为零，无法比较计数。"
         elif count_pro == 0 and count_replay > 0:
-            additional_info = " Note: Only replay requests found."
+            additional_info = " Note: 仅发现回放环境请求。"
         elif count_pro > 0 and count_replay == 0:
-            additional_info = " Note: Only production requests found."
+            additional_info = " Note: 仅发现生产环境请求。"
         else:
-            additional_info = " Note: No requests found in either environment for this URL."
+            additional_info = " Note: 未在任一环境中找到针对此URL的请求。"
 
         return {"function_description": base_info + description + additional_info}
 
@@ -176,26 +176,24 @@ class DB:
         return single_dict
 
     def get_difference_ratio_weighted(self, all_df_list: List[Dict[str, Any]]) -> str:
-        """Calculates weighted averages and provides a summary comparison."""
+        """计算加权平均值并提供摘要对比"""
         total_prod_requests = 0
         total_replay_requests = 0
         total_weighted_production_delay = 0.0
         total_weighted_replay_delay = 0.0
 
-        # Use production count as the weight for comparing corresponding requests
+        # 使用生产环境请求数作为权重
         total_weight = 0.0
 
         for df_dict in all_df_list:
-            # Use float conversion with error handling or rely on safe stats calculation
             try:
                 prod_mean = float(df_dict['production_delay_mean'])
                 replay_mean = float(df_dict['replay_delay_mean'])
                 prod_count = int(df_dict['request_count_production'])
-                # replay_count = int(df_dict['request_count_replay']) # Not directly used in weighting here
 
-                # Only include in weighted average if both means are valid and prod count > 0
+                # 仅当两个均值都有效且生产环境计数>0时纳入加权计算
                 if not pd.isna(prod_mean) and not pd.isna(replay_mean) and prod_count > 0:
-                    weight = prod_count  # Weight by production request count
+                    weight = prod_count  # 以生产环境请求数为权重
                     total_weighted_production_delay += prod_mean * weight
                     total_weighted_replay_delay += replay_mean * weight
                     total_weight += weight
@@ -205,24 +203,24 @@ class DB:
 
             except (ValueError, TypeError, KeyError) as e:
                 logger.warning(
-                    f"Skipping entry for weighted average due to invalid data: {df_dict.get('url', 'N/A')}, Error: {e}")
-                continue  # Skip this entry if data is bad
+                    f"跳过无效数据条目: {df_dict.get('url', 'N/A')}, 错误: {e}")
+                continue
 
         if total_weight == 0:
-            return "Overall comparison cannot be made: No comparable requests with valid delays found."
+            return "无法进行整体比较：未找到具有有效延迟的可比请求"
 
         overall_production_delay = total_weighted_production_delay / total_weight
         overall_replay_delay = total_weighted_replay_delay / total_weight
 
-        # Summary conclusion
-        faster_env = "Production" if overall_production_delay <= overall_replay_delay else "Replay"
-        slower_env = "Replay" if faster_env == "Production" else "Production"
+        # 总结结论
+        faster_env = "生产环境" if overall_production_delay <= overall_replay_delay else "回放环境"
+        slower_env = "回放环境" if faster_env == "生产环境" else "生产环境"
 
         conclusion = (
-            f"Overall Weighted Comparison ({total_prod_requests:,} Prod / {total_replay_requests:,} Replay requests analyzed):\n"
-            f"  - Weighted Avg Production Delay: {overall_production_delay:.{DECIMALS}f}s\n"
-            f"  - Weighted Avg Replay Delay:    {overall_replay_delay:.{DECIMALS}f}s\n"
-            f"  - Conclusion: {faster_env} environment shows lower weighted average delay than {slower_env}."
+            f"整体加权比较（分析 {total_prod_requests:,} 个生产请求 / {total_replay_requests:,} 个回放请求）：\n"
+            f"  - 加权平均生产延迟: {overall_production_delay:.{DECIMALS}f}秒\n"
+            f"  - 加权平均回放延迟: {overall_replay_delay:.{DECIMALS}f}秒\n"
+            f"  - 结论: {faster_env}的加权平均延迟低于{slower_env}"
         )
         return conclusion
 
