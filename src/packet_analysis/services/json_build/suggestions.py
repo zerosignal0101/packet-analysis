@@ -42,7 +42,7 @@ optimization_suggestions_random_forest = {
 def safe_format(value):
     # 如果值是 NaN 或 None，则返回 0 或其他默认值
     if pd.isna(value):
-        return None  # 或者根据需求返回 None
+        return 0  # 或者根据需求返回 None
     return "{:.6f}".format(value)
 
 
