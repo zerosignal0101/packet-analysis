@@ -134,7 +134,7 @@ class DB:
         else:
             additional_info = " Note: No requests found in either environment for this URL."
 
-        return {"analysis_notes": base_info + description + additional_info}
+        return {"function_description": base_info + description + additional_info}
 
     def built_single_dict(self, url: str, df_prod: pd.DataFrame, df_back: pd.DataFrame,
                           request_method: Optional[str]) -> Dict[str, Any]:
