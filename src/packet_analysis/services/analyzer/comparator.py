@@ -72,35 +72,6 @@ def compare_producer_playback(
         logger.info(f"json comparison started at {datetime.now()}")
         comparison_database = DB(producer_parquet_file_path, playback_parquet_file_path)
         data_list, path_delay_dict, contrast_delay_conclusion = comparison_database.get_analysis_results()
-        # process data list merge request_count_replay and request_count_production
-        new_data_list = []  # 创建一个新的列表来存储处理后的字典
-        for item in data_list:
-            if 'request_count_production' in item and 'request_count_replay' in item:
-                # # 创建新的 'request_count' 键，其值为一个字典
-                # request_count = {
-                #     'production': item['request_count_production'],
-                #     'replay': item['request_count_replay']
-                # }
-                # 创建新的 'request_count' 键，其值为一个 int 和
-                request_count = item['request_count_production'] + item['request_count_replay']
-
-                # 创建一个新的字典，复制原字典并添加新键
-                new_item = item.copy()  # 使用 copy() 进行浅复制
-                new_item['request_count'] = request_count  # 添加新的键
-
-                # 删除原来的键
-                if 'request_count_production' in new_item:
-                    del new_item['request_count_production']
-                if 'request_count_replay' in new_item:
-                    del new_item['request_count_replay']
-
-                new_data_list.append(new_item)  # 添加处理后的字典到新列表
-            else:
-                # 如果字典中不包含这些键，则直接添加原字典（可选，根据需求调整）
-                new_data_list.append(item)
-
-        data_list = new_data_list
-
         # Update response with the data_list for the current analysis
         data_legend = {
             "production": "生产环境",
