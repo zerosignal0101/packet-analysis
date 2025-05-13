@@ -3,11 +3,11 @@ name: Build and Push Docker Images
 on:
   push:
     tags:
-      - 'v*'  # 当推送以 v 开头的标签时触发工作流
-  workflow_dispatch: # 添加手动触发
+      - 'release-v*'
+  workflow_dispatch:
     inputs:
       tag_to_build:
-        description: 'The existing tag to build (e.g., v1.0.0). Must be an existing tag.'
+        description: 'The existing tag to build (e.g., release-v1.0.0). Must be an existing tag.'
         required: true
         type: string
 
@@ -36,8 +36,8 @@ jobs:
       - name: Checkout code for specific tag
         uses: actions/checkout@v4
         with:
-          ref: ${{ steps.determine_tag.outputs.TAG_REF }} # Checkout the specified tag
-          # fetch-depth: 0 # uncomment if you need full history or other tags
+          ref: ${{ steps.determine_tag.outputs.TAG_REF }}
+          # fetch-depth: 0
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -57,7 +57,7 @@ jobs:
         run: |
           # RAW_TAG_NAME will be like 'release-v1.0.0'
           RAW_TAG_NAME_FROM_STEP="${{ steps.determine_tag.outputs.RAW_TAG_NAME }}"
-          VERSION_NUMBER=${RAW_TAG_NAME_FROM_STEP#release-} # Remove 'release-' prefix
+          VERSION_NUMBER=${RAW_TAG_NAME_FROM_STEP#release-}
           echo "VERSION=${VERSION_NUMBER}" >> $GITHUB_OUTPUT
           echo "Building for tag: ${RAW_TAG_NAME_FROM_STEP}, Extracted version: ${VERSION_NUMBER}"
 
@@ -70,6 +70,6 @@ jobs:
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.REPOSITORY }}:${{ steps.version_extractor.outputs.VERSION }}
-            ${{ env.REGISTRY }}/${{ env.REPOSITORY }}:latest  # Consider if 'latest' should only be for actual new releases
+            ${{ env.REGISTRY }}/${{ env.REPOSITORY }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
