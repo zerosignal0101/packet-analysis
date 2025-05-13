@@ -1,0 +1,59 @@
+name: Build and Push Docker Images
+
+on:
+  push:
+    tags:
+      - 'v*'  # 当推送以 v 开头的标签时触发工作流
+
+env:
+  REGISTRY: registry.cn-qingdao.aliyuncs.com
+  # REPOSITORY 包含了命名空间和仓库名，例如：your-namespace/your-repo-name
+  REPOSITORY: zerosignal/packet-analysis-tool
+  # DOCKER_COMPOSE_FILE: docker-compose-default.yml # 此变量在此工作流中未直接使用
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        platform: [linux/amd64, linux/arm64] # 构建 amd64 和 arm64 架构的镜像
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4 # 建议使用 v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3 # 建议使用 v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3 # 建议使用 v3
+
+      - name: Login to Aliyun Container Registry
+        uses: docker/login-action@v3 # 建议使用 v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.ALIYUN_DOCKER_USERNAME }} # 需要在 GitHub Secrets 中配置
+          password: ${{ secrets.ALIYUN_DOCKER_PASSWORD }} # 需要在 GitHub Secrets 中配置
+
+      - name: Extract version from tag
+        if: startsWith(github.ref, 'refs/tags/')
+        id: version_extractor # 更改了 id 名称，更清晰
+        run: |
+          VERSION_TAG=${GITHUB_REF#refs/tags/}
+          echo "VERSION=${VERSION_TAG}" >> $GITHUB_OUTPUT
+          echo "Extracted version: ${VERSION_TAG}"
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5 # 建议使用 v5
+        with:
+          context: . # Docker 构建上下文路径
+          file: ./Dockerfile # 指定 Dockerfile 路径 (假设在项目根目录)
+          platforms: ${{ matrix.platform }} # 构建的目标平台
+          push: true # 推送镜像到仓库
+          tags: | # 定义镜像标签
+            ${{ env.REGISTRY }}/${{ env.REPOSITORY }}:${{ steps.version_extractor.outputs.VERSION }}
+            ${{ env.REGISTRY }}/${{ env.REPOSITORY }}:latest
+          # build-args: | # 如果你的 Dockerfile 需要构建参数，可以在这里添加
+          #   SOME_ARG=some_value
+          cache-from: type=gha # 启用 GitHub Actions 缓存
+          cache-to: type=gha,mode=max # 启用 GitHub Actions 缓存
+
