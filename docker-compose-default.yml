@@ -8,7 +8,7 @@ services:
       - app_network
 
   web-api:
-    image: &image-name zerosignal0101/packet-analysis-tool:v0.3.0
+    image: &image-name registry.cn-qingdao.aliyuncs.com/zerosignal/packet-analysis-tool:v0.3.1
     build:
       context: .
       dockerfile: Dockerfile
