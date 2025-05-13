@@ -55,10 +55,11 @@ jobs:
       - name: Extract version from tag name
         id: version_extractor
         run: |
-          # RAW_TAG_NAME will be like 'v1.0.0'
+          # RAW_TAG_NAME will be like 'release-v1.0.0'
           RAW_TAG_NAME_FROM_STEP="${{ steps.determine_tag.outputs.RAW_TAG_NAME }}"
-          echo "VERSION=${RAW_TAG_NAME_FROM_STEP}" >> $GITHUB_OUTPUT
-          echo "Building for tag: ${RAW_TAG_NAME_FROM_STEP}"
+          VERSION_NUMBER=${RAW_TAG_NAME_FROM_STEP#release-} # Remove 'release-' prefix
+          echo "VERSION=${VERSION_NUMBER}" >> $GITHUB_OUTPUT
+          echo "Building for tag: ${RAW_TAG_NAME_FROM_STEP}, Extracted version: ${VERSION_NUMBER}"
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
