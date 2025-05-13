@@ -1,38 +1,49 @@
 name: Build and Push Docker Images
-
 on:
   push:
     tags:
       - 'v*'  # 当推送以 v 开头的标签时触发工作流
-
+  workflow_dispatch: # 添加手动触发
+    inputs:
+      tag_to_build:
+        description: 'The existing tag to build (e.g., v1.0.0). Must be an existing tag.'
+        required: true
+        type: string
 env:
   REGISTRY: registry.cn-qingdao.aliyuncs.com
-  # REPOSITORY 包含了命名空间和仓库名，例如：your-namespace/your-repo-name
   REPOSITORY: zerosignal/packet-analysis-tool
-  # DOCKER_COMPOSE_FILE: docker-compose-default.yml # 此变量在此工作流中未直接使用
-
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        platform: [linux/amd64, linux/arm64] # 构建 amd64 和 arm64 架构的镜像
+        platform: [linux/amd64, linux/arm64]
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4 # 建议使用 v4
-
+      - name: Determine tag to checkout
+        id: determine_tag
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "TAG_REF=refs/tags/${{ github.event.inputs.tag_to_build }}" >> $GITHUB_OUTPUT
+            echo "RAW_TAG_NAME=${{ github.event.inputs.tag_to_build }}" >> $GITHUB_OUTPUT
+          else
+            echo "TAG_REF=${{ github.ref }}" >> $GITHUB_OUTPUT
+            echo "RAW_TAG_NAME=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+      - name: Checkout code for specific tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.determine_tag.outputs.TAG_REF }} # Checkout the specified tag
+          # fetch-depth: 0 # uncomment if you need full history or other tags
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3 # 建议使用 v3
-
+        uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3 # 建议使用 v3
-
+        uses: docker/setup-buildx-action@v3
       - name: Login to Aliyun Container Registry
-        uses: docker/login-action@v3 # 建议使用 v3
+        uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.ALIYUN_DOCKER_USERNAME }} # 需要在 GitHub Secrets 中配置
-          password: ${{ secrets.ALIYUN_DOCKER_PASSWORD }} # 需要在 GitHub Secrets 中配置
+          username: ${{ secrets.ALIYUN_DOCKER_USERNAME }}
+          password: ${{ secrets.ALIYUN_DOCKER_PASSWORD }}
 
       - name: Extract version from tag
         if: startsWith(github.ref, 'refs/tags/')
